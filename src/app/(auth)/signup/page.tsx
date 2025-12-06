@@ -1,12 +1,14 @@
 // src/app/(auth)/signup/page.tsx
 "use client";
+
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/lib/supabase/client"; // แก้ตรงนี้แค่บรรทัดเดียว!
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
+import { Eye, EyeOff, CheckCircle } from "lucide-react";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -15,15 +17,17 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Resend timer
   const [resendTimer, setResendTimer] = useState(60);
-  const [canResend, setCanResend] = useState(true);
+  const [canResend, setCanResend] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const router = useRouter();
 
   const startResendTimer = () => {
     setResendTimer(60);
     setCanResend(false);
     if (timerRef.current) clearInterval(timerRef.current);
+
     timerRef.current = setInterval(() => {
       setResendTimer((prev) => {
         if (prev <= 1) {
@@ -42,11 +46,12 @@ export default function SignupPage() {
       type: "signup",
       email,
     });
+
     if (resendError) {
       setError(resendError.message);
     } else {
       startResendTimer();
-      alert("ส่งลิ้งยืนยันใหม่เรียบร้อย! กรุณาตรวจสอบใน Gmail ของคุณ");
+      setError("ส่งลิงก์ยืนยันใหม่เรียบร้อยแล้ว!");
     }
   };
 
@@ -58,7 +63,6 @@ export default function SignupPage() {
       setError("รหัสผ่านและยืนยันรหัสผ่านไม่ตรงกัน");
       return;
     }
-
     if (password.length < 6) {
       setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
       return;
@@ -69,10 +73,9 @@ export default function SignupPage() {
       email,
       password,
       options: {
-        emailRedirectTo: `${location.origin}/dashboard`,
+        emailRedirectTo: `${window.location.origin}/dashboard`,
       },
     });
-
     setLoading(false);
 
     if (signupError) {
@@ -89,131 +92,211 @@ export default function SignupPage() {
     };
   }, []);
 
+  // หน้าสำเร็จ (หลังสมัคร)
   if (showSuccess) {
     return (
-      <div className="min-h-screen bg-linear-to-r from-blue-50 to-indigo-100 flex items-center justify-center p-4 sm:p-6">
-        <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 w-full max-w-md text-gray-800 text-center">
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-800 mb-4">
-              สมัครสมาชิกสำเร็จ!
-            </h1>
-            <p className="text-gray-600 text-sm sm:text-base">
-              กรุณาไปกดลิ้งยืนยันที่ถูกส่งไปยัง Gmail ของคุณ ({email})
-              แล้วเรียบร้อย
-            </p>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-            <p className="text-green-800 text-sm">
-              {canResend ? (
-                <button
-                  onClick={resendConfirmation}
-                  className="text-green-600 font-semibold hover:underline flex items-center justify-center gap-2 mx-auto"
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-12 text-center">
+              <CheckCircle className="w-20 h-20 mx-auto text-white mb-4" />
+              <h1 className="text-3xl font-bold text-white">
+                สมัครสมาชิกสำเร็จ!
+              </h1>
+            </div>
+
+            <div className="p-8 text-center space-y-6">
+              <div>
+                <p className="text-gray-700">เราได้ส่งลิงก์ยืนยันไปที่</p>
+                <p className="font-semibold text-lg text-indigo-600 mt-2">
+                  {email}
+                </p>
+                <p className="text-sm text-gray-600 mt-3">
+                  กรุณาเช็คกล่องจดหมาย (รวมถึงโฟลเดอร์ Spam/Promotions)
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                {canResend ? (
+                  <button
+                    onClick={resendConfirmation}
+                    className="text-blue-600 font-semibold hover:underline"
+                  >
+                    ส่งลิงก์ยืนยันใหม่
+                  </button>
+                ) : (
+                  <p className="text-gray-700">
+                    ส่งใหม่ได้ใน{" "}
+                    <span className="font-bold text-blue-600">
+                      {resendTimer} วินาที
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {error && (
+                <p
+                  className={`text-sm ${error.includes("เรียบร้อย") ? "text-green-600" : "text-red-600"}`}
                 >
-                  ส่งลิ้งยืนยันใหม่
-                </button>
-              ) : (
-                <span>
-                  ส่งลิ้งยืนยันใหม่ได้ใน{" "}
-                  <span className="font-bold text-green-600">
-                    {resendTimer} วินาที
-                  </span>
-                </span>
+                  {error}
+                </p>
               )}
-            </p>
+
+              <button
+                onClick={() => router.push("/login")}
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold py-4 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition shadow-lg"
+              >
+                ไปที่หน้าเข้าสู่ระบบ
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => router.push("/login")}
-            className="w-full bg-blue-600 text-white py-3 sm:py-4 rounded-lg font-bold text-base sm:text-lg hover:bg-blue-700 transition"
-          >
-            ไปที่หน้าเข้าสู่ระบบ
-          </button>
-          {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
+
+          <p className="text-center text-gray-500 text-xs mt-8">
+            © 2025 Dropway. ส่งของไว การันตีถึงปลายทาง
+          </p>
         </div>
       </div>
     );
   }
 
+  // หน้าสมัครสมาชิกปกติ
   return (
-    <div className="min-h-screen bg-linear-to-r from-blue-50 to-indigo-100 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 w-full max-w-md text-gray-800">
-        <div className="text-center mb-6 sm:mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-800">
-            สมัครสมาชิก Dropway
-          </h1>
-          <p className="text-gray-600 mt-2 text-sm sm:text-base">
-            สร้างบัญชีเพื่อเริ่มใช้งาน
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-10 text-center">
+            <h1 className="text-4xl font-bold text-white tracking-tight">
+              Dropway
+            </h1>
+            <p className="text-blue-100 mt-2 text-lg">สร้างบัญชีใหม่ฟรี</p>
+          </div>
+
+          {/* Form */}
+          <div className="p-8 pt-10 space-y-6">
+            <form onSubmit={handleSignup} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  อีเมล
+                </label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={loading}
+                  placeholder="example@dropway.com"
+                  className="w-full px-4 py-3.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  รหัสผ่าน (อย่างน้อย 6 ตัวอักษร)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={loading}
+                    className="w-full px-4 py-3.5 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ยืนยันรหัสผ่าน
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    disabled={loading}
+                    className="w-full px-4 py-3.5 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm animate-pulse">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold py-4 rounded-xl hover:from-green-700 hover:to-emerald-700 transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-60 disabled:transform-none shadow-lg flex items-center justify-center gap-3"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                        fill="none"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
+                    </svg>
+                    กำลังสมัครสมาชิก...
+                  </>
+                ) : (
+                  "สมัครสมาชิกฟรี"
+                )}
+              </button>
+            </form>
+
+            <p className="text-center text-gray-600 mt-8">
+              มีบัญชีอยู่แล้ว?{" "}
+              <Link
+                href="/login"
+                className="font-semibold text-blue-600 hover:text-blue-700 hover:underline transition"
+              >
+                เข้าสู่ระบบ
+              </Link>
+            </p>
+          </div>
         </div>
-        <form onSubmit={handleSignup} className="space-y-4 sm:space-y-6">
-          <input
-            type="email"
-            placeholder="อีเมล"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 sm:px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-            required
-          />
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              placeholder="รหัสผ่าน (อย่างน้อย 6 ตัว)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 sm:px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-              required
-              minLength={6}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              {showPassword ? (
-                <EyeOff className="h-5 w-5 text-gray-400" />
-              ) : (
-                <Eye className="h-5 w-5 text-gray-400" />
-              )}
-            </button>
-          </div>
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              placeholder="ยืนยันรหัสผ่าน"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 sm:px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm sm:text-base"
-              required
-              minLength={6}
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-5 w-5 text-gray-400" />
-              ) : (
-                <Eye className="h-5 w-5 text-gray-400" />
-              )}
-            </button>
-          </div>
-          {error && <p className="text-red-600 text-sm">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 text-white py-3 sm:py-4 rounded-lg font-bold text-base sm:text-lg hover:bg-green-700 transition disabled:opacity-50"
-          >
-            {loading ? "กำลังสมัคร..." : "สมัครสมาชิก"}
-          </button>
-        </form>
-        <p className="text-center mt-6 text-gray-600 text-sm sm:text-base">
-          มีบัญชีแล้ว?{" "}
-          <Link
-            href="/login"
-            className="text-blue-600 font-semibold hover:underline"
-          >
-            เข้าสู่ระบบ
-          </Link>
+
+        <p className="text-center text-gray-500 text-xs mt-8">
+          © 2025 Dropway. ส่งของไว การันตีถึงปลายทาง
         </p>
       </div>
     </div>

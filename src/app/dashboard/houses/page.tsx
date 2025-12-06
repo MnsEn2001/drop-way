@@ -52,6 +52,7 @@ const villageBySubdistrict: Record<string, string[]> = {
     "นาโบสถ์",
     "วังตำลึง",
     "ตะเคียนด้วน",
+    "คลองยายเฒ่า",
     "วังน้ำเย็น",
     "นาแพะ",
     "ท่าทองแดง",
@@ -154,8 +155,19 @@ export default function HousesPage() {
         .from("houses")
         .select("*")
         .order("created_at", { ascending: false });
-      setHouses((data as House[]) ?? []);
+
+      // แปลง null → string ว่าง า ง ทุกคอลัมน์ที่เป็น string
+      const safeData = (data || []).map((h: any) => ({
+        ...h,
+        full_name: h.full_name || "",
+        phone: h.phone || "", // ← ตัวการ!
+        address: h.address || "",
+        note: h.note ?? "",
+      }));
+
+      setHouses(safeData as House[]);
     };
+
     loadHouses();
   }, []);
 
@@ -206,17 +218,17 @@ export default function HousesPage() {
   const filteredAndSorted = useMemo(() => {
     let result = houses.filter((h) => {
       const lowerSearch = search.toLowerCase().trim();
-      const addr = h.address.toLowerCase();
-      const fullName = h.full_name.toLowerCase();
-      const phoneStr = h.phone;
-      const houseNum = extractHouseNumber(h.address);
-      const villageNum = extractVillageNumber(h.address);
-      const subdistrict = extractSubdistrict(h.address);
+      const addr = (h.address || "").toLowerCase();
+      const fullName = (h.full_name || "").toLowerCase();
+      const phoneStr = h.phone || ""; // ← สำคัญ!
+      const houseNum = extractHouseNumber(h.address || "");
+      const villageNum = extractVillageNumber(h.address || "");
+      const subdistrict = extractSubdistrict(h.address || "");
       const noteLower = (h.note || "").toLowerCase();
 
       const matchesText =
         fullName.includes(lowerSearch) ||
-        phoneStr.includes(lowerSearch) ||
+        phoneStr.includes(lowerSearch) || // ← ปลอดภัยแล้ว
         addr.includes(lowerSearch) ||
         noteLower.includes(lowerSearch) ||
         houseNum.includes(lowerSearch) ||
@@ -445,7 +457,15 @@ export default function HousesPage() {
         .from("houses")
         .select("*")
         .order("created_at", { ascending: false });
-      setHouses((data as House[]) ?? []);
+      setHouses(
+        (data || []).map((h: any) => ({
+          ...h,
+          full_name: h.full_name || "",
+          phone: h.phone || "", // ← เพิ่มบรรทัดนี้
+          address: h.address || "",
+          note: h.note ?? "",
+        })) as House[],
+      );
     }
     setLoading(false);
   };
@@ -474,7 +494,15 @@ export default function HousesPage() {
         .from("houses")
         .select("*")
         .order("created_at", { ascending: false });
-      setHouses((data as House[]) ?? []);
+      setHouses(
+        (data || []).map((h: any) => ({
+          ...h,
+          full_name: h.full_name || "",
+          phone: h.phone || "", // ← เพิ่มบรรทัดนี้
+          address: h.address || "",
+          note: h.note ?? "",
+        })) as House[],
+      );
     }
     setSaving(false);
   };
@@ -619,7 +647,15 @@ export default function HousesPage() {
             .from("houses")
             .select("*")
             .order("created_at", { ascending: false });
-          setHouses((data as House[]) ?? []);
+          setHouses(
+            (data || []).map((h: any) => ({
+              ...h,
+              full_name: h.full_name || "",
+              phone: h.phone || "", // ← เพิ่มบรรทัดนี้
+              address: h.address || "",
+              note: h.note ?? "",
+            })) as House[],
+          );
         } else {
           addToast("ไม่มีบ้านใหม่ที่จะเพิ่ม", "info");
         }
@@ -672,7 +708,7 @@ export default function HousesPage() {
   return (
     <>
       <div className="max-w-7xl mx-auto px-4 py-6 pb-24 lg:pb-8">
-        <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2">
+        <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 -py-5 pb-2">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               คลังบ้าน
@@ -748,7 +784,7 @@ export default function HousesPage() {
             {/* Search + Filter */}
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <div className="relative flex-1 text-gray-800">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
 
                 <input
                   type="text"
@@ -758,13 +794,27 @@ export default function HousesPage() {
                     setSearch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-10 pr-12 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition font-medium"
+                  className="w-full pl-11 pr-12 py-3 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition font-medium"
                 />
 
-                {/* ปุ่มตัวกรองแบบไอคอน */}
+                {/* ปุ่ม X ล้างข้อความ (แสดงเมื่อพิมพ์แล้ว) */}
+                {search && (
+                  <button
+                    onClick={() => {
+                      setSearch("");
+                      setCurrentPage(1);
+                    }}
+                    className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                    title="ล้างการค้นหา"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                )}
+
+                {/* ปุ่มกรอง */}
                 <button
                   onClick={() => setShowFilterModal(true)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
                 >
                   <Filter className="w-4 h-4 text-gray-700" />
                 </button>

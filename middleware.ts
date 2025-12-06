@@ -10,20 +10,26 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // ถ้าล็อกอินอยู่แล้ว แล้วเปิดหน้าแรก → เด้งไป dashboard ทันที
-  if (user && pathname === "/") {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // ถ้าเปิดหน้าแรก (/)
+  if (pathname === "/") {
+    if (user) {
+      // ล็อกอินแล้ว → เด้งไป Dashboard ทันที
+      return NextResponse.redirect(new URL("/dashboard", request.url));
+    } else {
+      // ยังไม่ล็อกอิน → ให้แสดงหน้าแรกปกติ (ไม่ต้องทำอะไร)
+      return NextResponse.next();
+    }
   }
 
-  // ถ้ายังไม่ล็อกอิน แล้วพยายามเข้า dashboard → เด้งไป login
+  // ถ้าเข้า /dashboard แต่ยังไม่ล็อกอิน → เด้งไปหน้าแรก
   if (!user && pathname.startsWith("/dashboard")) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // ทุกกรณีอื่น → ให้แสดงหน้าปกติ (หน้าแรก, login, signup, etc.)
+  // ทุกกรณีอื่น → ให้ผ่านไปปกติ
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*", "/login", "/signup"],
+  matcher: ["/", "/dashboard/:path*"],
 };

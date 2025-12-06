@@ -240,23 +240,27 @@ export default function NavigatePage() {
   const displayedHouses = useMemo(() => {
     return filteredHouses.filter((h) =>
       searchQuery
-        ? h.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          h.phone.includes(searchQuery) ||
-          h.address.toLowerCase().includes(searchQuery.toLowerCase())
+        ? h.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (h.phone ?? "").includes(searchQuery) ||
+          h.address?.toLowerCase().includes(searchQuery.toLowerCase())
         : true,
     );
   }, [filteredHouses, searchQuery]);
 
   const filteredReportedHouses = useMemo(() => {
-    return reportedHouses.filter((h) => {
+    return reportedHouses.filter((h: any) => {
       const matchesSearch =
         searchQuery === "" ||
-        h.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.phone.includes(searchQuery) ||
-        h.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        h.report_reason.toLowerCase().includes(searchQuery.toLowerCase());
+        h.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (h.phone ?? "").includes(searchQuery) ||
+        h.address?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (h.report_reason ?? "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
+
       const matchesFilter =
         reportReasonFilter === "" || h.report_reason === reportReasonFilter;
+
       return matchesSearch && matchesFilter;
     });
   }, [reportedHouses, searchQuery, reportReasonFilter]);
@@ -477,9 +481,9 @@ export default function NavigatePage() {
         (data || []).map((h: any) => ({
           id: h.id,
           user_id: h.user_id,
-          full_name: h.full_name,
-          phone: h.phone,
-          address: h.address,
+          full_name: h.full_name || "",
+          phone: h.phone || "", // ← บังคับเป็น string ว่างถ้า null
+          address: h.address || "",
           lat: h.lat ? Number(h.lat) : null,
           lng: h.lng ? Number(h.lng) : null,
           note: h.note ?? null,
@@ -521,7 +525,15 @@ export default function NavigatePage() {
         .select("*")
         .eq("user_id", (await supabase.auth.getUser()).data.user?.id)
         .order("reported_at", { ascending: false });
-      setReportedHouses(data || []);
+      setReportedHouses(
+        (data || []).map((h: any) => ({
+          ...h,
+          full_name: h.full_name || "",
+          phone: h.phone || "",
+          address: h.address || "",
+          report_reason: h.report_reason || "",
+        })),
+      );
     } catch (err) {
       console.error("Error loading reported houses:", err);
     }
@@ -531,14 +543,18 @@ export default function NavigatePage() {
     if (!reportingHouse) return;
     if (!reportReason && !customReason)
       return addToast("กรุณาเลือกหรือกรอกเหตุผล", "error");
+
     const reason =
       reportReason === "อื่นๆ" ? customReason.trim() : reportReason;
     if (reportReason === "อื่นๆ" && !reason)
       return addToast("กรุณากรอกเหตุผลเมื่อเลือก 'อื่นๆ'", "error");
 
     try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) throw new Error("ไม่พบผู้ใช้");
+
       await supabase.from("reported_houses").insert({
-        user_id: (await supabase.auth.getUser()).data.user?.id,
+        user_id: user.id,
         full_name: reportingHouse.full_name,
         phone: reportingHouse.phone,
         address: reportingHouse.address,
@@ -547,11 +563,21 @@ export default function NavigatePage() {
         note: reportingHouse.note,
         report_reason: reason,
       });
+
       await supabase.from("today_houses").delete().eq("id", reportingHouse.id);
-      setHouses((prev) => prev.filter((h) => h.id !== reportingHouse.id));
+
       addToast("รายงานสำเร็จ", "success");
-      if (activeTab === "reported") loadReportedHouses();
-    } catch {
+
+      // ดึงข้อมูลใหม่ทั้งหมด + เรียงลำดับใหม่ทันที
+      await refreshData();
+
+      if (activeTab === "reported") {
+        await loadReportedHouses();
+      }
+
+      shouldResortRef.current = true; // ตัวนี้จะทำงานทันที
+    } catch (err) {
+      console.error(err);
       addToast("รายงานไม่สำเร็จ", "error");
     } finally {
       setShowReportModal(false);
@@ -680,15 +706,21 @@ export default function NavigatePage() {
 
   const markDelivered = async (id: string) => {
     if (!confirm("ยืนยันส่งแล้ว?")) return;
+
     try {
       const { error } = await supabase
         .from("today_houses")
         .delete()
         .eq("id", id);
+
       if (error) throw error;
+
       addToast("ส่งแล้ว ลบสำเร็จ", "success");
-      window.location.reload();
-    } catch {
+
+      // ดึงข้อมูลใหม่ + เรียงลำดับใหม่ทันที
+      await refreshData();
+      shouldResortRef.current = true; // จะถูกจับโดย useEffect ข้างบน
+    } catch (err) {
       addToast("เกิดข้อผิดพลาด ไม่สามารถลบได้", "error");
     }
   };
@@ -822,18 +854,23 @@ export default function NavigatePage() {
     if (activeTab === "reported") loadReportedHouses();
   }, [activeTab]);
 
+  // ตัวนี้เก็บไว้ตัวเดียวก็พอ (ดีเลย์ 150ms ให้ state อัปเดตก่อน)
   useEffect(() => {
-    if (loading) return;
-    const timer = setTimeout(() => {
-      reSortHouses();
-    }, 100); // ดีเลย์เล็กน้อย ป้องกันการเรียกพร้อมกัน
-    return () => clearTimeout(timer);
+    if (shouldResortRef.current && !loading && !isSortingRef.current) {
+      shouldResortRef.current = false;
+      const timer = setTimeout(() => {
+        reSortHouses();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
   }, [
-    activeTab,
-    activeStartPosition,
-    currentPosition,
-    groupNearbyHouses,
+    shouldResortRef.current,
     loading,
+    isSortingRef.current,
+    houses,
+    reportedHouses,
+    currentPosition,
+    activeStartPosition,
     reSortHouses,
   ]);
 
@@ -898,7 +935,6 @@ export default function NavigatePage() {
               </div>
             </div>
 
-            {/* Search + ลบทั้งหมด + กรอง */}
             <div className="flex gap-3 mt-4">
               <button
                 onClick={deleteAllInCurrentTab}
@@ -906,18 +942,34 @@ export default function NavigatePage() {
               >
                 <Trash2 className="w-6 h-6 text-red-700" />
               </button>
+
               <div className="relative flex-1 text-gray-800">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                {/* ไอคอนค้นหา */}
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+
                 <input
                   type="text"
                   placeholder={`ค้นหา ${activeTab === "today" ? "ชื่อ, เบอร์, ที่อยู่" : "ชื่อ, เบอร์, ที่อยู่, เหตุผล"}...`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-12 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition font-medium"
+                  className="w-full pl-11 pr-14 py-3 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition font-medium"
                 />
+
+                {/* ปุ่ม X ล้างข้อความ (แสดงเฉพาะตอนพิมพ์แล้ว) */}
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                    title="ล้างการค้นหา"
+                  >
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                )}
+
+                {/* ปุ่มกรอง */}
                 <button
                   onClick={() => setShowFilterModal(true)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
                 >
                   <Filter className="w-4 h-4 text-gray-700" />
                 </button>
