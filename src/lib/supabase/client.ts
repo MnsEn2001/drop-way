@@ -1,4 +1,4 @@
-// src/lib/supabase/client.ts
+// src/lib/supabase/client.ts  ← ต้องเป็นแบบนี้ 100%
 import { createBrowserClient } from "@supabase/ssr";
 
 export const supabase = createBrowserClient(
@@ -8,14 +8,15 @@ export const supabase = createBrowserClient(
     cookies: {
       get(name: string) {
         if (typeof document === "undefined") return null;
-        const cookie = document.cookie
+        const value = document.cookie
           .split("; ")
-          .find((row) => row.startsWith(`${name}=`));
-        return cookie?.split("=")[1] ?? null;
+          .find((row) => row.startsWith(`${name}=`))
+          ?.split("=")[1];
+        return value ?? null;
       },
       set(name: string, value: string, options: any) {
         if (typeof document === "undefined") return;
-        document.cookie = `${name}=${value}; path=/; max-age=${options.maxAge || 3600}; SameSite=Lax`;
+        document.cookie = `${name}=${value}; path=/; max-age=${options.maxAge || 3600}; SameSite=Lax; Secure`;
       },
       remove(name: string) {
         if (typeof document === "undefined") return;
