@@ -76,12 +76,10 @@ export default function NavigatePage() {
   const [showStartModal, setShowStartModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showManualModal, setShowManualModal] = useState(false);
-
   const [currentHouse, setCurrentHouse] = useState<House | null>(null);
   const [reportNote, setReportNote] = useState("");
 
-  // เพิ่ม state เหล่านี้ (ถ้ายังไม่มี)
+  // ตั้งจุดเริ่มต้น
   const [startInput, setStartInput] = useState("");
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
   const [detectedStartLng, setDetectedStartLng] = useState<number | null>(null);
@@ -90,7 +88,7 @@ export default function NavigatePage() {
   const shouldResort = useRef(true);
   const watchId = useRef<number | null>(null);
 
-  // Realtime ทั้ง today_houses และ houses (คลังหลัก)
+  // Realtime
   useEffect(() => {
     const channel = supabase
       .channel("navigate_realtime")
@@ -138,38 +136,6 @@ export default function NavigatePage() {
     setHouses(cleaned);
     shouldResort.current = true;
   }, []);
-
-  // ฟังก์ชันตรวจจับตำแหน่ง (เหมือนหน้า houses ทุกประการ)
-  const detectCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      addToast("เบราว์เซอร์ไม่รองรับการระบุตำแหน่ง", "error");
-      return;
-    }
-
-    setIsDetecting(true);
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-
-        setDetectedStartLat(lat);
-        setDetectedStartLng(lng);
-        setStartInput(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-
-        addToast("ตรวจจับพิกัดสำเร็จ!", "success");
-        setIsDetecting(false);
-      },
-      () => {
-        addToast(
-          "ไม่สามารถตรวจจับตำแหน่งได้ กรุณาเปิด GPS หรืออนุญาตตำแหน่ง",
-          "error",
-        );
-        setIsDetecting(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
-    );
-  };
 
   const loadStartPosition = async () => {
     try {
@@ -224,11 +190,10 @@ export default function NavigatePage() {
     };
   }, [loadData]);
 
-  // เรียงตามระยะทาง
+  // เรียงลำดับ
   const sortedHouses = useMemo(() => {
     if (houses.length === 0) return [];
     const origin = startPosition || currentPosition || DEFAULT_POSITION;
-
     const withCoord = houses.filter((h) => h.lat && h.lng);
     const noCoord = houses.filter((h) => !h.lat || !h.lng);
 
@@ -295,10 +260,8 @@ export default function NavigatePage() {
     loadData();
   };
 
-  // แก้ไขใน houses (คลังหลัก) + today_houses พร้อมกัน
   const saveEdit = async () => {
     if (!currentHouse) return;
-
     const updates = {
       full_name: currentHouse.full_name.trim(),
       phone: currentHouse.phone.trim(),
@@ -307,14 +270,12 @@ export default function NavigatePage() {
       lng: currentHouse.lng,
       note: currentHouse.note?.trim() || null,
     };
-
     await Promise.all([
       supabase.from("today_houses").update(updates).eq("id", currentHouse.id),
       supabase
         .from("houses")
         .upsert({ id: currentHouse.id, ...updates }, { onConflict: "id" }),
     ]);
-
     addToast("แก้ไขสำเร็จ (ทั้งคลังและวันนี้)");
     setShowEditModal(false);
     loadData();
@@ -323,7 +284,6 @@ export default function NavigatePage() {
   const reportIssue = async () => {
     if (!currentHouse || !reportNote.trim())
       return addToast("กรุณาใส่ข้อความรายงาน", "error");
-
     await supabase
       .from("today_houses")
       .update({
@@ -331,7 +291,6 @@ export default function NavigatePage() {
         reported_at: new Date().toISOString(),
       })
       .eq("id", currentHouse.id);
-
     addToast("บันทึกการรายงานแล้ว");
     setShowReportModal(false);
     setReportNote("");
@@ -354,7 +313,6 @@ export default function NavigatePage() {
     const origin = startPosition || currentPosition || DEFAULT_POSITION;
     const valid = displayed.filter((h) => h.lat && h.lng).slice(0, 20);
     if (valid.length === 0) return addToast("ไม่มีพิกัด", "error");
-
     const points = [
       origin,
       ...valid.map((h) => ({ lat: h.lat!, lng: h.lng! })),
@@ -364,11 +322,9 @@ export default function NavigatePage() {
     addToast(`เปิดเส้นทาง ${valid.length} จุด`);
   };
 
-  // ตั้งจุดเริ่มต้น
   const handleSetStartPosition = async () => {
     if (!detectedStartLat || !detectedStartLng)
       return addToast("กรุณาใส่พิกัด", "error");
-
     await supabase.rpc("save_start_position", {
       p_lat: detectedStartLat,
       p_lng: detectedStartLng,
@@ -394,6 +350,28 @@ export default function NavigatePage() {
     addToast("ตรวจจับพิกัดสำเร็จ");
   };
 
+  const detectCurrentLocation = () => {
+    if (!navigator.geolocation)
+      return addToast("เบราว์เซอร์ไม่รองรับ", "error");
+    setIsDetecting(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setDetectedStartLat(lat);
+        setDetectedStartLng(lng);
+        setStartInput(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        addToast("ตรวจจับพิกัดสำเร็จ!", "success");
+        setIsDetecting(false);
+      },
+      () => {
+        addToast("ไม่สามารถตรวจจับได้", "error");
+        setIsDetecting(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000 },
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -404,7 +382,7 @@ export default function NavigatePage() {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50 pb-24 lg:pb-8">
+      <div className="min-h-screen bg-gray-50 pb-24 lg:pb-8 text-gray-800">
         {/* Header */}
         <div className="sticky top-0 bg-white border-b z-40 shadow">
           <div className="max-w-7xl mx-auto px-4 py-4">
@@ -412,7 +390,9 @@ export default function NavigatePage() {
               <h1 className="text-2xl font-bold">
                 นำทางวันนี้ ({displayed.length})
               </h1>
-              <div className="flex gap-3">
+
+              {/* ปุ่มสำหรับคอมพิวเตอร์ (ซ่อนบนมือถือ) */}
+              <div className="hidden lg:flex gap-3">
                 <button
                   onClick={() => setShowStartModal(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg"
@@ -484,9 +464,8 @@ export default function NavigatePage() {
                             setCurrentHouse(house);
                             setShowEditModal(true);
                           }}
-                          className="text-blue-600"
                         >
-                          <Edit3 className="w-5 h-5" />
+                          <Edit3 className="w-5 h-5 text-blue-600" />
                         </button>
                         <button
                           onClick={() => {
@@ -494,9 +473,8 @@ export default function NavigatePage() {
                             setReportNote(house.report_note || "");
                             setShowReportModal(true);
                           }}
-                          className="text-orange-600"
                         >
-                          <AlertTriangle className="w-5 h-5" />
+                          <AlertTriangle className="w-5 h-5 text-orange-600" />
                         </button>
                       </div>
                     </div>
@@ -514,7 +492,6 @@ export default function NavigatePage() {
                     <p className="text-xs text-gray-500 mt-2 line-clamp-2">
                       {house.address}
                     </p>
-
                     {house.note && (
                       <p className="text-xs text-amber-700 mt-2 italic">
                         หมายเหตุ: {house.note}
@@ -555,7 +532,6 @@ export default function NavigatePage() {
                         ไม่มีพิกัด
                       </div>
                     )}
-
                     <button
                       onClick={() => markDelivered(house.id)}
                       className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl"
@@ -569,8 +545,8 @@ export default function NavigatePage() {
           )}
         </div>
 
-        {/* Mobile Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t lg:hidden z-50 shadow-lg">
+        {/* Bottom Bar สำหรับมือถือเท่านั้น */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg lg:hidden z-50">
           <div className="flex justify-around py-3">
             <button
               onClick={() => setShowStartModal(true)}
@@ -596,7 +572,8 @@ export default function NavigatePage() {
           </div>
         </div>
 
-        {/* Modal: ตั้งจุดเริ่มต้น */}
+        {/* Modal ทั้งหมด (เหมือนเดิม) */}
+        {/* ตั้งจุดเริ่มต้น */}
         {showStartModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
@@ -609,7 +586,6 @@ export default function NavigatePage() {
                 </button>
               </div>
 
-              {/* ปุ่มตรวจจับตำแหน่งปัจจุบัน */}
               <button
                 onClick={detectCurrentLocation}
                 disabled={isDetecting}
@@ -623,28 +599,14 @@ export default function NavigatePage() {
                 {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบัน"}
               </button>
 
-              {/* ช่องกรอกพิกัดด้วยมือ */}
               <input
                 type="text"
                 placeholder="พิกัด (lat,lng) เช่น 16.883300,99.125000"
                 value={startInput}
-                onChange={(e) => {
-                  setStartInput(e.target.value);
-                  const [latStr, lngStr] = e.target.value.split(",");
-                  const lat = parseFloat(latStr?.trim());
-                  const lng = parseFloat(lngStr?.trim());
-                  if (!isNaN(lat) && !isNaN(lng)) {
-                    setDetectedStartLat(lat);
-                    setDetectedStartLng(lng);
-                  } else {
-                    setDetectedStartLat(null);
-                    setDetectedStartLng(null);
-                  }
-                }}
+                onChange={(e) => setStartInput(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:border-blue-500 focus:outline-none mb-3"
               />
 
-              {/* ปุ่มตรวจสอบบน Google Maps (เหมือนหน้า houses เป๊ะ) */}
               {detectedStartLat && detectedStartLng && (
                 <div className="text-center mb-5">
                   <button
@@ -654,7 +616,7 @@ export default function NavigatePage() {
                         "_blank",
                       )
                     }
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium underline flex items-center gap-1 mx-auto"
+                    className="text-blue-600 hover:text-blue-800 text-sm font-medium underline"
                   >
                     ตรวจสอบบน Google Maps
                   </button>
@@ -664,22 +626,21 @@ export default function NavigatePage() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowStartModal(false)}
-                  className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
+                  className="flex-1 py-3 bg-gray-200 rounded-xl"
                 >
                   ยกเลิก
                 </button>
                 <button
                   onClick={handleSetStartPosition}
-                  disabled={!detectedStartLat || !detectedStartLng}
+                  disabled={!detectedStartLat}
                   className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold disabled:opacity-50"
                 >
-                  ตั้งจุดเริ่มต้น
+                  ตั้งค่า
                 </button>
               </div>
             </div>
           </div>
         )}
-
         {/* Modal: แก้ไขบ้าน */}
         {showEditModal && currentHouse && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
