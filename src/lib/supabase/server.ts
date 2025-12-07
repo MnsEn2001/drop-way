@@ -1,7 +1,6 @@
 // src/lib/supabase/server.ts
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import type { CookieOptions } from "@supabase/ssr";
 
 export const createServerSupabaseClient = () => {
   const cookieStore = cookies();
@@ -14,21 +13,9 @@ export const createServerSupabaseClient = () => {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(
-          cookiesToSet: {
-            name: string;
-            value: string;
-            options?: CookieOptions;
-          }[],
-        ) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          } catch (error) {
-            // บางครั้ง Next.js เรียก setAll จาก Server Component ที่ไม่สามารถ set cookie ได้
-            // ไม่ต้องทำอะไร – middleware จะจัดการ refresh token ให้เอง
-          }
+        setAll() {
+          // ว่างไว้! ห้าม set cookies ใน Server Components
+          // (Supabase จะไม่เรียก setAll ถ้าเราไม่ refresh token)
         },
       },
     },
