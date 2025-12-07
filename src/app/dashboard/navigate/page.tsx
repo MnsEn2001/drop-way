@@ -17,6 +17,7 @@ import {
   MapIcon,
   Trash2,
   Clock,
+  ExternalLink,
 } from "lucide-react";
 
 interface House {
@@ -1487,6 +1488,7 @@ export default function NavigatePage() {
             </div>
           </div>
         )}
+
         {/* Modal ตั้งจุดเริ่มต้น (แก้แล้ว) */}
         {showStartModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -1501,6 +1503,7 @@ export default function NavigatePage() {
                   <X className="w-6 h-6" />
                 </button>
               </div>
+
               <input
                 type="text"
                 placeholder="ชื่อจุด (ไม่บังคับ)"
@@ -1508,6 +1511,7 @@ export default function NavigatePage() {
                 onChange={(e) => setStartNameInput(e.target.value)}
                 className="w-full px-4 py-3 border rounded-xl mb-3 text-sm"
               />
+
               <input
                 type="text"
                 placeholder="ละติจูด,ลองจิจูด (เช่น 16.8833,99.125)"
@@ -1531,12 +1535,32 @@ export default function NavigatePage() {
                 }}
                 className="w-full px-4 py-3 border rounded-xl mb-3 text-sm"
               />
+
+              {/* เพิ่มปุ่มตรวจสอบบน Google Maps */}
+              {detectedStartLat && detectedStartLng && (
+                <div className="text-center mb-4 -mt-2">
+                  <button
+                    onClick={() =>
+                      window.open(
+                        `https://www.google.com/maps/search/?api=1&query=${detectedStartLat},${detectedStartLng}`,
+                        "_blank",
+                      )
+                    }
+                    className="inline-flex items-center gap-1 text-blue-600 text-xs underline hover:text-blue-800"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    ตรวจสอบบน Google Maps
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={() => detectLocation(true)}
                 className="w-full py-3 bg-blue-600 text-white rounded-xl mb-4 flex items-center justify-center gap-2"
               >
                 <MapPin className="w-5 h-5" /> ตรวจจับตำแหน่งปัจจุบัน
               </button>
+
               <div className="flex gap-3">
                 <button
                   onClick={clearStartPosition}
@@ -1546,7 +1570,8 @@ export default function NavigatePage() {
                 </button>
                 <button
                   onClick={handleSetStartPosition}
-                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold"
+                  disabled={!detectedStartLat || !detectedStartLng}
+                  className="flex-1 py-3 bg-green-600 text-white rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ตั้งค่า
                 </button>
@@ -1554,7 +1579,6 @@ export default function NavigatePage() {
             </div>
           </div>
         )}
-
         {/* Modal ตั้งตำแหน่งด้วยมือ */}
         {showManualModal && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
