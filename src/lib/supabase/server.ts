@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 
 export const createServerSupabaseClient = () => {
   const cookieStore = cookies();
+
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -13,7 +14,8 @@ export const createServerSupabaseClient = () => {
           return cookieStore.getAll();
         },
         setAll() {
-          // ว่างไว้! ห้าม set ใน server component
+          // ว่างไว้! ห้าม set cookies ใน Server Components
+          // (Supabase จะไม่เรียก setAll ถ้าเราไม่ refresh token)
         },
       },
     },
