@@ -1,9 +1,14 @@
 // src/middleware.ts
 import { type NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server"; // ใช้ server client ที่อัปเดตแล้ว
 
 export async function middleware(request: NextRequest) {
-  const supabase = createServerSupabaseClient();
+  let response = NextResponse.next({
+    request,
+  });
+
+  const supabase = createServerSupabaseClient(); // ใช้ client ที่มี setAll จริง
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -16,7 +21,7 @@ export async function middleware(request: NextRequest) {
       // ล็อกอินแล้ว → เด้งไป Dashboard ทันที
       return NextResponse.redirect(new URL("/dashboard", request.url));
     } else {
-      // ยังไม่ล็อกอิน → ให้แสดงหน้าแรกปกติ (ไม่ต้องทำอะไร)
+      // ยังไม่ล็อกอิน → ให้แสดงหน้าแรกปกติ
       return NextResponse.next();
     }
   }
@@ -26,8 +31,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // ทุกกรณีอื่น → ให้ผ่านไปปกติ
-  return NextResponse.next();
+  // ทุกกรณีอื่น → ให้ผ่านไปปกติ (และ copy cookies ถ้ามี refresh)
+  return response;
 }
 
 export const config = {
