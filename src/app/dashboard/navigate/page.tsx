@@ -137,16 +137,30 @@ export default function NavigatePage() {
     shouldResort.current = true;
   }, []);
 
+  // 2. แก้ loadStartPosition ให้ดึงจากฐานข้อมูลก่อนเสมอ (สำคัญมาก!)
   const loadStartPosition = async () => {
     try {
-      const { data } = await supabase.rpc("get_start_position");
-      if (data?.[0]) {
-        setStartPosition({ lat: data[0].lat, lng: data[0].lng });
-      } else {
-        const saved = localStorage.getItem("todayStartPosition");
-        if (saved) setStartPosition(JSON.parse(saved));
+      const { data, error } = await supabase.rpc("get_start_position");
+
+      if (error) throw error;
+
+      if (data && data[0]) {
+        const pos = { lat: data[0].lat, lng: data[0].lng };
+        setStartPosition(pos);
+        localStorage.setItem("todayStartPosition", JSON.stringify(pos)); // อัปเดต backup
+        return;
       }
-    } catch {}
+
+      // ถ้าไม่มีในฐานข้อมูล ให้ลองดึงจาก localStorage (กรณีเก่า)
+      const saved = localStorage.getItem("todayStartPosition");
+      if (saved) {
+        const pos = JSON.parse(saved);
+        setStartPosition(pos);
+      }
+    } catch (err) {
+      console.warn("ไม่สามารถโหลดจุดเริ่มต้นได้:", err);
+      // ไม่ต้องทำอะไร แค่เงียบไว้
+    }
   };
 
   useEffect(() => {
@@ -189,6 +203,13 @@ export default function NavigatePage() {
       if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
     };
   }, [loadData]);
+
+  // 1. เพิ่ม useEffect นี้ ไว้ด้านบนสุดของ component (หลัง state ทั้งหมด)
+  useEffect(() => {
+    if (showStartModal) {
+      loadStartPosition(); // ดึงจุดล่าสุดจากฐานข้อมูลทุกครั้งที่เปิด modal
+    }
+  }, [showStartModal]);
 
   // เรียงลำดับ
   const sortedHouses = useMemo(() => {
@@ -323,20 +344,42 @@ export default function NavigatePage() {
   };
 
   const handleSetStartPosition = async () => {
-    if (!detectedStartLat || !detectedStartLng)
-      return addToast("กรุณาใส่พิกัด", "error");
-    await supabase.rpc("save_start_position", {
-      p_lat: detectedStartLat,
-      p_lng: detectedStartLng,
-    });
-    setStartPosition({ lat: detectedStartLat, lng: detectedStartLng });
-    localStorage.setItem(
-      "todayStartPosition",
-      JSON.stringify({ lat: detectedStartLat, lng: detectedStartLng }),
-    );
-    addToast("ตั้งจุดเริ่มต้นสำเร็จ");
-    setShowStartModal(false);
-    shouldResort.current = true;
+    let finalLat: number | null = detectedStartLat;
+    let finalLng: number | null = detectedStartLng;
+
+    // ถ้ายังไม่ได้กรอกหรือตรวจจับ → ใช้ตำแหน่งปัจจุบัน (GPS) อัตโนมัติ
+    if (!finalLat || !finalLng) {
+      if (!currentPosition) {
+        return addToast("ไม่พบตำแหน่งปัจจุบัน กรุณาเปิด GPS", "error");
+      }
+      finalLat = currentPosition.lat;
+      finalLng = currentPosition.lng;
+      addToast("ใช้ตำแหน่งปัจจุบันเป็นจุดเริ่มต้น", "success");
+    }
+
+    try {
+      const { error } = await supabase.rpc("save_start_position", {
+        p_lat: finalLat,
+        p_lng: finalLng,
+      });
+
+      if (error) throw error;
+
+      const newPos = { lat: finalLat, lng: finalLng };
+      setStartPosition(newPos);
+      localStorage.setItem("todayStartPosition", JSON.stringify(newPos));
+      shouldResort.current = true;
+
+      addToast(
+        finalLat === currentPosition?.lat
+          ? "ใช้ตำแหน่งปัจจุบันเป็นจุดเริ่มต้นแล้ว!"
+          : "ตั้งจุดเริ่มต้นสำเร็จ!",
+        "success",
+      );
+      setShowStartModal(false);
+    } catch (err: any) {
+      addToast("เซฟไม่สำเร็จ: " + err.message, "error");
+    }
   };
 
   const handleManualInput = () => {
@@ -603,8 +646,26 @@ export default function NavigatePage() {
                 type="text"
                 placeholder="พิกัด (lat,lng) เช่น 16.883300,99.125000"
                 value={startInput}
-                onChange={(e) => setStartInput(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:border-blue-500 focus:outline-none mb-3"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setStartInput(value);
+                  const parts = value.split(",").map((p) => p.trim());
+                  if (parts.length === 2) {
+                    const lat = parseFloat(parts[0]);
+                    const lng = parseFloat(parts[1]);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                      setDetectedStartLat(lat);
+                      setDetectedStartLng(lng);
+                    } else {
+                      setDetectedStartLat(null);
+                      setDetectedStartLng(null);
+                    }
+                  } else {
+                    setDetectedStartLat(null);
+                    setDetectedStartLng(null);
+                  }
+                }}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm focus:border-blue-500 focus:outline-none mb-3 font-mono text-center"
               />
 
               {detectedStartLat && detectedStartLng && (
