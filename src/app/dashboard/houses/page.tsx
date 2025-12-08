@@ -22,6 +22,7 @@ import {
   Copy,
   Download,
   ChevronDown,
+  CheckCircle,
 } from "lucide-react";
 import Papa from "papaparse";
 
@@ -485,7 +486,7 @@ export default function HousesPage() {
     };
 
     try {
-      // 1. อัปเดตในตาราง houses (คลังหลัก)
+      // 1. อัปเดตใน houses (คลังหลัก) - ใช้ id เดิม
       const { error: housesError } = await supabase
         .from("houses")
         .update(updates)
@@ -493,27 +494,27 @@ export default function HousesPage() {
 
       if (housesError) throw housesError;
 
-      // 2. สำคัญมาก! อัปเดตใน today_houses ด้วย (ถ้ามีงานวันนี้อยู่)
+      // 2. สำคัญมาก! อัปเดตใน today_houses ของทุกคนที่ใช้บ้านนี้อยู่
+      // โดยค้นหาจาก (full_name + phone) เพราะ id ไม่ตรงกันแล้ว!
       const { error: todayError } = await supabase
         .from("today_houses")
         .update(updates)
-        .eq("id", editingHouse.id); // ใช้ id เดียวกัน
+        .eq("full_name", updates.full_name)
+        .eq("phone", updates.phone);
 
       if (todayError) {
-        console.warn(
-          "ไม่พบใน today_houses หรืออัปเดตไม่ได้:",
-          todayError.message,
-        );
-        // ไม่ throw เพราะอาจไม่มีในวันนี้ก็ได้ → ถือว่าปกติ
+        console.warn("อัปเดต today_houses ล้มเหลว:", todayError.message);
+        // ไม่ throw เพราะอาจไม่มีใครใช้บ้านนี้ในวันนี้ก็ได้
       }
 
-      addToast("อัปเดตข้อมูลสำเร็จ! อัปเดตทั้งคลังและงานวันนี้แล้ว", "success");
+      addToast("อัปเดตสำเร็จ! ซิงค์ไปทุกงานวันนี้แล้ว", "success");
 
       // รีโหลดข้อมูลในหน้านี้
       const { data } = await supabase
         .from("houses")
         .select("*")
         .order("created_at", { ascending: false });
+
       setHouses(
         (data || []).map((h: any) => ({
           ...h,
@@ -527,6 +528,7 @@ export default function HousesPage() {
       setShowEditModal(false);
       resetForm();
     } catch (err: any) {
+      console.error("อัปเดตไม่สำเร็จ:", err);
       addToast("อัปเดตไม่สำเร็จ: " + err.message, "error");
     } finally {
       setSaving(false);
@@ -1106,22 +1108,24 @@ export default function HousesPage() {
       </button>
 
       {/* Toast */}
-      <div className="fixed top-16 right-4 z-50 space-y-2">
+      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3 pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-xl text-white text-sm font-medium animate-in slide-in-from-top ${
-              t.type === "success"
-                ? "bg-green-600"
-                : t.type === "error"
-                  ? "bg-red-600"
-                  : "bg-blue-600"
-            }`}
+            className={`flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl text-white font-bold text-sm min-w-[280px] animate-in slide-in-from-bottom fade-in duration-300 pointer-events-auto`}
+            style={{
+              background:
+                t.type === "success"
+                  ? "linear-gradient(to right, #16a34a, #22c55e)"
+                  : t.type === "error"
+                    ? "linear-gradient(to right, #dc2626, #ef4444)"
+                    : "linear-gradient(to right, #2563eb, #3b82f6)",
+            }}
           >
-            {t.type === "success" && <Plus className="w-5 h-5" />}
-            {t.type === "error" && <AlertCircle className="w-5 h-5" />}
-            {t.type === "info" && <AlertCircle className="w-5 h-5" />}
-            {t.message}
+            {t.type === "success" && <CheckCircle className="w-6 h-6" />}
+            {t.type === "error" && <AlertCircle className="w-6 h-6" />}
+            {t.type === "info" && <AlertCircle className="w-6 h-6" />}
+            <span>{t.message}</span>
           </div>
         ))}
       </div>
