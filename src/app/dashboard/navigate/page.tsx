@@ -702,7 +702,8 @@ export default function NavigatePage() {
             </div>
           </div>
         )}
-        {/* Modal: แก้ไขบ้าน */}
+
+        {/* Modal: แก้ไขบ้าน (เหมือนหน้า houses 100%) */}
         {showEditModal && currentHouse && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
@@ -723,8 +724,9 @@ export default function NavigatePage() {
                     full_name: e.target.value,
                   })
                 }
-                className="w-full px-4 py-3 border rounded-xl mb-3"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl mb-3 focus:border-blue-500 outline-none"
               />
+
               <input
                 type="text"
                 placeholder="เบอร์โทร"
@@ -732,8 +734,9 @@ export default function NavigatePage() {
                 onChange={(e) =>
                   setCurrentHouse({ ...currentHouse, phone: e.target.value })
                 }
-                className="w-full px-4 py-3 border rounded-xl mb-3"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl mb-3 focus:border-blue-500 outline-none"
               />
+
               <textarea
                 placeholder="ที่อยู่"
                 value={currentHouse.address}
@@ -741,8 +744,9 @@ export default function NavigatePage() {
                   setCurrentHouse({ ...currentHouse, address: e.target.value })
                 }
                 rows={3}
-                className="w-full px-4 py-3 border rounded-xl mb-3 resize-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl mb-3 resize-none focus:border-blue-500 outline-none"
               />
+
               <textarea
                 placeholder="หมายเหตุ"
                 value={currentHouse.note || ""}
@@ -750,21 +754,110 @@ export default function NavigatePage() {
                   setCurrentHouse({ ...currentHouse, note: e.target.value })
                 }
                 rows={2}
-                className="w-full px-4 py-3 border rounded-xl mb-3 resize-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl mb-4 resize-none focus:border-blue-500 outline-none"
               />
 
-              <div className="flex gap-3">
+              {/* === ส่วนพิกัด (เหมือนหน้า houses เป๊ะ) === */}
+              <div className="space-y-3">
+                {/* ปุ่มตรวจจับตำแหน่ง */}
+                <button
+                  onClick={() => {
+                    if (!navigator.geolocation) {
+                      addToast("เบราว์เซอร์ไม่รองรับ GPS", "error");
+                      return;
+                    }
+                    setIsDetecting(true);
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => {
+                        const lat = pos.coords.latitude;
+                        const lng = pos.coords.longitude;
+                        setCurrentHouse({
+                          ...currentHouse,
+                          lat,
+                          lng,
+                        });
+                        addToast("ตรวจจับพิกัดสำเร็จ!", "success");
+                        setIsDetecting(false);
+                      },
+                      () => {
+                        addToast("ไม่สามารถตรวจจับตำแหน่งได้", "error");
+                        setIsDetecting(false);
+                      },
+                      { enableHighAccuracy: true, timeout: 10000 },
+                    );
+                  }}
+                  disabled={isDetecting}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-60 transition"
+                >
+                  {isDetecting ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <MapPin className="w-5 h-5" />
+                  )}
+                  {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบัน"}
+                </button>
+
+                {/* ช่องกรอกพิกัดมือ */}
+                <input
+                  type="text"
+                  placeholder="พิกัด (lat,lng) เช่น 16.883300,99.125000"
+                  value={
+                    currentHouse.lat && currentHouse.lng
+                      ? `${currentHouse.lat},${currentHouse.lng}`
+                      : ""
+                  }
+                  onChange={(e) => {
+                    const value = e.target.value.trim();
+                    if (!value) {
+                      setCurrentHouse({
+                        ...currentHouse,
+                        lat: null,
+                        lng: null,
+                      });
+                      return;
+                    }
+                    const parts = value.split(",");
+                    if (parts.length === 2) {
+                      const lat = parseFloat(parts[0]);
+                      const lng = parseFloat(parts[1]);
+                      if (!isNaN(lat) && !isNaN(lng)) {
+                        setCurrentHouse({ ...currentHouse, lat, lng });
+                      }
+                    }
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-mono text-center focus:border-blue-500 outline-none"
+                />
+
+                {/* ปุ่มตรวจสอบบน Maps */}
+                {currentHouse.lat && currentHouse.lng && (
+                  <div className="text-center">
+                    <button
+                      onClick={() =>
+                        window.open(
+                          `https://www.google.com/maps/search/?api=1&query=${currentHouse.lat},${currentHouse.lng}`,
+                          "_blank",
+                        )
+                      }
+                      className="text-blue-600 hover:text-blue-800 text-sm font-medium underline flex items-center gap-1 mx-auto"
+                    >
+                      ตรวจสอบบน Google Maps
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="flex-1 py-3 bg-gray-200 rounded-xl"
+                  className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
                 >
                   ยกเลิก
                 </button>
                 <button
                   onClick={saveEdit}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold"
+                  className="flex-1 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg"
                 >
-                  บันทึก
+                  บันทึกการแก้ไข
                 </button>
               </div>
             </div>
