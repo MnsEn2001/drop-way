@@ -474,23 +474,42 @@ export default function HousesPage() {
   const saveEdit = async () => {
     if (!editingHouse) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("houses")
-      .update({
-        full_name: name.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
-        note: note.trim(),
-        lat: detectedLat,
-        lng: detectedLng,
-      })
-      .eq("id", editingHouse.id);
 
-    if (error) addToast("อัปเดตไม่สำเร็จ: " + error.message, "error");
-    else {
-      addToast("อัปเดตข้อมูลสำเร็จ!", "success");
-      setShowEditModal(false);
-      resetForm();
+    const updates = {
+      full_name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim(),
+      note: note.trim() || null,
+      lat: detectedLat,
+      lng: detectedLng,
+    };
+
+    try {
+      // 1. อัปเดตในตาราง houses (คลังหลัก)
+      const { error: housesError } = await supabase
+        .from("houses")
+        .update(updates)
+        .eq("id", editingHouse.id);
+
+      if (housesError) throw housesError;
+
+      // 2. สำคัญมาก! อัปเดตใน today_houses ด้วย (ถ้ามีงานวันนี้อยู่)
+      const { error: todayError } = await supabase
+        .from("today_houses")
+        .update(updates)
+        .eq("id", editingHouse.id); // ใช้ id เดียวกัน
+
+      if (todayError) {
+        console.warn(
+          "ไม่พบใน today_houses หรืออัปเดตไม่ได้:",
+          todayError.message,
+        );
+        // ไม่ throw เพราะอาจไม่มีในวันนี้ก็ได้ → ถือว่าปกติ
+      }
+
+      addToast("อัปเดตข้อมูลสำเร็จ! อัปเดตทั้งคลังและงานวันนี้แล้ว", "success");
+
+      // รีโหลดข้อมูลในหน้านี้
       const { data } = await supabase
         .from("houses")
         .select("*")
@@ -499,13 +518,19 @@ export default function HousesPage() {
         (data || []).map((h: any) => ({
           ...h,
           full_name: h.full_name || "",
-          phone: h.phone || "", // ← เพิ่มบรรทัดนี้
+          phone: h.phone || "",
           address: h.address || "",
           note: h.note ?? "",
         })) as House[],
       );
+
+      setShowEditModal(false);
+      resetForm();
+    } catch (err: any) {
+      addToast("อัปเดตไม่สำเร็จ: " + err.message, "error");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const clearFilters = () => {
@@ -786,7 +811,6 @@ export default function HousesPage() {
             <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <div className="relative flex-1 text-gray-800">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-
                 <input
                   type="text"
                   placeholder="ค้นหาทุกอย่าง (ชื่อ, เบอร์, ที่อยู่, พิกัด...)"
@@ -796,26 +820,30 @@ export default function HousesPage() {
                     setCurrentPage(1);
                   }}
                   className="w-full pl-11 pr-12 py-3 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition font-medium"
+                  id="house-search-input" // เพิ่ม id เพื่อ ref
                 />
-
-                {/* ปุ่ม X ล้างข้อความ (แสดงเมื่อพิมพ์แล้ว) */}
+                {/* ปุ่ม X ล้างข้อความ (สำคัญ: รักษา focus ไว้!) */}
                 {search && (
                   <button
                     onClick={() => {
                       setSearch("");
                       setCurrentPage(1);
+                      // สำคัญมาก: โฟกัสกลับทันทีหลังล้าง
+                      const input = document.getElementById(
+                        "house-search-input",
+                      ) as HTMLInputElement;
+                      input?.focus();
                     }}
-                    className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                    className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition-colors z-10"
                     title="ล้างการค้นหา"
                   >
                     <X className="w-4 h-4 text-gray-500" />
                   </button>
                 )}
-
                 {/* ปุ่มกรอง */}
                 <button
                   onClick={() => setShowFilterModal(true)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition z-10"
                 >
                   <Filter className="w-4 h-4 text-gray-700" />
                 </button>
