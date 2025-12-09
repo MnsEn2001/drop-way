@@ -93,7 +93,7 @@ export default function LoginPage() {
                   required
                   disabled={loading}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50"
+                  className="text-gray-700 w-full px-4 py-3.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none disabled:bg-gray-50"
                 />
               </div>
 

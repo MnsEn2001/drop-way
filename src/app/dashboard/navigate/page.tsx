@@ -131,7 +131,13 @@ export default function NavigatePage() {
   const [toasts, setToasts] = useState<
     { id: string; msg: string; type: "success" | "error" }[]
   >([]);
-
+  // === เพิ่ม state ใหม่ ตรงด้านบน useState ทั้งหมด ===
+  const [showNoCoordsOnly, setShowNoCoordsOnly] = useState(false);
+  const [showWithCoordsOnly, setShowWithCoordsOnly] = useState(false);
+  const [editingDeliveredNote, setEditingDeliveredNote] = useState<
+    string | null
+  >(null);
+  const [tempNote, setTempNote] = useState("");
   const shouldResort = useRef(true);
   const watchId = useRef<number | null>(null);
   // โหลดข้อมูลส่งแล้ว
@@ -187,12 +193,10 @@ export default function NavigatePage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-
       const { data } = await supabase
         .from("today_houses")
         .select("*")
         .eq("user_id", user.id);
-
       const cleaned = (data || []).map((h: any) => ({
         id: h.id,
         full_name: h.full_name || "",
@@ -358,18 +362,69 @@ export default function NavigatePage() {
     };
     runOptimization();
   }, [houses, currentPosition, startPosition]);
+  // === แก้ displayed (แท็บวันนี้) ให้รองรับตัวกรองพิกัด ===
   const displayed = useMemo(() => {
-    if (!searchQuery) return optimizedHouses;
-    const q = searchQuery.toLowerCase();
-    return optimizedHouses.filter(
-      (h) =>
-        h.full_name.toLowerCase().includes(q) ||
-        h.phone.includes(q) ||
-        h.address.toLowerCase().includes(q) ||
-        h.report_note?.toLowerCase().includes(q),
-    );
-  }, [optimizedHouses, searchQuery]);
-
+    let filtered = optimizedHouses;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (h) =>
+          h.full_name.toLowerCase().includes(q) ||
+          h.phone.includes(q) ||
+          h.address.toLowerCase().includes(q) ||
+          h.report_note?.toLowerCase().includes(q),
+      );
+    }
+    // ตัวกรองพิกัด
+    if (showNoCoordsOnly) {
+      filtered = filtered.filter((h) => !h.lat || !h.lng);
+    }
+    if (showWithCoordsOnly) {
+      filtered = filtered.filter((h) => h.lat && h.lng);
+    }
+    return filtered;
+  }, [optimizedHouses, searchQuery, showNoCoordsOnly, showWithCoordsOnly]);
+  // === ฟังก์ชันบันทึกหมายเหตุส่งแล้ว ===
+  const saveDeliveredNote = async (item: any) => {
+    if (tempNote === item.delivered_note) {
+      setEditingDeliveredNote(null);
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from("delivered_today")
+        .update({
+          delivered_note: tempNote.trim() || "ส่งแล้ว (ไม่ระบุหมายเหตุ)",
+        })
+        .eq("id", item.id);
+      if (error) throw error;
+      setDeliveredHouses((prev) =>
+        prev.map((h) =>
+          h.id === item.id
+            ? {
+                ...h,
+                delivered_note: tempNote.trim() || "ส่งแล้ว (ไม่ระบุหมายเหตุ)",
+              }
+            : h,
+        ),
+      );
+      addToast("อัปเดตหมายเหตุสำเร็จ", "success");
+    } catch (err) {
+      addToast("อัปเดตไม่สำเร็จ", "error");
+    } finally {
+      setEditingDeliveredNote(null);
+    }
+  };
+  const formatDeliveredDateTime = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    const day = d.getDate().toString().padStart(2, "0");
+    const month = (d.getMonth() + 1).toString().padStart(2, "0");
+    const year = d.getFullYear() + 543;
+    const hour = d.getHours().toString().padStart(2, "0");
+    const min = d.getMinutes().toString().padStart(2, "0");
+    const sec = d.getSeconds().toString().padStart(2, "0");
+    return `${day}/${month}/${year} || ${hour}:${min}:${sec}`;
+  };
   const addToast = (msg: string, type: "success" | "error" = "success") => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, msg, type }]);
@@ -377,12 +432,10 @@ export default function NavigatePage() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
   };
-
   const copyPhone = (phone: string) => {
     navigator.clipboard.writeText(phone);
     addToast("คัดลอกเบอร์แล้ว");
   };
-
   const openMaps = (lat: number, lng: number) => {
     const o = startPosition || currentPosition || DEFAULT_POSITION;
     window.open(
@@ -452,10 +505,8 @@ export default function NavigatePage() {
       setDeliverNote("");
     }
   };
-
   const saveEdit = async () => {
     if (!currentHouse) return;
-
     const updates = {
       full_name: currentHouse.full_name.trim(),
       phone: currentHouse.phone.trim(),
@@ -464,16 +515,13 @@ export default function NavigatePage() {
       lng: currentHouse.lng,
       note: currentHouse.note?.trim() || null,
     };
-
     try {
       // 1. อัปเดต today_houses (ตาม id เดิม)
       const { error: err1 } = await supabase
         .from("today_houses")
         .update(updates)
         .eq("id", currentHouse.id);
-
       if (err1) throw err1;
-
       // 2. อัปเดตหรือสร้างใน houses โดยใช้ (full_name + phone) เป็น key
       const { data: existing, error: fetchErr } = await supabase
         .from("houses")
@@ -483,26 +531,21 @@ export default function NavigatePage() {
           phone: updates.phone,
         })
         .maybeSingle(); // สำคัญ: ใช้ maybeSingle() ถ้าไม่มีจะได้ null ไม่ error
-
       if (fetchErr && fetchErr.code !== "PGRST116") throw fetchErr;
-
       if (existing) {
         // เจอแล้ว → UPDATE
         const { error: updateErr } = await supabase
           .from("houses")
           .update(updates)
           .eq("id", existing.id);
-
         if (updateErr) throw updateErr;
       } else {
         // ไม่เจอ → INSERT ใหม่ (ไม่ต้องสนใจ id เดิม)
         const { error: insertErr } = await supabase
           .from("houses")
           .insert(updates); // ไม่ต้องส่ง id
-
         if (insertErr) throw insertErr;
       }
-
       addToast("แก้ไขข้อมูลสำเร็จและซิงค์กับคลังหลักแล้ว", "success");
       setShowEditModal(false);
       setCurrentHouse(null);
@@ -512,7 +555,6 @@ export default function NavigatePage() {
       addToast("แก้ไขไม่สำเร็จ: " + (err.message || "ลองใหม่"), "error");
     }
   };
-
   const reportIssue = async () => {
     if (!currentHouse || !reportNote.trim())
       return addToast("กรุณาใส่ข้อความ", "error");
@@ -528,7 +570,6 @@ export default function NavigatePage() {
     setReportNote("");
     loadData();
   };
-
   const forceRefreshLocation = () => {
     navigator.geolocation.getCurrentPosition(
       (p) => {
@@ -540,7 +581,6 @@ export default function NavigatePage() {
       { enableHighAccuracy: true },
     );
   };
-
   const openFullRoute = () => {
     const origin = startPosition || currentPosition || DEFAULT_POSITION;
     const valid = displayed.filter((h) => h.lat && h.lng).slice(0, 20);
@@ -553,7 +593,6 @@ export default function NavigatePage() {
     window.open(url, "_blank");
     addToast(`เปิดเส้นทาง ${valid.length} จุด`);
   };
-
   const handleSetStartPosition = async () => {
     setIsDetecting(true);
     let finalLat: number;
@@ -632,15 +671,15 @@ export default function NavigatePage() {
   return (
     <>
       <div className="min-h-screen bg-gray-50 pb-24 lg:pb-8 text-gray-800">
-        {/* Header + ปุ่มสลับโหมด */}
+        {/* Header + ปุ่มสลับโหมด + ตัวกรองพิกัด */}
         <div className="sticky top-0 bg-white border-b z-40 shadow">
           <div className="max-w-7xl mx-auto px-4 py-4">
-            {/* ชื่อหน้า + ปุ่มสลับโหมด */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
                 <h1 className="text-2xl font-bold">
                   {viewMode === "today" ? "นำทางวันนี้" : "ส่งแล้ววันนี้"}
                 </h1>
+                {/* สลับแท็บ */}
                 <div className="flex bg-gray-100 p-1 rounded-xl">
                   <button
                     onClick={() => setViewMode("today")}
@@ -664,6 +703,7 @@ export default function NavigatePage() {
                   </button>
                 </div>
               </div>
+              {/* ปุ่มต่าง ๆ (desktop) */}
               <div className="hidden lg:flex gap-3">
                 {viewMode === "today" && (
                   <>
@@ -692,9 +732,9 @@ export default function NavigatePage() {
                 )}
               </div>
             </div>
-            {/* แถวค้นหา + ลบทั้งหมด */}
+            {/* แถวค้นหา + ตัวกรองพิกัด + ถังขยะ */}
             <div className="flex items-center gap-3">
-              {/* ปุ่มถังขยะ — ลบจริงทั้ง 2 แท็บ 100% */}
+              {/* ถังขยะ */}
               {(viewMode === "today"
                 ? displayed.length
                 : displayedDelivered.length) > 0 && (
@@ -761,6 +801,37 @@ export default function NavigatePage() {
                 >
                   <Trash2 className="w-6 h-6 group-hover:scale-110 transition-transform" />
                 </button>
+              )}
+              {/* ตัวกรองพิกัด (เฉพาะแท็บวันนี้) */}
+              {viewMode === "today" && (
+                <div className="flex bg-gray-100 rounded-xl p-1">
+                  <button
+                    onClick={() => {
+                      setShowNoCoordsOnly(!showNoCoordsOnly);
+                      if (showWithCoordsOnly) setShowWithCoordsOnly(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      showNoCoordsOnly
+                        ? "bg-orange-500 text-white"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    ไม่มีพิกัด
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowWithCoordsOnly(!showWithCoordsOnly);
+                      if (showNoCoordsOnly) setShowNoCoordsOnly(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      showWithCoordsOnly
+                        ? "bg-green-600 text-white"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    มีพิกัด
+                  </button>
+                </div>
               )}
               {/* ช่องค้นหา */}
               <div className="relative flex-1">
@@ -922,12 +993,7 @@ export default function NavigatePage() {
                       <span className="text-2xl font-bold text-green-700">
                         #{displayedDelivered.length - idx}
                       </span>
-                      <span className="text-sm text-green-600 ml-3">
-                        {new Date(h.delivered_at).toLocaleTimeString("th-TH", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                      {/* ลบการแสดงเวลาเก่าออก เพื่อย้ายลงลาง */}
                     </div>
                     <div className="bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold">
                       ส่งแล้ว
@@ -938,19 +1004,71 @@ export default function NavigatePage() {
                   </h3>
                   <p className="text-sm text-gray-600">{h.phone}</p>
                   <p className="text-xs text-gray-500 mt-1">{h.address}</p>
-                  {h.delivered_note && (
-                    <div className="mt-3 p-3 bg-white rounded-xl border border-green-300">
-                      <p className="text-sm font-medium text-green-700">
-                        หมายเหตุตอนส่ง:{" "}
-                        <span className="font-bold">{h.delivered_note}</span>
-                      </p>
-                    </div>
-                  )}
                   {h.note && (
                     <p className="text-xs text-amber-700 mt-2 italic">
                       หมายเหตุเดิม: {h.note}
                     </p>
                   )}
+                  {/* หมายเหตุตอนส่ง – แก้ไขได้ */}
+                  <div className="mt-4 p-4 bg-white rounded-xl border-2 border-green-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-semibold text-yellow-700">
+                        หมายเหตุตอนส่ง :
+                      </p>
+                      {editingDeliveredNote !== h.id && (
+                        <button
+                          onClick={() => {
+                            setEditingDeliveredNote(h.id);
+                            setTempNote(h.delivered_note || "");
+                          }}
+                          className="text-blue-600 hover:text-blue-800 transition"
+                        >
+                          <Edit3 className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                    {editingDeliveredNote === h.id ? (
+                      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                        <input
+                          type="text"
+                          value={tempNote}
+                          onChange={(e) => setTempNote(e.target.value)}
+                          placeholder="เช่น ฝากไว้หน้าบ้าน, ลูกค้ารับเอง..."
+                          className="flex-1 px-4 py-2.5 border border-green-400 rounded-lg text-sm focus:border-green-600 outline-none transition"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              saveDeliveredNote(h);
+                            } else if (e.key === "Escape") {
+                              setEditingDeliveredNote(null);
+                            }
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => saveDeliveredNote(h)}
+                            className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-bold text-sm hover:bg-green-700 transition shadow"
+                          >
+                            บันทึก
+                          </button>
+                          <button
+                            onClick={() => setEditingDeliveredNote(null)}
+                            className="flex-1 px-3 py-2.5 bg-gray-200 rounded-lg text-sm hover:bg-gray-300 transition"
+                          >
+                            ยกเลิก
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm font-bold text-blue-600 break-words">
+                        {h.delivered_note || "ส่งแล้ว (ไม่ระบุหมายเหตุ)"}
+                      </p>
+                    )}
+                  </div>
+                  {/* แสดงวันที่และเวลาด้านล่างกรอบ */}
+                  <p className="text-xs text-gray-600 mt-2 text-left">
+                    {formatDeliveredDateTime(h.delivered_at)}
+                  </p>
                 </div>
               ))}
             </div>
@@ -978,7 +1096,6 @@ export default function NavigatePage() {
             </div>
           ))}
         </div>
-
         {/* Bottom Bar มือถือ */}
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg lg:hidden z-50">
           <div className="flex justify-around py-3">
@@ -1270,7 +1387,6 @@ export default function NavigatePage() {
                   }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-mono text-center focus:border-blue-500 outline-none"
                 />
-
                 {/* ปุ่มตรวจสอบบน Maps */}
                 {currentHouse.lat && currentHouse.lng && (
                   <div className="text-center">
@@ -1288,7 +1404,6 @@ export default function NavigatePage() {
                   </div>
                 )}
               </div>
-
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowEditModal(false)}
@@ -1306,7 +1421,6 @@ export default function NavigatePage() {
             </div>
           </div>
         )}
-
         {/* Modal: รายงานปัญหา */}
         {showReportModal && currentHouse && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -1317,11 +1431,9 @@ export default function NavigatePage() {
                   <X className="w-6 h-6" />
                 </button>
               </div>
-
               <p className="font-medium mb-4">
                 {currentHouse.full_name} — {currentHouse.phone}
               </p>
-
               <textarea
                 placeholder="เช่น โทรไม่ติด, ไม่อยู่บ้าน, ปฏิเสธรับ..."
                 value={reportNote}
@@ -1329,7 +1441,6 @@ export default function NavigatePage() {
                 rows={5}
                 className="w-full px-4 py-3 border rounded-xl mb-4 resize-none"
               />
-
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowReportModal(false)}
