@@ -380,32 +380,37 @@ export default function HousesPage() {
       addToast("กรุณาเข้าสู่ระบบก่อน", "error");
       return;
     }
+
+    // ตรวจสอบว่ามีใน today_houses แล้วหรือยัง (ใช้ id_home ตรวจสอบเร็วสุด)
     const { data: existing } = await supabase
       .from("today_houses")
       .select("id")
       .eq("user_id", user.id)
-      .eq("full_name", house.full_name)
-      .eq("phone", house.phone)
-      .single();
+      .eq("id_home", house.id) // เร็ว + แม่นยำ 100%
+      .maybeSingle();
 
     if (existing) {
-      addToast("รายการนี้มีในรับงานแล้ว", "info");
+      addToast("บ้านนี้อยู่ในรายการส่งวันนี้แล้ว", "info");
       return;
     }
 
     const { error } = await supabase.from("today_houses").insert({
       user_id: user.id,
+      id_home: house.id, // ส่ง id_home ไปด้วย!
       full_name: house.full_name,
       phone: house.phone,
       address: house.address,
-      lat: house.lat || null,
-      lng: house.lng || null,
-      note: house.note || null,
-      order_index: 0,
+      lat: house.lat,
+      lng: house.lng,
+      note: house.note,
+      order_index: 9999,
     });
 
-    if (error) addToast("เพิ่มเข้ารับงานไม่สำเร็จ: " + error.message, "error");
-    else addToast("เพิ่มเข้ารับงานสำเร็จ!", "success");
+    if (error) {
+      addToast("เพิ่มไม่สำเร็จ: " + error.message, "error");
+    } else {
+      addToast("เพิ่มเข้ารายการส่งสำเร็จ!", "success");
+    }
   };
 
   const deleteHouse = async (id: string) => {
@@ -442,33 +447,45 @@ export default function HousesPage() {
 
   const addHouse = async () => {
     setLoading(true);
-    const { error } = await supabase.from("houses").insert({
-      full_name: name.trim(),
-      phone: phone.trim(),
-      address: address.trim(),
-      note: note.trim(),
-      lat: detectedLat,
-      lng: detectedLng,
-    });
-    if (error) addToast("เกิดข้อผิดพลาด: " + error.message, "error");
-    else {
-      addToast("เพิ่มบ้านสำเร็จ!", "success");
-      setShowAdd(false);
-      resetForm();
-      const { data } = await supabase
+
+    const { data, error } = await supabase
+      .from("houses")
+      .insert({
+        full_name: name.trim(),
+        phone: phone.trim(),
+        address: address.trim(),
+        note: note.trim() || null,
+        lat: detectedLat,
+        lng: detectedLng,
+      })
+      .select("id") // รับ ID กลับมา
+      .single();
+
+    if (error) {
+      addToast("เพิ่มบ้านไม่สำเร็จ: " + error.message, "error");
+    } else {
+      addToast("เพิ่มบ้านใหม่สำเร็จ!", "success");
+
+      // รีโหลดคลัง
+      const { data: all } = await supabase
         .from("houses")
         .select("*")
         .order("created_at", { ascending: false });
+
       setHouses(
-        (data || []).map((h: any) => ({
+        (all || []).map((h: any) => ({
           ...h,
           full_name: h.full_name || "",
-          phone: h.phone || "", // ← เพิ่มบรรทัดนี้
+          phone: h.phone || "",
           address: h.address || "",
           note: h.note ?? "",
-        })) as House[],
+        })),
       );
+
+      setShowAdd(false);
+      resetForm();
     }
+
     setLoading(false);
   };
 
@@ -486,7 +503,7 @@ export default function HousesPage() {
     };
 
     try {
-      // 1. อัปเดตใน houses (คลังหลัก) - ใช้ id เดิม
+      // 1. อัปเดตคลังหลัก (houses)
       const { error: housesError } = await supabase
         .from("houses")
         .update(updates)
@@ -494,22 +511,20 @@ export default function HousesPage() {
 
       if (housesError) throw housesError;
 
-      // 2. สำคัญมาก! อัปเดตใน today_houses ของทุกคนที่ใช้บ้านนี้อยู่
-      // โดยค้นหาจาก (full_name + phone) เพราะ id ไม่ตรงกันแล้ว!
+      // 2. ซิงค์อัตโนมัติไปยัง today_houses ทุกคนที่ใช้บ้านนี้อยู่ (เร็วมาก!)
       const { error: todayError } = await supabase
         .from("today_houses")
         .update(updates)
-        .eq("full_name", updates.full_name)
-        .eq("phone", updates.phone);
+        .eq("id_home", editingHouse.id);
 
       if (todayError) {
-        console.warn("อัปเดต today_houses ล้มเหลว:", todayError.message);
-        // ไม่ throw เพราะอาจไม่มีใครใช้บ้านนี้ในวันนี้ก็ได้
+        console.warn("บางคนอาจยังไม่อัปเดต today_houses:", todayError.message);
+        // ไม่ error เพราะอาจไม่มีใครใช้บ้านนี้ในวันนี้
       }
 
-      addToast("อัปเดตสำเร็จ! ซิงค์ไปทุกงานวันนี้แล้ว", "success");
+      addToast("อัปเดตสำเร็จ! ทุกคนเห็นข้อมูลใหม่ทันที", "success");
 
-      // รีโหลดข้อมูลในหน้านี้
+      // รีโหลดคลังบ้าน
       const { data } = await supabase
         .from("houses")
         .select("*")
@@ -522,13 +537,12 @@ export default function HousesPage() {
           phone: h.phone || "",
           address: h.address || "",
           note: h.note ?? "",
-        })) as House[],
+        })),
       );
 
       setShowEditModal(false);
       resetForm();
     } catch (err: any) {
-      console.error("อัปเดตไม่สำเร็จ:", err);
       addToast("อัปเดตไม่สำเร็จ: " + err.message, "error");
     } finally {
       setSaving(false);
