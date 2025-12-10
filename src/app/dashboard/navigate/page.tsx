@@ -1,4 +1,3 @@
-// src/app/dashboard/routes/navigate/page.tsx
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -473,13 +472,13 @@ export default function NavigatePage() {
         delivered_note: finalNote,
         delivered_at: new Date().toISOString(),
       };
-      // 1. บันทึกในฐานข้อมูล
+      // เพิ่มสิ่งนี้: อัพเดต state ทันที ไม่ต้องรอ realtime!
+      setDeliveredHouses((prev) => [deliveredItem, ...prev]);
+      // 1. บันทึกในฐานข้อมูล (ใน background)
       const { error: insertError } = await supabase
         .from("delivered_today")
         .insert(deliveredItem);
       if (insertError) {
-        // Rollback optimistic update ถ้าล้มเหลว
-        loadData();
         throw insertError;
       }
       // 2. ลบออกจาก today_houses
@@ -488,16 +487,18 @@ export default function NavigatePage() {
         .delete()
         .eq("id", houseToDeliver.id);
       if (deleteError) {
-        // Rollback
-        loadData();
         throw deleteError;
       }
-      // เพิ่มสิ่งนี้: อัพเดต state ทันที ไม่ต้องรอ realtime!
-      setDeliveredHouses((prev) => [deliveredItem, ...prev]);
       addToast(`ส่งแล้ว: ${finalNote}`, "success");
     } catch (err: any) {
       console.error("ส่งไม่สำเร็จ:", err);
       addToast("ส่งไม่สำเร็จ: " + err.message || err, "error");
+      // Rollback optimistic update ถ้าล้มเหลว
+      setHouses((prev) => [...prev, houseToDeliver]); // คืนบ้านเดิมเข้า houses
+      setOptimizedHouses((prev) => [...prev, houseToDeliver]); // คืนเข้า optimized
+      setDeliveredHouses((prev) =>
+        prev.filter((h) => h.id !== houseToDeliver.id),
+      ); // ลบจาก delivered ถ้าเพิ่มไปแล้ว
       loadData(); // Reload ถ้าผิดพลาด
     } finally {
       setShowDeliverModal(false);
@@ -515,6 +516,19 @@ export default function NavigatePage() {
       lng: currentHouse.lng,
       note: currentHouse.note?.trim() || null,
     };
+    // Optimistic update: อัปเดต UI ทันที
+    const updateLocalState = (updatedHouse: House) => {
+      setHouses((prev) =>
+        prev.map((h) => (h.id === updatedHouse.id ? updatedHouse : h)),
+      );
+      setOptimizedHouses((prev) =>
+        prev.map((h) => (h.id === updatedHouse.id ? updatedHouse : h)),
+      );
+    };
+    const optimisticHouse = { ...currentHouse, ...updates };
+    updateLocalState(optimisticHouse);
+    setShowEditModal(false);
+    setCurrentHouse(null);
     try {
       // 1. อัปเดต today_houses (ตาม id เดิม)
       const { error: err1 } = await supabase
@@ -547,28 +561,54 @@ export default function NavigatePage() {
         if (insertErr) throw insertErr;
       }
       addToast("แก้ไขข้อมูลสำเร็จและซิงค์กับคลังหลักแล้ว", "success");
-      setShowEditModal(false);
-      setCurrentHouse(null);
+      // เรียก loadData() เพื่อ sync ถ้าจำเป็น (แต่ UI เปลี่ยนแล้ว)
       loadData();
     } catch (err: any) {
       console.error("แก้ไขไม่สำเร็จ:", err);
       addToast("แก้ไขไม่สำเร็จ: " + (err.message || "ลองใหม่"), "error");
+      // Rollback optimistic update
+      updateLocalState(currentHouse); // คืนค่าเดิม
+      loadData(); // Reload เพื่อ sync
     }
   };
   const reportIssue = async () => {
     if (!currentHouse || !reportNote.trim())
       return addToast("กรุณาใส่ข้อความ", "error");
-    await supabase
-      .from("today_houses")
-      .update({
-        report_note: reportNote.trim(),
-        reported_at: new Date().toISOString(),
-      })
-      .eq("id", currentHouse.id);
-    addToast("รายงานแล้ว");
+    // Optimistic update for report
+    const updatedHouse = {
+      ...currentHouse,
+      report_note: reportNote.trim(),
+      reported_at: new Date().toISOString(),
+    };
+    setHouses((prev) =>
+      prev.map((h) => (h.id === updatedHouse.id ? updatedHouse : h)),
+    );
+    setOptimizedHouses((prev) =>
+      prev.map((h) => (h.id === updatedHouse.id ? updatedHouse : h)),
+    );
     setShowReportModal(false);
     setReportNote("");
-    loadData();
+    try {
+      const { error } = await supabase
+        .from("today_houses")
+        .update({
+          report_note: reportNote.trim(),
+          reported_at: new Date().toISOString(),
+        })
+        .eq("id", currentHouse.id);
+      if (error) throw error;
+      addToast("รายงานแล้ว", "success");
+    } catch (err) {
+      addToast("รายงานไม่สำเร็จ", "error");
+      // Rollback
+      setHouses((prev) =>
+        prev.map((h) => (h.id === currentHouse.id ? currentHouse : h)),
+      );
+      setOptimizedHouses((prev) =>
+        prev.map((h) => (h.id === currentHouse.id ? currentHouse : h)),
+      );
+      loadData();
+    }
   };
   const forceRefreshLocation = () => {
     navigator.geolocation.getCurrentPosition(
