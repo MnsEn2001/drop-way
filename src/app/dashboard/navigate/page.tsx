@@ -530,7 +530,7 @@ export default function NavigatePage() {
     run();
   }, [houses, currentPosition, startPosition]);
 
-  // สำหรับหน้านำทางวันนี้
+  // ค้นหาแบบสุดยอด (เหมือนหน้า houses)
   const displayed = useMemo(() => {
     let list = optimizedHouses;
 
@@ -539,46 +539,56 @@ export default function NavigatePage() {
     else if (filterCoord === "none")
       list = list.filter((h) => !h.lat || !h.lng);
 
-    // ค้นหา
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter((h) => {
-        const text = [
-          h.full_name,
-          h.phone,
-          h.address,
-          h.note || "",
-          h.quantity?.toString() || "",
-          h.lat?.toString() || "",
-          h.lng?.toString() || "",
-        ]
-          .join(" ")
-          .toLowerCase();
-        return text.includes(q);
-      });
-    }
-
-    return list;
-  }, [optimizedHouses, searchQuery, filterCoord]);
-
-  // สำหรับหน้าส่งแล้ววันนี้
-  const displayedDelivered = useMemo(() => {
-    if (!searchQuery) return deliveredHouses;
+    if (!searchQuery.trim()) return list;
 
     const q = searchQuery.toLowerCase().trim();
-    return deliveredHouses.filter((h: any) => {
-      const text = [
-        h.full_name,
-        h.phone,
-        h.address,
-        h.delivered_note || "",
+
+    return list.filter((h) => {
+      const fullText = [
+        h.full_name || "",
+        h.phone || "",
+        h.address || "",
         h.note || "",
         h.quantity?.toString() || "",
-        formatDeliveredDateTime(h.delivered_at),
+        h.lat ? h.lat.toFixed(6) : "",
+        h.lng ? h.lng.toFixed(6) : "",
+        h.lat && h.lng ? `${h.lat.toFixed(6)},${h.lng.toFixed(6)}` : "",
+        h.address.match(/[\d\/\\-]+/)?.[0] || "",
+        h.address.match(/ม\.\s*(\d+)/i)?.[1] || "",
+        h.address.match(/ต\.\s*([\u0E00-\u0E7F]+)/)?.[1] || "",
       ]
         .join(" ")
         .toLowerCase();
-      return text.includes(q);
+
+      return fullText.includes(q);
+    });
+  }, [optimizedHouses, searchQuery, filterCoord]);
+
+  const displayedDelivered = useMemo(() => {
+    if (!searchQuery.trim()) return deliveredHouses;
+
+    const q = searchQuery.toLowerCase().trim();
+
+    return deliveredHouses.filter((h: any) => {
+      const time = formatDeliveredDateTime(h.delivered_at);
+      const fullText = [
+        h.full_name || "",
+        h.phone || "",
+        h.address || "",
+        h.delivered_note || "",
+        h.note || "",
+        h.quantity?.toString() || "",
+        time,
+        time.split("||")[1]?.trim() || "",
+        time.split("/")[0],
+        time.split("/")[1],
+        h.address.match(/[\d\/\\-]+/)?.[0] || "",
+        h.address.match(/ม\.\s*(\d+)/i)?.[1] || "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return fullText.includes(q);
     });
   }, [deliveredHouses, searchQuery]);
 
@@ -653,9 +663,9 @@ export default function NavigatePage() {
               )}
             </div>
 
-            {/* ส่วนใหม่: ปุ่มลบทั้งหมด + ตัวกรอง (เฉพาะวันนี้) + ช่องค้นหา */}
+            {/* ส่วนใหม่: ปุ่มลบทั้งหมด + ตัวกรอง + ช่องค้นหา */}
             <div className="space-y-4">
-              {/* แถวบน: ปุ่มลบทั้งหมด (ทั้ง 2 แท็บ) */}
+              {/* แถวบน: ปุ่มลบทั้งหมด */}
               <div className="flex justify-between items-center">
                 {(viewMode === "today"
                   ? optimizedHouses.length
@@ -668,7 +678,7 @@ export default function NavigatePage() {
                         : deliveredHouses.length;
                       if (
                         !confirm(
-                          `ลบ${isToday ? "รายการวันนี้" : "รายการส่งแล้ว"}ทั้งหมด ${count} รายการจริงหรือ?\nไม่สามารถกู้คืนได้`,
+                          `ลบ${isToday ? "รายการวันนี้" : "รายการส่งแล้ว"}ทั้งหมด ${count} รายการจริงหรือ?`,
                         )
                       )
                         return;
@@ -676,26 +686,24 @@ export default function NavigatePage() {
                       const deleteAll = async () => {
                         try {
                           if (isToday) {
-                            const { error } = await supabase
+                            await supabase
                               .from("today_houses")
                               .delete()
                               .neq(
                                 "id",
                                 "00000000-0000-0000-0000-000000000000",
                               );
-                            if (error) throw error;
                             setHouses([]);
                             setOptimizedHouses([]);
                             addToast("ลบรายการวันนี้ทั้งหมดแล้ว", "success");
                           } else {
-                            const { error } = await supabase
+                            await supabase
                               .from("delivered_today")
                               .delete()
                               .in(
                                 "id",
                                 deliveredHouses.map((h) => h.id),
                               );
-                            if (error) throw error;
                             setDeliveredHouses([]);
                             addToast("ลบรายการส่งแล้วทั้งหมดแล้ว", "success");
                           }
@@ -711,7 +719,7 @@ export default function NavigatePage() {
                   </button>
                 )}
 
-                {/* ตัวกรองพิกัด (เฉพาะวันนี้) */}
+                {/* ตัวกรองพิกัด */}
                 {viewMode === "today" && optimizedHouses.length > 0 && (
                   <div className="flex bg-gray-100 p-1 rounded-xl">
                     {(() => {
@@ -729,7 +737,7 @@ export default function NavigatePage() {
                                 : "text-gray-600"
                             }`}
                           >
-                            ทั้งหมด ({optimizedHouses.length})
+                            All ({optimizedHouses.length})
                           </button>
                           <button
                             onClick={() => setFilterCoord("has")}
@@ -760,26 +768,35 @@ export default function NavigatePage() {
                 )}
               </div>
 
-              {/* ช่องค้นหา (ใช้ร่วมกันทั้ง 2 แท็บ) */}
+              {/* ช่องค้นหา */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
                   type="text"
                   placeholder={
                     viewMode === "today"
-                      ? "ค้นหา ชื่อ, เบอร์, ที่อยู่, หมายเหตุ, จำนวน, พิกัด..."
-                      : "ค้นหา ชื่อ, เบอร์, ที่อยู่, หมายเหตุตอนส่ง, เวลา..."
+                      ? "ค้นหาทุกอย่าง: ชื่อ, เบอร์, ที่อยู่, พิกัด, หมายเหตุ..."
+                      : "ค้นหา: ชื่อ, เบอร์, เวลาส่ง, หมายเหตุตอนส่ง..."
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-11 pr-12 py-3 border rounded-xl focus:border-blue-500 outline-none font-medium transition shadow-sm"
+                  id="navigate-search-input"
                 />
                 {searchQuery && (
                   <button
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setTimeout(() => {
+                        const input = document.getElementById(
+                          "navigate-search-input",
+                        ) as HTMLInputElement;
+                        input?.focus();
+                      }, 0);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition"
                   >
-                    <X className="w-5 h-5" />
+                    <X className="w-5 h-5 text-gray-500" />
                   </button>
                 )}
               </div>
@@ -787,15 +804,15 @@ export default function NavigatePage() {
           </div>
         </div>
 
-        {/* รายการ */}
+        {/* รายการ – ใช้ displayed แทน optimizedHouses */}
         <div className="max-w-7xl mx-auto px-4 py-6">
           {viewMode === "today" ? (
-            optimizedHouses.length === 0 ? (
+            displayed.length === 0 ? (
               <p className="text-center py-20 text-gray-500 text-lg">
                 {searchQuery ? "ไม่พบรายการที่ค้นหา" : "ยังไม่มีงานวันนี้"}
               </p>
             ) : (
-              optimizedHouses.map((house, idx) => {
+              displayed.map((house, idx) => {
                 const dist =
                   house.lat && house.lng && (startPosition || currentPosition)
                     ? haversineDistance(
@@ -842,7 +859,7 @@ export default function NavigatePage() {
                           </button>
                         </div>
                       </div>
-
+                      {/* ข้อมูลบ้านเหมือนเดิม */}
                       <h3 className="text-lg font-bold">{house.full_name}</h3>
                       <p className="text-sm text-gray-600">{house.phone}</p>
                       {house.quantity && house.quantity > 1 && (
@@ -867,7 +884,6 @@ export default function NavigatePage() {
                         </p>
                       )}
                     </div>
-
                     <div className="px-5 pb-5 flex gap-3">
                       {house.lat && house.lng ? (
                         <button
