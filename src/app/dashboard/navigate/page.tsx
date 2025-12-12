@@ -5,7 +5,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Edit3,
-  ExternalLink, // มาแล้ว!
+  ExternalLink,
   Flag,
   Loader2,
   Map as MapIcon,
@@ -65,28 +65,23 @@ const getOptimizedRouteOrder = async (
   housesWithCoords: House[],
 ): Promise<House[]> => {
   if (housesWithCoords.length === 0) return [];
-
   const coords = [
     start,
     ...housesWithCoords.map((h) => ({ lat: h.lat!, lng: h.lng! })),
   ];
   const coordStr = coords.map((c) => `${c.lng},${c.lat}`).join(";");
-
   const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=false&geometries=false&source=first&destination=last&roundtrip=false`;
-
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
     const data = await res.json();
-
     if (data.code === "Ok" && data.waypoints) {
       const order: number[] = data.waypoints
         .slice(1)
         .map((wp: any) => wp.waypoint_index - 1)
         .filter((i: number) => i >= 0 && i < housesWithCoords.length);
-
       const reordered = order
         .map((i) => housesWithCoords[i])
         .filter((h): h is House => h !== undefined);
@@ -95,7 +90,6 @@ const getOptimizedRouteOrder = async (
   } catch (err) {
     console.warn("OSRM ล้มเหลว ใช้ระยะทางตรงแทน");
   }
-
   return housesWithCoords
     .map((h) => ({
       ...h,
@@ -116,22 +110,28 @@ export default function NavigatePage() {
     lat: number;
     lng: number;
   } | null>(null);
-  const [loading, setLoading] = useState(true); // ← ตัวนี้สำคัญ!
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [viewMode, setViewMode] = useState<"today" | "delivered">("today");
+  const [viewMode, setViewMode] = useState<"today" | "delivered" | "reported">(
+    "today",
+  );
   const [deliveredHouses, setDeliveredHouses] = useState<any[]>([]);
+  const [reportedHouses, setReportedHouses] = useState<any[]>([]);
 
   // Modal
   const [showStartModal, setShowStartModal] = useState(false);
   const [showDeliverModal, setShowDeliverModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [currentHouse, setCurrentHouse] = useState<House | null>(null);
   const [deliverNote, setDeliverNote] = useState("");
   const [houseToDeliver, setHouseToDeliver] = useState<House | null>(null);
+  const [houseToReport, setHouseToReport] = useState<House | null>(null);
+  const [reportReason, setReportReason] = useState("");
   const [filterCoord, setFilterCoord] = useState<"all" | "has" | "none">("all");
+  const [isSearchLocked, setIsSearchLocked] = useState(false);
 
   // Start position
-  const [startInput, setStartInput] = useState("");
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
   const [detectedStartLng, setDetectedStartLng] = useState<number | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -141,9 +141,7 @@ export default function NavigatePage() {
   const [toasts, setToasts] = useState<
     { id: string; msg: string; type: "success" | "error" }[]
   >([]);
-
   const shouldResort = useRef(true);
-  const watchId = useRef<number | null>(null);
 
   const addToast = (msg: string, type: "success" | "error" = "success") => {
     const id = Date.now().toString();
@@ -159,7 +157,7 @@ export default function NavigatePage() {
     window.location.href = `tel:${phone.replace(/[^0-9]/g, "")}`;
   };
 
-  // ลบจาก today_houses (ใช้ id_home)
+  // ลบจาก today_houses
   const deleteFromToday = async (id: string, id_home?: string | null) => {
     if (!confirm("ลบบ้านนี้จากรายการวันนี้จริงหรือ?")) return;
     try {
@@ -194,7 +192,7 @@ export default function NavigatePage() {
     }
   };
 
-  /// ตัวอย่าง confirmDeliver ที่ใช้ quantity ได้เต็มที่
+  // ยืนยันส่งแล้ว
   const confirmDeliver = async () => {
     if (!houseToDeliver) return;
     const note = deliverNote.trim() || "ส่งแล้ว (ไม่ระบุหมายเหตุ)";
@@ -210,7 +208,6 @@ export default function NavigatePage() {
             .delete()
             .eq("id_home", houseToDeliver.id_home)
         : supabase.from("today_houses").delete().eq("id", houseToDeliver.id);
-
       const { error: delErr } = await delQuery;
       if (delErr) throw delErr;
 
@@ -227,7 +224,7 @@ export default function NavigatePage() {
         lat: houseToDeliver.lat,
         lng: houseToDeliver.lng,
         note: houseToDeliver.note,
-        quantity: houseToDeliver.quantity, // ใช้ได้จริง!
+        quantity: houseToDeliver.quantity,
         delivered_note: note,
         delivered_at: new Date().toISOString(),
       };
@@ -248,10 +245,65 @@ export default function NavigatePage() {
     }
   };
 
-  // แก้ไข → อัปเดตทั้ง houses (คลังหลัก) + today_houses (ทุกคน)
+  // รายงานปัญหา
+  const confirmReport = async () => {
+    if (!houseToReport || !reportReason.trim()) {
+      addToast("กรุณากรอกเหตุผลการรายงาน", "error");
+      return;
+    }
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("ไม่พบผู้ใช้");
+
+      const delQuery = houseToReport.id_home
+        ? supabase
+            .from("today_houses")
+            .delete()
+            .eq("id_home", houseToReport.id_home)
+        : supabase.from("today_houses").delete().eq("id", houseToReport.id);
+      const { error: delErr } = await delQuery;
+      if (delErr) throw delErr;
+
+      setHouses((p) => p.filter((h) => h.id !== houseToReport.id));
+      setOptimizedHouses((p) => p.filter((h) => h.id !== houseToReport.id));
+
+      const item = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        id_home: houseToReport.id_home || null,
+        full_name: houseToReport.full_name,
+        phone: houseToReport.phone,
+        address: houseToReport.address,
+        lat: houseToReport.lat,
+        lng: houseToReport.lng,
+        note: houseToReport.note,
+        quantity: houseToReport.quantity,
+        report_reason: reportReason.trim(),
+        reported_at: new Date().toISOString(),
+      };
+
+      const { error: insErr } = await supabase
+        .from("reported_houses")
+        .insert(item);
+      if (insErr) throw insErr;
+
+      setReportedHouses((p) => [item, ...p]);
+      addToast(`รายงานแล้ว: ${reportReason.trim()}`, "success");
+    } catch (err: any) {
+      addToast("รายงานไม่สำเร็จ: " + err.message, "error");
+    } finally {
+      setShowReportModal(false);
+      setHouseToReport(null);
+      setReportReason("");
+    }
+  };
+
+  // แก้ไขบ้าน
   const saveEdit = async () => {
     if (!currentHouse) return;
-
     const updates = {
       full_name: currentHouse.full_name.trim(),
       phone: currentHouse.phone.trim(),
@@ -261,27 +313,20 @@ export default function NavigatePage() {
       note: currentHouse.note?.trim() || null,
       quantity: currentHouse.quantity || 1,
     };
-
     try {
-      // 1. อัปเดตคลังหลักก่อน (houses)
       if (currentHouse.id_home) {
         const { error: housesError } = await supabase
           .from("houses")
           .update(updates)
           .eq("id", currentHouse.id_home);
-
         if (housesError) throw housesError;
       }
-
-      // 2. อัปเดต today_houses (ของเรา + ทุกคนที่ใช้บ้านนี้)
       const { error } = await supabase
         .from("today_houses")
         .update(updates)
         .or(`id.eq.${currentHouse.id},id_home.eq.${currentHouse.id_home}`);
-
       if (error) throw error;
 
-      // อัปเดต UI ทันที
       setHouses((prev) =>
         prev.map((h) =>
           h.id === currentHouse.id || h.id_home === currentHouse.id_home
@@ -296,7 +341,6 @@ export default function NavigatePage() {
             : h,
         ),
       );
-
       addToast("แก้ไขสำเร็จ! ทุกคนเห็นข้อมูลใหม่ทันที", "success");
     } catch (err: any) {
       addToast("แก้ไขไม่สำเร็จ: " + err.message, "error");
@@ -306,14 +350,13 @@ export default function NavigatePage() {
     }
   };
 
-  // ดึงข้อมูลวันนี้ (ใช้ RPC)
+  // ดึงข้อมูล
   const loadTodayHouses = useCallback(async () => {
     try {
       const { data, error } = await supabase.rpc(
         "refresh_and_merge_today_houses",
       );
       if (error) throw error;
-
       const cleaned = (data || []).map((h: any) => ({
         id: h.id,
         id_home: h.id_home || null,
@@ -326,7 +369,6 @@ export default function NavigatePage() {
         quantity: h.quantity,
         order_index: h.order_index || 9999,
       }));
-
       setHouses(cleaned);
       shouldResort.current = true;
     } catch (err: any) {
@@ -352,16 +394,33 @@ export default function NavigatePage() {
     } catch {}
   }, []);
 
-  // Init + Realtime + GPS
+  const loadReported = useCallback(async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const today = new Date().toISOString().split("T")[0];
+      const { data } = await supabase
+        .from("reported_houses")
+        .select("*")
+        .eq("user_id", user.id)
+        .gte("reported_at", `${today}T00:00:00`)
+        .lte("reported_at", `${today}T23:59:59`)
+        .order("reported_at", { ascending: false });
+      setReportedHouses(data || []);
+    } catch {}
+  }, []);
+
+  // Init + Realtime
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await Promise.all([loadTodayHouses(), loadDelivered()]);
-      setLoading(false); // ← สำคัญมาก! อย่าลืมอันนี้
+      await Promise.all([loadTodayHouses(), loadDelivered(), loadReported()]);
+      setLoading(false);
     };
     init();
 
-    // Realtime
     const channel = supabase
       .channel("navigate_realtime")
       .on(
@@ -379,6 +438,11 @@ export default function NavigatePage() {
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "reported_houses" },
+        loadReported,
+      )
+      .on(
+        "postgres_changes",
         { event: "UPDATE", schema: "public", table: "houses" },
         loadTodayHouses,
       )
@@ -387,7 +451,46 @@ export default function NavigatePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadTodayHouses, loadDelivered]);
+  }, [loadTodayHouses, loadDelivered, loadReported]);
+
+  // โหลดจุดเริ่มต้นจาก localStorage ตอน mount
+  useEffect(() => {
+    const saved = localStorage.getItem("todayStartPosition");
+    if (saved) {
+      try {
+        const pos = JSON.parse(saved);
+        if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
+          setStartPosition(pos);
+          shouldResort.current = true;
+          addToast("ใช้จุดเริ่มต้นที่ตั้งไว้ก่อนหน้า", "success");
+        }
+      } catch (err) {
+        console.warn("โหลดจุดเริ่มต้นเก่าผิดพลาด", err);
+        localStorage.removeItem("todayStartPosition");
+      }
+    }
+  }, []);
+
+  // เรียงลำดับอัตโนมัติ
+  useEffect(() => {
+    if (!shouldResort.current || houses.length === 0) return;
+    const run = async () => {
+      const origin = startPosition || currentPosition || DEFAULT_POSITION;
+      const withCoords = houses.filter((h) => h.lat && h.lng);
+      const noCoords = houses.filter((h) => !h.lat || !h.lng);
+      const optimized = await getOptimizedRouteOrder(origin, withCoords);
+      const final = [...optimized, ...noCoords];
+      setOptimizedHouses(final);
+      final.forEach(async (h, i) => {
+        await supabase
+          .from("today_houses")
+          .update({ order_index: i + 1 })
+          .eq("id", h.id);
+      });
+      shouldResort.current = false;
+    };
+    run();
+  }, [houses, currentPosition, startPosition]);
 
   // รีเฟรช GPS
   const forceRefreshLocation = () => {
@@ -403,42 +506,38 @@ export default function NavigatePage() {
   };
 
   const openFullRoute = () => {
+    const listToUse =
+      isSearchLocked && searchQuery.trim() ? displayed : optimizedHouses;
     const origin = startPosition || currentPosition || DEFAULT_POSITION;
-    const validHouses = optimizedHouses.filter(
+    const validHouses = listToUse.filter(
       (h): h is House & { lat: number; lng: number } => !!h.lat && !!h.lng,
     );
-
     if (validHouses.length === 0) {
-      addToast("ไม่มีบ้านที่มีพิกัด", "error");
+      addToast("ไม่มีบ้านที่มีพิกัดในรายการนี้", "error");
       return;
     }
-
-    // ถ้าน้อยกว่า 20 จุด → ใช้เส้นทางจริง
-    if (validHouses.length <= 20) {
-      const coords = [
-        `${origin.lat},${origin.lng}`,
-        ...validHouses.map((h) => `${h.lat},${h.lng}`),
-      ].join("/");
-      const url = `https://www.google.com/maps/dir/${coords}`;
-      window.open(url, "_blank");
-      addToast(`เปิดเส้นทาง ${validHouses.length} จุด`, "success");
-    } else {
-      // มากกว่า 20 จุด → ใช้ data layer ปักหมุดทั้งหมด + เริ่มจากจุดเริ่มต้น
-      const markers = validHouses
-        .map((h) => `color:red|${h.lat},${h.lng}`)
-        .join("&markers=");
-
-      const url = `https://www.google.com/maps/dir/${origin.lat},${origin.lng}/@${origin.lat},${origin.lng},12z/data=!3m1!4b1!4m2!2m1!6e5&markers=color:blue|${origin.lat},${origin.lng}&${markers}`;
-
-      window.open(url, "_blank");
-      addToast(`ปักหมุดทั้งหมด ${validHouses.length} จุดบนแผนที่`, "success");
-    }
+    const maxPoints = 20;
+    const housesToUse = validHouses.slice(0, maxPoints);
+    const coords = [
+      `${origin.lat},${origin.lng}`,
+      ...housesToUse.map((h) => `${h.lat},${h.lng}`),
+    ].join("/");
+    const url = `https://www.google.com/maps/dir/${coords}`;
+    window.open(url, "_blank");
+    const total = validHouses.length;
+    const used = housesToUse.length;
+    const source =
+      isSearchLocked && searchQuery.trim() ? "ผลค้นหาที่ล็อค" : "ทั้งหมด";
+    const msg =
+      used < total
+        ? `เปิดเส้นทาง ${used} จุดแรก จาก ${source} (${total} จุด)`
+        : `เปิดเส้นทางทั้งหมดจาก ${source} (${used} จุด)`;
+    addToast(msg, "success");
   };
 
   const handleSetStartPosition = async () => {
     setIsDetecting(true);
     let lat: number, lng: number;
-
     if (detectedStartLat !== null && detectedStartLng !== null) {
       lat = detectedStartLat;
       lng = detectedStartLng;
@@ -460,7 +559,6 @@ export default function NavigatePage() {
         return;
       }
     }
-
     try {
       await supabase.rpc("save_start_position", { p_lat: lat, p_lng: lng });
       const newPos = { lat, lng };
@@ -476,7 +574,6 @@ export default function NavigatePage() {
     }
   };
 
-  // ฟังก์ชันตรวจจับตำแหน่ง (เหมือนในหน้า houses)
   const detectCurrentLocation = () => {
     setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(
@@ -485,7 +582,7 @@ export default function NavigatePage() {
         const lng = pos.coords.longitude;
         setDetectedStartLat(lat);
         setDetectedStartLng(lng);
-        setCoordInput(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        setCoordInput(`${lat.toFixed(6)},${lng.toFixed(6)}`);
         addToast("ตรวจจับพิกัดสำเร็จ!", "success");
         setIsDetecting(false);
       },
@@ -497,7 +594,6 @@ export default function NavigatePage() {
     );
   };
 
-  // ฟังก์ชันเปิด Google Maps ตรวจสอบพิกัด
   const verifyOnMaps = (lat: number, lng: number) => {
     window.open(
       `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
@@ -505,44 +601,13 @@ export default function NavigatePage() {
     );
   };
 
-  // เรียงลำดับอัตโนมัติ
-  useEffect(() => {
-    if (!shouldResort.current || houses.length === 0) return;
-
-    const run = async () => {
-      const origin = startPosition || currentPosition || DEFAULT_POSITION;
-      const withCoords = houses.filter((h) => h.lat && h.lng);
-      const noCoords = houses.filter((h) => !h.lat || !h.lng);
-
-      const optimized = await getOptimizedRouteOrder(origin, withCoords);
-      const final = [...optimized, ...noCoords];
-      setOptimizedHouses(final);
-
-      final.forEach(async (h, i) => {
-        await supabase
-          .from("today_houses")
-          .update({ order_index: i + 1 })
-          .eq("id", h.id);
-      });
-
-      shouldResort.current = false;
-    };
-    run();
-  }, [houses, currentPosition, startPosition]);
-
-  // ค้นหาแบบสุดยอด (เหมือนหน้า houses)
   const displayed = useMemo(() => {
     let list = optimizedHouses;
-
-    // ตัวกรองพิกัด
     if (filterCoord === "has") list = list.filter((h) => h.lat && h.lng);
     else if (filterCoord === "none")
       list = list.filter((h) => !h.lat || !h.lng);
-
     if (!searchQuery.trim()) return list;
-
     const q = searchQuery.toLowerCase().trim();
-
     return list.filter((h) => {
       const fullText = [
         h.full_name || "",
@@ -559,16 +624,13 @@ export default function NavigatePage() {
       ]
         .join(" ")
         .toLowerCase();
-
       return fullText.includes(q);
     });
   }, [optimizedHouses, searchQuery, filterCoord]);
 
   const displayedDelivered = useMemo(() => {
     if (!searchQuery.trim()) return deliveredHouses;
-
     const q = searchQuery.toLowerCase().trim();
-
     return deliveredHouses.filter((h: any) => {
       const time = formatDeliveredDateTime(h.delivered_at);
       const fullText = [
@@ -587,7 +649,6 @@ export default function NavigatePage() {
       ]
         .join(" ")
         .toLowerCase();
-
       return fullText.includes(q);
     });
   }, [deliveredHouses, searchQuery]);
@@ -603,13 +664,16 @@ export default function NavigatePage() {
   return (
     <>
       <div className="min-h-screen bg-gray-50 pb-24 lg:pb-8 text-gray-800">
-        {/* Header */}
         <div className="sticky top-0 bg-white border-b z-40 shadow-lg">
           <div className="max-w-7xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
                 <h1 className="text-2xl font-bold">
-                  {viewMode === "today" ? "นำทางวันนี้" : "ส่งแล้ววันนี้"}
+                  {viewMode === "today"
+                    ? "นำทางวันนี้"
+                    : viewMode === "delivered"
+                      ? "ส่งแล้ววันนี้"
+                      : "รายงานแล้ว"}
                 </h1>
                 <div className="flex bg-gray-100 p-1 rounded-xl">
                   <button
@@ -632,10 +696,18 @@ export default function NavigatePage() {
                   >
                     ส่งแล้ว ({deliveredHouses.length})
                   </button>
+                  <button
+                    onClick={() => setViewMode("reported")}
+                    className={`px-5 py-2 rounded-lg font-bold transition-all ${
+                      viewMode === "reported"
+                        ? "bg-orange-600 text-white shadow-md"
+                        : "text-gray-600"
+                    }`}
+                  >
+                    รายงานแล้ว ({reportedHouses.length})
+                  </button>
                 </div>
               </div>
-
-              {/* ปุ่มใหญ่ฝั่งขวา (เฉพาะเดสก์ท็อป + เฉพาะวันนี้) */}
               {viewMode === "today" && (
                 <div className="hidden lg:flex gap-3">
                   <button
@@ -663,63 +735,66 @@ export default function NavigatePage() {
               )}
             </div>
 
-            {/* ส่วนใหม่: ปุ่มลบทั้งหมด + ตัวกรอง + ช่องค้นหา */}
             <div className="space-y-4">
-              {/* แถวบน: ปุ่มลบทั้งหมด */}
               <div className="flex justify-between items-center">
                 {(viewMode === "today"
                   ? optimizedHouses.length
-                  : deliveredHouses.length) > 0 && (
+                  : viewMode === "delivered"
+                    ? deliveredHouses.length
+                    : reportedHouses.length) > 0 && (
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       const isToday = viewMode === "today";
                       const count = isToday
                         ? optimizedHouses.length
-                        : deliveredHouses.length;
+                        : viewMode === "delivered"
+                          ? deliveredHouses.length
+                          : reportedHouses.length;
                       if (
                         !confirm(
-                          `ลบ${isToday ? "รายการวันนี้" : "รายการส่งแล้ว"}ทั้งหมด ${count} รายการจริงหรือ?`,
+                          `ลบ${isToday ? "รายการวันนี้" : viewMode === "delivered" ? "รายการส่งแล้ว" : "รายการรายงาน"}ทั้งหมด ${count} รายการจริงหรือ?`,
                         )
                       )
                         return;
-
-                      const deleteAll = async () => {
-                        try {
-                          if (isToday) {
-                            await supabase
-                              .from("today_houses")
-                              .delete()
-                              .neq(
-                                "id",
-                                "00000000-0000-0000-0000-000000000000",
-                              );
-                            setHouses([]);
-                            setOptimizedHouses([]);
-                            addToast("ลบรายการวันนี้ทั้งหมดแล้ว", "success");
-                          } else {
-                            await supabase
-                              .from("delivered_today")
-                              .delete()
-                              .in(
-                                "id",
-                                deliveredHouses.map((h) => h.id),
-                              );
-                            setDeliveredHouses([]);
-                            addToast("ลบรายการส่งแล้วทั้งหมดแล้ว", "success");
-                          }
-                        } catch (err: any) {
-                          addToast("ลบไม่สำเร็จ: " + err.message, "error");
+                      try {
+                        if (isToday) {
+                          await supabase
+                            .from("today_houses")
+                            .delete()
+                            .neq("id", "00000000-0000-0000-0000-000000000000");
+                          setHouses([]);
+                          setOptimizedHouses([]);
+                          addToast("ลบรายการวันนี้ทั้งหมดแล้ว", "success");
+                        } else if (viewMode === "delivered") {
+                          await supabase
+                            .from("delivered_today")
+                            .delete()
+                            .in(
+                              "id",
+                              deliveredHouses.map((h) => h.id),
+                            );
+                          setDeliveredHouses([]);
+                          addToast("ลบรายการส่งแล้วทั้งหมดแล้ว", "success");
+                        } else {
+                          await supabase
+                            .from("reported_houses")
+                            .delete()
+                            .in(
+                              "id",
+                              reportedHouses.map((h) => h.id),
+                            );
+                          setReportedHouses([]);
+                          addToast("ลบรายการรายงานทั้งหมดแล้ว", "success");
                         }
-                      };
-                      deleteAll();
+                      } catch (err: any) {
+                        addToast("ลบไม่สำเร็จ: " + err.message, "error");
+                      }
                     }}
                     className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
                 )}
-
-                {/* ตัวกรองพิกัด */}
                 {viewMode === "today" && optimizedHouses.length > 0 && (
                   <div className="flex bg-gray-100 p-1 rounded-xl">
                     {(() => {
@@ -731,35 +806,22 @@ export default function NavigatePage() {
                         <>
                           <button
                             onClick={() => setFilterCoord("all")}
-                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${
-                              filterCoord === "all"
-                                ? "bg-blue-600 text-white shadow"
-                                : "text-gray-600"
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-bold text-sm transition-all ${filterCoord === "all" ? "bg-blue-600 text-white shadow" : "text-gray-600"}`}
                           >
                             All ({optimizedHouses.length})
                           </button>
                           <button
                             onClick={() => setFilterCoord("has")}
-                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 transition-all ${
-                              filterCoord === "has"
-                                ? "bg-green-600 text-white shadow"
-                                : "text-gray-600"
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 transition-all ${filterCoord === "has" ? "bg-green-600 text-white shadow" : "text-gray-600"}`}
                           >
-                            <MapPin className="w-4 h-4" />
-                            มีพิกัด ({withCoord})
+                            <MapPin className="w-4 h-4" /> มีพิกัด ({withCoord})
                           </button>
                           <button
                             onClick={() => setFilterCoord("none")}
-                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 transition-all ${
-                              filterCoord === "none"
-                                ? "bg-orange-600 text-white shadow"
-                                : "text-gray-600"
-                            }`}
+                            className={`px-4 py-2 rounded-lg font-bold text-sm flex items-center gap-1 transition-all ${filterCoord === "none" ? "bg-orange-600 text-white shadow" : "text-gray-600"}`}
                           >
-                            <AlertTriangle className="w-4 h-4" />
-                            ไม่มีพิกัด ({withoutCoord})
+                            <AlertTriangle className="w-4 h-4" /> ไม่มีพิกัด (
+                            {withoutCoord})
                           </button>
                         </>
                       );
@@ -768,7 +830,7 @@ export default function NavigatePage() {
                 )}
               </div>
 
-              {/* ช่องค้นหา */}
+              {/* ช่องค้นหา + ปุ่มล็อค */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
@@ -776,7 +838,7 @@ export default function NavigatePage() {
                   placeholder={
                     viewMode === "today"
                       ? "ค้นหาทุกอย่าง: ชื่อ, เบอร์, ที่อยู่, พิกัด, หมายเหตุ..."
-                      : "ค้นหา: ชื่อ, เบอร์, เวลาส่ง, หมายเหตุตอนส่ง..."
+                      : "ค้นหา: ชื่อ, เบอร์, เวลา, หมายเหตุ..."
                   }
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -787,16 +849,68 @@ export default function NavigatePage() {
                   <button
                     onClick={() => {
                       setSearchQuery("");
-                      setTimeout(() => {
-                        const input = document.getElementById(
-                          "navigate-search-input",
-                        ) as HTMLInputElement;
-                        input?.focus();
-                      }, 0);
+                      setTimeout(
+                        () =>
+                          document
+                            .getElementById("navigate-search-input")
+                            ?.focus(),
+                        0,
+                      );
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition"
+                    className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition z-10"
                   >
                     <X className="w-5 h-5 text-gray-500" />
+                  </button>
+                )}
+                {viewMode === "today" && searchQuery.trim() && (
+                  <button
+                    onClick={() => {
+                      setIsSearchLocked(!isSearchLocked);
+                      addToast(
+                        isSearchLocked
+                          ? "ปลดล็อคการค้นหาแล้ว"
+                          : "ล็อคการค้นหาแล้ว – เส้นทางทั้งหมดใช้เฉพาะผลค้นหา",
+                        "success",
+                      );
+                    }}
+                    className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-all ${
+                      isSearchLocked
+                        ? "bg-blue-600 text-white shadow-lg"
+                        : "bg-gray-200 text-gray-600 hover:bg-gray-300"
+                    }`}
+                    title={
+                      isSearchLocked
+                        ? "กำลังล็อค – คลิกปลดล็อค"
+                        : "คลิกล็อคผลค้นหา"
+                    }
+                  >
+                    {isSearchLocked ? (
+                      <svg
+                        className="w-5 h-5"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5 9V7a5 5 0 0110 0v2h3a1 1 0 011 1v7a1 1 0 01-1 1H2a1 1 0 01-1-1v-7a1 1 0 011-1h3zm4-5a3 3 0 016 0v2H5V4a3 3 0 013-3z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    ) : (
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 11V7a4 4 0 118 0m-1 9v-4m-6 4h12"
+                        />
+                      </svg>
+                    )}
                   </button>
                 )}
               </div>
@@ -804,7 +918,6 @@ export default function NavigatePage() {
           </div>
         </div>
 
-        {/* รายการ – ใช้ displayed แทน optimizedHouses */}
         <div className="max-w-7xl mx-auto px-4 py-6">
           {viewMode === "today" ? (
             displayed.length === 0 ? (
@@ -822,7 +935,6 @@ export default function NavigatePage() {
                         house.lng,
                       ).toFixed(1)
                     : null;
-
                 return (
                   <div
                     key={house.id}
@@ -850,6 +962,17 @@ export default function NavigatePage() {
                             <Edit3 className="w-5 h-5 text-blue-600" />
                           </button>
                           <button
+                            onClick={() => {
+                              setHouseToReport(house);
+                              setReportReason("");
+                              setShowReportModal(true);
+                            }}
+                            className="p-2 bg-orange-100 rounded-lg hover:bg-orange-200 transition"
+                            title="รายงานปัญหา / ฝากไว้ก่อน"
+                          >
+                            <AlertTriangle className="w-5 h-5 text-orange-600" />
+                          </button>
+                          <button
                             onClick={() =>
                               deleteFromToday(house.id, house.id_home)
                             }
@@ -859,7 +982,6 @@ export default function NavigatePage() {
                           </button>
                         </div>
                       </div>
-                      {/* ข้อมูลบ้านเหมือนเดิม */}
                       <h3 className="text-lg font-bold">{house.full_name}</h3>
                       <p className="text-sm text-gray-600">{house.phone}</p>
                       {house.quantity && house.quantity > 1 && (
@@ -917,8 +1039,7 @@ export default function NavigatePage() {
                 );
               })
             )
-          ) : (
-            // ส่งแล้ววันนี้
+          ) : viewMode === "delivered" ? (
             displayedDelivered.map((h, idx) => (
               <div
                 key={h.id}
@@ -951,10 +1072,55 @@ export default function NavigatePage() {
                 </p>
               </div>
             ))
+          ) : reportedHouses.length === 0 ? (
+            <p className="text-center py-20 text-gray-500 text-lg">
+              ยังไม่มีรายการที่รายงาน
+            </p>
+          ) : (
+            reportedHouses.map((h, idx) => (
+              <div
+                key={h.id}
+                className="bg-gradient-to-r from-orange-50 to-amber-50 border-2 border-orange-200 rounded-2xl p-5 shadow-md mb-4"
+              >
+                <div className="flex justify-between items-start mb-3">
+                  <span className="text-2xl font-bold text-orange-700">
+                    #{reportedHouses.length - idx}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("ลบรายงานนี้?")) return;
+                      await supabase
+                        .from("reported_houses")
+                        .delete()
+                        .eq("id", h.id);
+                      setReportedHouses((p) => p.filter((x) => x.id !== h.id));
+                      addToast("ลบรายงานแล้ว", "success");
+                    }}
+                    className="p-2 bg-red-100 rounded-lg hover:bg-red-200"
+                  >
+                    <Trash2 className="w-5 h-5 text-red-600" />
+                  </button>
+                </div>
+                <h3 className="text-lg font-bold">{h.full_name}</h3>
+                <p className="text-sm text-gray-600">{h.phone}</p>
+                {h.quantity && h.quantity > 1 && (
+                  <p className="text-sm font-bold text-purple-600">
+                    จำนวน: {h.quantity} ชิ้น
+                  </p>
+                )}
+                <p className="text-xs text-gray-500 mt-1">{h.address}</p>
+                <p className="text-sm font-bold text-orange-700 mt-3 break-words">
+                  รายงาน: {h.report_reason}
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  {formatDeliveredDateTime(h.reported_at).replace("||", "เวลา")}
+                </p>
+              </div>
+            ))
           )}
         </div>
 
-        {/* Bottom Bar มือถือ */}
+        {/* Bottom Bar */}
         {viewMode === "today" && (
           <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-2xl lg:hidden z-50">
             <div className="flex justify-around py-3">
@@ -988,11 +1154,7 @@ export default function NavigatePage() {
           {toasts.map((t) => (
             <div
               key={t.id}
-              className={`px-6 py-4 rounded-2xl text-white font-bold shadow-2xl animate-in slide-in-from-bottom ${
-                t.type === "success"
-                  ? "bg-gradient-to-r from-green-500 to-emerald-600"
-                  : "bg-gradient-to-r from-red-500 to-rose-600"
-              }`}
+              className={`px-6 py-4 rounded-2xl text-white font-bold shadow-2xl animate-in slide-in-from-bottom ${t.type === "success" ? "bg-gradient-to-r from-green-500 to-emerald-600" : "bg-gradient-to-r from-red-500 to-rose-600"}`}
             >
               {t.type === "success" ? (
                 <CheckCircle className="w-6 h-6 inline mr-2" />
@@ -1004,7 +1166,7 @@ export default function NavigatePage() {
           ))}
         </div>
 
-        {/* Modal: ยืนยันส่งแล้ว */}
+        {/* Modal ยืนยันส่งแล้ว */}
         {showDeliverModal && houseToDeliver && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
@@ -1024,7 +1186,7 @@ export default function NavigatePage() {
                 )}
               </div>
               <textarea
-                placeholder="หมายเหตุตอนส่ง (เช่น ฝากหน้าบ้าน, ลูกค้าไม่อยู่...)"
+                placeholder="หมายเหตุตอนส่ง..."
                 value={deliverNote}
                 onChange={(e) => setDeliverNote(e.target.value)}
                 rows={3}
@@ -1049,7 +1211,55 @@ export default function NavigatePage() {
           </div>
         )}
 
-        {/* Modal: ตั้งจุดเริ่มต้น (เวอร์ชันอัปเดตเต็มรูปแบบ) */}
+        {/* Modal รายงานปัญหา */}
+        {showReportModal && houseToReport && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
+              <h2 className="text-xl font-bold text-orange-600 mb-4">
+                รายงานปัญหา / ฝากไว้ก่อน
+              </h2>
+              <div className="bg-gray-50 p-4 rounded-xl mb-4">
+                <p className="font-bold">{houseToReport.full_name}</p>
+                <p className="text-sm text-gray-600">{houseToReport.phone}</p>
+                <p className="text-xs text-gray-500">{houseToReport.address}</p>
+                {houseToReport.quantity && houseToReport.quantity > 1 && (
+                  <p className="text-sm font-bold text-purple-600 mt-2">
+                    จำนวน: {houseToReport.quantity} ชิ้น
+                  </p>
+                )}
+              </div>
+              <textarea
+                placeholder="กรอกเหตุผล เช่น ฝากหน้าบ้าน, ลูกค้าไม่อยู่..."
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 border-2 border-orange-200 rounded-xl focus:border-orange-500 outline-none resize-none"
+                autoFocus
+              />
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={() => {
+                    setShowReportModal(false);
+                    setHouseToReport(null);
+                    setReportReason("");
+                  }}
+                  className="flex-1 py-3 bg-gray-200 rounded-xl"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={confirmReport}
+                  disabled={!reportReason.trim()}
+                  className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50"
+                >
+                  รายงานแล้ว
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: ตั้งจุดเริ่มต้น (เวอร์ชันอัตโนมัติเต็มรูปแบบ) */}
         {showStartModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
@@ -1062,7 +1272,7 @@ export default function NavigatePage() {
                 </button>
               </div>
 
-              {/* ปุ่มตรวจจับตำแหน่งปัจจุบัน */}
+              {/* ปุ่มตรวจจับตำแหน่งใหม่ (สำหรับกรณีต้องการรีเฟรช) */}
               <button
                 onClick={detectCurrentLocation}
                 disabled={isDetecting}
@@ -1073,44 +1283,31 @@ export default function NavigatePage() {
                 ) : (
                   <MapPin className="w-5 h-5" />
                 )}
-                {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบัน"}
+                {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบันใหม่"}
               </button>
 
-              {/* กรอกพิกัดด้วยมือ + แสดงผลทันที */}
+              {/* กรอกพิกัดด้วยมือ */}
               <input
                 type="text"
                 placeholder="พิกัด (lat,lng) เช่น 16.883300,99.125000"
                 value={coordInput}
                 onChange={(e) => {
-                  const value = e.target.value;
+                  const value = e.target.value.trim();
                   setCoordInput(value);
-
                   const [latStr, lngStr] = value.split(",");
                   const lat = parseFloat(latStr?.trim());
                   const lng = parseFloat(lngStr?.trim());
-
                   if (!isNaN(lat) && !isNaN(lng)) {
                     setDetectedStartLat(lat);
                     setDetectedStartLng(lng);
-                  } else {
+                  } else if (value === "") {
+                    // ถ้าลบหมด ให้อนุญาตให้ดึง GPS ใหม่ได้
                     setDetectedStartLat(null);
                     setDetectedStartLng(null);
                   }
                 }}
                 className="w-full px-4 py-3 border rounded-xl text-center font-mono text-sm mb-3 focus:border-blue-500 outline-none"
               />
-
-              {/* แสดงพิกัดที่ใช้งานจริง */}
-              {detectedStartLat !== null && detectedStartLng !== null && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4">
-                  <p className="text-xs text-blue-600 font-medium">
-                    พิกัดที่ใช้:
-                  </p>
-                  <p className="font-mono text-sm font-bold text-blue-800">
-                    {detectedStartLat.toFixed(6)}, {detectedStartLng.toFixed(6)}
-                  </p>
-                </div>
-              )}
 
               {/* ตรวจสอบบน Google Maps */}
               {detectedStartLat !== null && detectedStartLng !== null && (
@@ -1129,48 +1326,30 @@ export default function NavigatePage() {
 
               {/* ปุ่มด้านล่าง */}
               <div className="flex gap-3">
-                {/* ปุ่มล้าง / ยกเลิก */}
+                {/* ปุ่มล้าง (ลบค่าที่ตั้งไว้ทั้งหมด) */}
                 <button
                   onClick={() => {
                     if (
-                      detectedStartLat !== null ||
-                      detectedStartLng !== null
+                      confirm(
+                        "ล้างจุดเริ่มต้นที่ตั้งไว้ และใช้ตำแหน่งปัจจุบันใหม่หรือไม่?",
+                      )
                     ) {
-                      // มีการตั้งค่าพิกัด → แสดง "ล้าง"
-                      if (
-                        confirm(
-                          "ล้างพิกัดที่ตั้งไว้ และใช้ตำแหน่งปัจจุบันอัตโนมัติหรือไม่?",
-                        )
-                      ) {
-                        setDetectedStartLat(null);
-                        setDetectedStartLng(null);
-                        setCoordInput("");
-                        // ดึงตำแหน่งจริงทันที
-                        navigator.geolocation.getCurrentPosition(
-                          (pos) => {
-                            const lat = pos.coords.latitude;
-                            const lng = pos.coords.longitude;
-                            setDetectedStartLat(lat);
-                            setDetectedStartLng(lng);
-                            setCoordInput(
-                              `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
-                            );
-                            addToast("ใช้ตำแหน่งปัจจุบันแล้ว", "success");
-                          },
-                          () => addToast("ดึงตำแหน่งไม่สำเร็จ", "error"),
-                          { enableHighAccuracy: true },
-                        );
-                      }
-                    } else {
-                      // ไม่มีพิกัด → ปุ่มเป็น "ยกเลิก"
-                      setShowStartModal(false);
+                      localStorage.removeItem("todayStartPosition");
+                      setStartPosition(null);
+                      setDetectedStartLat(null);
+                      setDetectedStartLng(null);
+                      setCoordInput("");
+                      addToast(
+                        "ล้างจุดเริ่มต้นแล้ว กำลังดึงตำแหน่งใหม่...",
+                        "success",
+                      );
+                      // ดึง GPS ใหม่อัตโนมัติ
+                      detectCurrentLocation();
                     }
                   }}
-                  className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 rounded-xl font-medium transition"
+                  className="flex-1 py-3 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold transition"
                 >
-                  {detectedStartLat !== null || detectedStartLng !== null
-                    ? "ล้าง"
-                    : "ยกเลิก"}
+                  ล้างจุดเริ่ม
                 </button>
 
                 {/* ปุ่มบันทึก */}
@@ -1182,9 +1361,7 @@ export default function NavigatePage() {
                   }
                   className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {detectedStartLat === null
-                    ? "กำลังตรวจจับ..."
-                    : "ตั้งเป็นจุดเริ่มต้น"}
+                  {isDetecting ? "กำลังตรวจจับ..." : "ตั้งเป็นจุดเริ่มต้น"}
                 </button>
               </div>
 
@@ -1192,14 +1369,13 @@ export default function NavigatePage() {
               {detectedStartLat === null &&
                 detectedStartLng === null &&
                 !isDetecting && (
-                  <p className="text-xs text-center text-gray-500 mt- mt-3">
-                    กรุณาตรวจจับหรือกรอกพิกัดก่อนบันทึก
+                  <p className="text-xs text-center text-gray-500 mt-3">
+                    กำลังดึงตำแหน่งอัตโนมัติ...
                   </p>
                 )}
             </div>
           </div>
         )}
-
         {/* Modal: แก้ไขบ้าน (เวอร์ชันเต็มเหมือนหน้า houses) */}
         {showEditModal && currentHouse && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

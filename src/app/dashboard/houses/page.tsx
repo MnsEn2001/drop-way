@@ -23,6 +23,7 @@ import {
   Download,
   ChevronDown,
   CheckCircle,
+  Phone,
 } from "lucide-react";
 import Papa from "papaparse";
 
@@ -153,18 +154,26 @@ export default function HousesPage() {
 
   useEffect(() => {
     const loadHouses = async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("houses")
         .select("*")
         .order("created_at", { ascending: false });
 
-      // แปลง null → string ว่าง า ง ทุกคอลัมน์ที่เป็น string
+      if (error) {
+        addToast("โหลดคลังบ้านล้มเหลว: " + error.message, "error");
+        return;
+      }
+
+      // แก้ตรงนี้ให้ปลอดภัยสุด ๆ
       const safeData = (data || []).map((h: any) => ({
         ...h,
-        full_name: h.full_name || "",
-        phone: h.phone || "", // ← ตัวการ!
-        address: h.address || "",
-        note: h.note ?? "",
+        full_name: (h.full_name ?? "").toString().trim() || "ไม่มีชื่อ",
+        phone: h.phone != null ? String(h.phone).trim() : "", // ← ปลอดภัยกับ null/undefined
+        address: (h.address ?? "").toString().trim() || "ไม่มีที่อยู่",
+        note: h.note != null ? String(h.note).trim() : null,
+        lat: h.lat ?? null,
+        lng: h.lng ?? null,
+        quantity: h.quantity ?? 1,
       }));
 
       setHouses(safeData as House[]);
@@ -421,6 +430,11 @@ export default function HousesPage() {
       setHouses((prev) => prev.filter((h) => h.id !== id));
       addToast("ลบบ้านเรียบร้อย", "success");
     }
+  };
+
+  const callPhone = (phone: string) => {
+    if (!phone) return;
+    window.location.href = `tel:${phone.replace(/[^0-9]/g, "")}`;
   };
 
   const detectLocation = async () => {
@@ -799,7 +813,7 @@ export default function HousesPage() {
                         : "text-gray-700"
                     }`}
                   >
-                    รายชื่อบ้านทั้งหมด
+                    ที่อยู่ทั้งหมด
                   </button>
 
                   <button
@@ -813,7 +827,7 @@ export default function HousesPage() {
                         : "text-gray-700"
                     }`}
                   >
-                    เพิ่มบ้านใหม่ด้วย CSV
+                    เพิ่มด้วย CSV
                   </button>
                 </div>
               )}
@@ -945,12 +959,9 @@ export default function HousesPage() {
                       <div className="p-4">
                         {/* บรรทัด: ชื่อ + ปุ่ม 3 ปุ่ม */}
                         <div className="flex items-start justify-between gap-3 mb-2">
-                          {/* ชื่อบ้าน */}
                           <h3 className="font-bold text-indigo-700 text-sm line-clamp-2 leading-tight flex-1">
                             {h.full_name || "ไม่มีชื่อ"}
                           </h3>
-
-                          {/* ปุ่ม 3 ปุ่ม */}
                           <div className="flex gap-1.5 shrink-0">
                             <button
                               onClick={() => addToRoute(h)}
@@ -959,7 +970,6 @@ export default function HousesPage() {
                             >
                               <Plus className="w-4 h-4 text-green-600" />
                             </button>
-
                             <button
                               onClick={() => openEditModal(h)}
                               className="p-1.5 rounded hover:bg-blue-50 transition-colors shadow-sm"
@@ -967,7 +977,6 @@ export default function HousesPage() {
                             >
                               <Edit3 className="w-4 h-4 text-blue-600" />
                             </button>
-
                             <button
                               onClick={() => deleteHouse(h.id)}
                               className="p-1.5 rounded hover:bg-red-50 transition-colors shadow-sm"
@@ -978,18 +987,31 @@ export default function HousesPage() {
                           </div>
                         </div>
 
-                        {/* เบอร์โทร */}
+                        {/* เบอร์โทร + ปุ่มโทร + คัดลอก */}
                         <div className="flex items-center gap-2 mt-1">
-                          <p className="text-sm font-medium text-gray-700">
-                            {h.phone}
+                          <p className="text-sm font-medium text-gray-700 truncate">
+                            {h.phone && h.phone !== "" ? h.phone : "ไม่มีเบอร์"}
                           </p>
-                          <button
-                            onClick={() => copyPhone(h.phone)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                            title="คัดลอกเบอร์โทร"
-                          >
-                            <Copy className="w-3 h-3 text-gray-500" />
-                          </button>
+                          <div className="flex gap-1 shrink-0">
+                            {h.phone && h.phone !== "" && (
+                              <>
+                                <button
+                                  onClick={() => callPhone(h.phone)}
+                                  className="p-1.5 bg-green-100 rounded-lg hover:bg-green-200 transition-colors"
+                                  title="โทรออก"
+                                >
+                                  <Phone className="w-4 h-4 text-green-600" />
+                                </button>
+                                <button
+                                  onClick={() => copyPhone(h.phone)}
+                                  className="p-1.5 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                                  title="คัดลอกเบอร์โทร"
+                                >
+                                  <Copy className="w-4 h-4 text-gray-500" />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         {/* ที่อยู่ */}
@@ -1009,14 +1031,14 @@ export default function HousesPage() {
                         {h.lat && h.lng ? (
                           <button
                             onClick={() => openMaps(h.lat!, h.lng!)}
-                            className="w-full py-2.5 text-sm font-semibold text-white bg-linear-to-r from-emerald-600 to-green-600 rounded-lg hover:from-emerald-700 hover:to-green-700 transition flex items-center justify-center gap-1.5"
+                            className="w-full py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-600 to-green-600 rounded-lg hover:from-emerald-700 hover:to-green-700 transition flex items-center justify-center gap-1.5"
                           >
                             <Navigation className="w-4 h-4" /> นำทาง
                           </button>
                         ) : (
                           <button
                             onClick={() => openEditModal(h)}
-                            className="w-full py-2.5 text-sm font-semibold text-white bg-linear-to-r from-orange-500 to-red-500 rounded-lg hover:from-orange-600 hover:to-red-600 transition flex items-center justify-center gap-1.5"
+                            className="w-full py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-orange-500 to-red-500 rounded-lg hover:from-orange-600 hover:to-red-600 transition flex items-center justify-center gap-1.5"
                           >
                             <MapPin className="w-4 h-4" /> เพิ่มพิกัด
                           </button>
