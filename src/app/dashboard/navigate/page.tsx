@@ -1,3 +1,4 @@
+// C:\DropWay\dropway\src\app\dashboard\navigate\page.tsx
 "use client";
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -124,12 +125,14 @@ export default function NavigatePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [currentHouse, setCurrentHouse] = useState<House | null>(null);
-  const [deliverNote, setDeliverNote] = useState("");
   const [houseToDeliver, setHouseToDeliver] = useState<House | null>(null);
   const [houseToReport, setHouseToReport] = useState<House | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [filterCoord, setFilterCoord] = useState<"all" | "has" | "none">("all");
   const [isSearchLocked, setIsSearchLocked] = useState(false);
+
+  const [deliverNote, setDeliverNote] = useState("โอนเข้าบริษัท"); // ค่าเริ่มต้น
+  const [deliverNoteCustom, setDeliverNoteCustom] = useState(""); // สำหรับกรณี "อื่นๆ"
 
   // Start position
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
@@ -146,10 +149,11 @@ export default function NavigatePage() {
   const addToast = (msg: string, type: "success" | "error" = "success") => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, msg, type }]);
-    setTimeout(
-      () => setToasts((prev) => prev.filter((t) => t.id !== id)),
-      3000,
-    );
+
+    // หายอัตโนมัติใน 2 วินาที
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 1000);
   };
 
   // โทรออก
@@ -195,7 +199,14 @@ export default function NavigatePage() {
   // ยืนยันส่งแล้ว
   const confirmDeliver = async () => {
     if (!houseToDeliver) return;
-    const note = deliverNote.trim() || "ส่งแล้ว (ไม่ระบุหมายเหตุ)";
+
+    // กำหนดหมายเหตุจริงที่จะบันทึกลงฐานข้อมูล
+    const finalNote =
+      deliverNote === "อื่นๆ"
+        ? deliverNoteCustom.trim() || "อื่นๆ (ไม่ระบุรายละเอียด)"
+        : deliverNote;
+
+    const note = finalNote || "ส่งแล้ว (ไม่ระบุหมายเหตุ)";
     try {
       const {
         data: { user },
@@ -241,7 +252,8 @@ export default function NavigatePage() {
     } finally {
       setShowDeliverModal(false);
       setHouseToDeliver(null);
-      setDeliverNote("");
+      setDeliverNote("โอนเข้าบริษัท"); // รีเซ็ต
+      setDeliverNoteCustom(""); // รีเซ็ต
     }
   };
 
@@ -670,10 +682,10 @@ export default function NavigatePage() {
               <div className="flex items-center gap-4">
                 <h1 className="text-2xl font-bold">
                   {viewMode === "today"
-                    ? "นำทางวันนี้"
+                    ? ""
                     : viewMode === "delivered"
-                      ? "ส่งแล้ววันนี้"
-                      : "รายงานแล้ว"}
+                      ? ""
+                      : ""}
                 </h1>
                 <div className="flex bg-gray-100 p-1 rounded-xl">
                   <button
@@ -704,7 +716,7 @@ export default function NavigatePage() {
                         : "text-gray-600"
                     }`}
                   >
-                    รายงานแล้ว ({reportedHouses.length})
+                    รายงาน ({reportedHouses.length})
                   </button>
                 </div>
               </div>
@@ -790,7 +802,7 @@ export default function NavigatePage() {
                         addToast("ลบไม่สำเร็จ: " + err.message, "error");
                       }
                     }}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition"
+                    className="flex items-center gap-2 px-2 py-2 bg-gradient-to-r from-red-600 to-rose-600 text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -1070,6 +1082,24 @@ export default function NavigatePage() {
                 <p className="text-xs text-gray-600 mt-2">
                   {formatDeliveredDateTime(h.delivered_at)}
                 </p>
+
+                {/* เพิ่มปุ่มดูพิกัด/นำทาง ถ้ามีพิกัด */}
+                {h.lat && h.lng && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() =>
+                        window.open(
+                          `https://www.google.com/maps/search/?api=1&query=${h.lat},${h.lng}`,
+                          "_blank",
+                        )
+                      }
+                      className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:shadow-lg transition"
+                    >
+                      <MapPin className="w-5 h-5" />
+                      ดูตำแหน่งบนแผนที่
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           ) : reportedHouses.length === 0 ? (
@@ -1115,6 +1145,24 @@ export default function NavigatePage() {
                 <p className="text-xs text-gray-600 mt-2">
                   {formatDeliveredDateTime(h.reported_at).replace("||", "เวลา")}
                 </p>
+
+                {/* เพิ่มปุ่มดูพิกัด/นำทาง ถ้ามีพิกัด */}
+                {h.lat && h.lng && (
+                  <div className="mt-4">
+                    <button
+                      onClick={() =>
+                        window.open(
+                          `https://www.google.com/maps/search/?api=1&query=${h.lat},${h.lng}`,
+                          "_blank",
+                        )
+                      }
+                      className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:shadow-lg transition"
+                    >
+                      <MapPin className="w-5 h-5" />
+                      ดูตำแหน่งบนแผนที่
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -1149,19 +1197,44 @@ export default function NavigatePage() {
           </div>
         )}
 
-        {/* Toast */}
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-3 pointer-events-none">
+        {/* Toast - มุมขวาบน */}
+        <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 pointer-events-none">
           {toasts.map((t) => (
             <div
               key={t.id}
-              className={`px-6 py-4 rounded-2xl text-white font-bold shadow-2xl animate-in slide-in-from-bottom ${t.type === "success" ? "bg-gradient-to-r from-green-500 to-emerald-600" : "bg-gradient-to-r from-red-500 to-rose-600"}`}
+              className={`
+                px-6 py-4 rounded-2xl text-white font-bold shadow-2xl
+                min-w-[280px] max-w-sm
+                animate-in slide-in-from-top fade-in duration-300
+                pointer-events-auto
+                ${
+                  t.type === "success"
+                    ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                    : "bg-gradient-to-r from-red-500 to-rose-600"
+                }
+              `}
             >
-              {t.type === "success" ? (
-                <CheckCircle className="w-6 h-6 inline mr-2" />
-              ) : (
-                <AlertTriangle className="w-6 h-6 inline mr-2" />
-              )}
-              {t.msg}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  {t.type === "success" ? (
+                    <CheckCircle className="w-6 h-6 flex-shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-6 h-6 flex-shrink-0" />
+                  )}
+                  <span className="text-sm sm:text-base">{t.msg}</span>
+                </div>
+                {/* ปุ่มปิดด้วยมือ (optional แต่ดีมาก) */}
+                <button
+                  onClick={() =>
+                    setToasts((prev) =>
+                      prev.filter((toast) => toast.id !== t.id),
+                    )
+                  }
+                  className="text-white/70 hover:text-white transition opacity-0 group-hover:opacity-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -1173,10 +1246,12 @@ export default function NavigatePage() {
               <h2 className="text-xl font-bold text-green-600 mb-4">
                 ยืนยันส่งแล้ว
               </h2>
+
+              {/* ข้อมูลบ้าน */}
               <div className="bg-gray-50 p-4 rounded-xl mb-4">
                 <p className="font-bold">{houseToDeliver.full_name}</p>
                 <p className="text-sm text-gray-600">{houseToDeliver.phone}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 line-clamp-2">
                   {houseToDeliver.address}
                 </p>
                 {houseToDeliver.quantity && houseToDeliver.quantity > 1 && (
@@ -1185,24 +1260,77 @@ export default function NavigatePage() {
                   </p>
                 )}
               </div>
-              <textarea
-                placeholder="หมายเหตุตอนส่ง..."
-                value={deliverNote}
-                onChange={(e) => setDeliverNote(e.target.value)}
-                rows={3}
-                className="w-full px-4 py-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none resize-none"
-                autoFocus
-              />
-              <div className="flex gap-3 mt-5">
+
+              {/* เลือกการชำระเงิน */}
+              <div className="mb-5">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  การชำระเงิน
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    "โอนเข้าบริษัท",
+                    "จ่ายด้วยเงินสด",
+                    "โอนเข้าบัญชีฉัน",
+                    "อื่นๆ",
+                  ].map((option) => (
+                    <button
+                      key={option}
+                      onClick={() => setDeliverNote(option)}
+                      className={`py-3 px-4 rounded-xl font-medium transition-all border-2 ${
+                        deliverNote === option
+                          ? "bg-green-600 text-white border-green-600 shadow-md"
+                          : "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ช่องกรอกเอง เฉพาะเมื่อเลือก "อื่นๆ" */}
+                {deliverNote === "อื่นๆ" && (
+                  <textarea
+                    placeholder="กรอกรายละเอียดการชำระเงิน..."
+                    value={deliverNoteCustom}
+                    onChange={(e) => setDeliverNoteCustom(e.target.value)}
+                    rows={3}
+                    autoFocus
+                    className="w-full mt-4 px-4 py-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none resize-none transition-all"
+                  />
+                )}
+
+                {/* Preview หมายเหตุ */}
+                <div className="mt-4 p-3 bg-green-50 rounded-xl">
+                  <p className="text-sm text-green-800 font-medium">
+                    หมายเหตุ:{" "}
+                    {deliverNote === "อื่นๆ"
+                      ? deliverNoteCustom.trim() || "กำลังกรอกรายละเอียด..."
+                      : deliverNote}
+                  </p>
+                </div>
+              </div>
+
+              {/* ปุ่มด้านล่าง */}
+              <div className="flex gap-3">
                 <button
-                  onClick={() => setShowDeliverModal(false)}
-                  className="flex-1 py-3 bg-gray-200 rounded-xl"
+                  onClick={() => {
+                    setShowDeliverModal(false);
+                    setDeliverNote("โอนเข้าบริษัท"); // รีเซ็ตค่าเริ่มต้น
+                    setDeliverNoteCustom("");
+                  }}
+                  className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
                 >
                   ยกเลิก
                 </button>
+
                 <button
                   onClick={confirmDeliver}
-                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg"
+                  disabled={
+                    !deliverNote ||
+                    (deliverNote === "อื่นๆ" && !deliverNoteCustom.trim())
+                  }
+                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   ส่งแล้ว
                 </button>
@@ -1210,7 +1338,6 @@ export default function NavigatePage() {
             </div>
           </div>
         )}
-
         {/* Modal รายงานปัญหา */}
         {showReportModal && houseToReport && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -1423,7 +1550,6 @@ export default function NavigatePage() {
                 className="w-full px-4 py-3 border rounded-xl mb-3 resize-none focus:border-blue-500 outline-none"
               />
 
-              {/* จำนวนชิ้น */}
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   จำนวนชิ้น
@@ -1431,14 +1557,31 @@ export default function NavigatePage() {
                 <input
                   type="number"
                   min="1"
-                  value={currentHouse.quantity || 1}
-                  onChange={(e) =>
-                    setCurrentHouse({
-                      ...currentHouse,
-                      quantity: parseInt(e.target.value) || 1,
-                    })
-                  }
-                  className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl text-center font-bold text-purple-700"
+                  step="1"
+                  placeholder="1"
+                  value={currentHouse.quantity ?? ""} // สำคัญ: ใช้ ?? "" เพื่อให้ลบได้หมด
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const num = value === "" ? null : parseInt(value, 10);
+
+                    // อนุญาตให้เป็น null ชั่วคราว (ตอนพิมพ์) และห้ามติดลบ
+                    if (num === null || (num >= 1 && !isNaN(num))) {
+                      setCurrentHouse({
+                        ...currentHouse,
+                        quantity: num === null ? undefined : num,
+                      });
+                    }
+                  }}
+                  onBlur={() => {
+                    // เมื่อเสียโฟกัส ถ้ายังว่างหรือน้อยกว่า 1 → ตั้งเป็น 1 อัตโนมัติ
+                    if (!currentHouse.quantity || currentHouse.quantity < 1) {
+                      setCurrentHouse({
+                        ...currentHouse,
+                        quantity: 1,
+                      });
+                    }
+                  }}
+                  className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl text-center font-bold text-purple-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
               </div>
 
