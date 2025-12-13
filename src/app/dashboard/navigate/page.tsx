@@ -586,15 +586,27 @@ export default function NavigatePage() {
     }
   };
 
-  const detectCurrentLocation = () => {
+  const detectCurrentLocation = (forEdit = false) => {
     setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
+
+        // ใช้ร่วมกันทั้งสอง modal
         setDetectedStartLat(lat);
         setDetectedStartLng(lng);
         setCoordInput(`${lat.toFixed(6)},${lng.toFixed(6)}`);
+
+        // ถ้ากำลังอยู่ใน modal แก้ไขบ้าน ให้อัปเดต currentHouse ด้วย
+        if (forEdit && currentHouse) {
+          setCurrentHouse({
+            ...currentHouse,
+            lat,
+            lng,
+          });
+        }
+
         addToast("ตรวจจับพิกัดสำเร็จ!", "success");
         setIsDetecting(false);
       },
@@ -1401,7 +1413,7 @@ export default function NavigatePage() {
 
               {/* ปุ่มตรวจจับตำแหน่งใหม่ (สำหรับกรณีต้องการรีเฟรช) */}
               <button
-                onClick={detectCurrentLocation}
+                onClick={() => detectCurrentLocation(false)}
                 disabled={isDetecting}
                 className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-60 transition mb-4"
               >
@@ -1437,7 +1449,7 @@ export default function NavigatePage() {
               />
 
               {/* ตรวจสอบบน Google Maps */}
-              {detectedStartLat !== null && detectedStartLng !== null && (
+              {(detectedStartLat !== null || detectedStartLng !== null) && (
                 <div className="text-center mb-5">
                   <button
                     onClick={() =>
