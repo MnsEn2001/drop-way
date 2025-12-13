@@ -1610,9 +1610,9 @@ export default function NavigatePage() {
 
               {/* ปุ่มตรวจจับตำแหน่ง GPS */}
               <button
-                onClick={detectCurrentLocation}
+                onClick={() => detectCurrentLocation(false)}
                 disabled={isDetecting}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-60 transition mb-3"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-60 transition mb-4"
               >
                 {isDetecting ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
