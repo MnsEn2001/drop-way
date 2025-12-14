@@ -133,6 +133,7 @@ export default function NavigatePage() {
 
   const [deliverNote, setDeliverNote] = useState("โอนเข้าบริษัท"); // ค่าเริ่มต้น
   const [deliverNoteCustom, setDeliverNoteCustom] = useState(""); // สำหรับกรณี "อื่นๆ"
+  const [isRealTimeMode, setIsRealTimeMode] = useState(false);
 
   // Start position
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
@@ -362,13 +363,16 @@ export default function NavigatePage() {
     }
   };
 
-  // ดึงข้อมูล
+  // แก้ไข loadTodayHouses ให้ดึงแบบธรรมดา (เร็วมาก)
   const loadTodayHouses = useCallback(async () => {
     try {
-      const { data, error } = await supabase.rpc(
-        "refresh_and_merge_today_houses",
-      );
+      const { data, error } = await supabase
+        .from("today_houses")
+        .select("*")
+        .order("order_index", { ascending: true });
+
       if (error) throw error;
+
       const cleaned = (data || []).map((h: any) => ({
         id: h.id,
         id_home: h.id_home || null,
@@ -381,8 +385,10 @@ export default function NavigatePage() {
         quantity: h.quantity,
         order_index: h.order_index || 9999,
       }));
+
       setHouses(cleaned);
-      shouldResort.current = true;
+      setOptimizedHouses(cleaned); // ใช้ order_index ที่มีอยู่แล้ว
+      shouldResort.current = false; // ไม่ต้อง optimize ใหม่ทุกครั้ง
     } catch (err: any) {
       addToast("โหลดข้อมูลล้มเหลว: " + err.message, "error");
     }
@@ -433,32 +439,103 @@ export default function NavigatePage() {
     };
     init();
 
-    const channel = supabase
-      .channel("navigate_realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "today_houses" },
-        () => {
-          loadTodayHouses();
-          shouldResort.current = true;
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "delivered_today" },
-        loadDelivered,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "reported_houses" },
-        loadReported,
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "houses" },
-        loadTodayHouses,
-      )
-      .subscribe();
+    const channel = supabase.channel("navigate_realtime");
+
+    // today_houses changes
+    channel.on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "today_houses" },
+      (payload) => {
+        const newHouse = payload.new as any;
+        const cleaned = {
+          id: newHouse.id,
+          id_home: newHouse.id_home || null,
+          full_name: newHouse.full_name || "",
+          phone: newHouse.phone || "",
+          address: newHouse.address || "",
+          lat: newHouse.lat,
+          lng: newHouse.lng,
+          note: newHouse.note,
+          quantity: newHouse.quantity,
+          order_index: newHouse.order_index || 9999,
+        };
+        setHouses((prev) => {
+          const updated = [...prev, cleaned];
+          // เรียงตาม order_index ทันที
+          updated.sort((a, b) => a.order_index - b.order_index);
+          setOptimizedHouses(updated);
+          return updated;
+        });
+      },
+    );
+
+    channel.on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "today_houses" },
+      (payload) => {
+        const oldHouse = payload.old as any;
+        const id = oldHouse.id;
+        const id_home = oldHouse.id_home;
+        setHouses((p) => {
+          const updated = p.filter((h) => h.id !== id && h.id_home !== id_home);
+          setOptimizedHouses(updated);
+          return updated;
+        });
+      },
+    );
+
+    channel.on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "today_houses" },
+      (payload) => {
+        const updatedHouse = payload.new as any;
+        const cleaned = {
+          id: updatedHouse.id,
+          id_home: updatedHouse.id_home || null,
+          full_name: updatedHouse.full_name || "",
+          phone: updatedHouse.phone || "",
+          address: updatedHouse.address || "",
+          lat: updatedHouse.lat,
+          lng: updatedHouse.lng,
+          note: updatedHouse.note,
+          quantity: updatedHouse.quantity,
+          order_index: updatedHouse.order_index || 9999,
+        };
+        setHouses((prev) =>
+          prev
+            .map((h) =>
+              h.id === cleaned.id || h.id_home === cleaned.id_home
+                ? cleaned
+                : h,
+            )
+            .sort((a, b) => a.order_index - b.order_index),
+        );
+        setOptimizedHouses((prev) =>
+          prev.map((h) =>
+            h.id === cleaned.id || h.id_home === cleaned.id_home ? cleaned : h,
+          ),
+        );
+      },
+    );
+
+    // delivered_today และ reported_houses ก็ทำเหมือนกัน
+    channel.on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "delivered_today" },
+      (payload) => {
+        setDeliveredHouses((p) => [payload.new, ...p]);
+      },
+    );
+
+    channel.on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "reported_houses" },
+      (payload) => {
+        setReportedHouses((p) => [payload.new, ...p]);
+      },
+    );
+
+    channel.subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -547,9 +624,68 @@ export default function NavigatePage() {
     addToast(msg, "success");
   };
 
+  // แก้ไข useEffect สำหรับ currentPosition ให้อัปเดต real-time เมื่ออยู่ในโหมดนี้
+  useEffect(() => {
+    if (!isRealTimeMode) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newPos = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        };
+        setCurrentPosition(newPos);
+        // ไม่เซฟลง localStorage หรือ Supabase
+        shouldResort.current = true;
+      },
+      (error) => {
+        console.warn("Real-time GPS error:", error);
+        addToast("อัปเดตตำแหน่งเรียลไทม์ล้มเหลว", "error");
+        setIsRealTimeMode(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 5000,
+      },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [isRealTimeMode]);
+
+  // แก้ไขการโหลด startPosition จาก localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("todayStartPosition");
+    if (saved) {
+      try {
+        const pos = JSON.parse(saved);
+        if (pos && typeof pos.lat === "number" && typeof pos.lng === "number") {
+          setStartPosition(pos);
+          setIsRealTimeMode(false); // ถ้ามีค่าที่เซฟไว้ → ปิดโหมด real-time
+          addToast("ใช้จุดเริ่มต้นที่ตั้งไว้", "success");
+        }
+      } catch (err) {
+        console.warn("โหลดจุดเริ่มต้นเก่าผิดพลาด", err);
+        localStorage.removeItem("todayStartPosition");
+      }
+    } else {
+      // ถ้าไม่มีค่าที่เซฟไว้ → เปิดโหมด real-time อัตโนมัติ
+      setIsRealTimeMode(true);
+      addToast("กำลังใช้ตำแหน่งเรียลไทม์", "success");
+    }
+  }, []);
+
+  // ตำแหน่งที่ใช้จริงในการคำนวณเส้นทาง
+  const effectiveStartPosition =
+    startPosition || currentPosition || DEFAULT_POSITION;
+
+  // แก้ไข handleSetStartPosition ให้เซฟลง localStorage + Supabase
   const handleSetStartPosition = async () => {
     setIsDetecting(true);
     let lat: number, lng: number;
+
     if (detectedStartLat !== null && detectedStartLng !== null) {
       lat = detectedStartLat;
       lng = detectedStartLng;
@@ -571,13 +707,15 @@ export default function NavigatePage() {
         return;
       }
     }
+
     try {
       await supabase.rpc("save_start_position", { p_lat: lat, p_lng: lng });
       const newPos = { lat, lng };
       setStartPosition(newPos);
       localStorage.setItem("todayStartPosition", JSON.stringify(newPos));
+      setIsRealTimeMode(false); // ปิดโหมด real-time เมื่อเซฟค่าคงที่
       shouldResort.current = true;
-      addToast("ตั้งจุดเริ่มต้นสำเร็จ!", "success");
+      addToast("ตั้งจุดเริ่มต้นสำเร็จ! (ใช้ค่าคงที่)", "success");
       setShowStartModal(false);
     } catch (e: any) {
       addToast("เซฟไม่สำเร็จ: " + e.message, "error");
@@ -679,8 +817,14 @@ export default function NavigatePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <Loader2 className="w-12 h-12 animate-spin text-blue-600" />
+      <div className="space-y-4 px-4 py-6">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl p-5 animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-16 mb-4"></div>
+            <div className="h-6 bg-gray-200 rounded w-48 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-32"></div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -732,6 +876,7 @@ export default function NavigatePage() {
                   </button>
                 </div>
               </div>
+
               {viewMode === "today" && (
                 <div className="hidden lg:flex gap-3">
                   <button
@@ -742,11 +887,34 @@ export default function NavigatePage() {
                     {startPosition ? "แก้จุดเริ่ม" : "ตั้งจุดเริ่ม"}
                   </button>
                   <button
-                    onClick={forceRefreshLocation}
-                    className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg font-bold shadow"
+                    onClick={async () => {
+                      addToast("กำลังเรียงลำดับใหม่ตามระยะทาง...", "success");
+                      shouldResort.current = true;
+                      // force re-run optimization
+                      const origin = effectiveStartPosition;
+                      const withCoords = houses.filter((h) => h.lat && h.lng);
+                      const optimized = await getOptimizedRouteOrder(
+                        origin,
+                        withCoords,
+                      );
+                      const final = [
+                        ...optimized,
+                        ...houses.filter((h) => !h.lat || !h.lng),
+                      ];
+                      setOptimizedHouses(final);
+                      // อัปเดต order_index ทีละอัน
+                      for (let i = 0; i < final.length; i++) {
+                        await supabase
+                          .from("today_houses")
+                          .update({ order_index: i + 1 })
+                          .eq("id", final[i].id);
+                      }
+                      addToast("เรียงลำดับใหม่เสร็จแล้ว!", "success");
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow"
                   >
                     <RefreshCw className="w-5 h-5" />
-                    รีเฟรช
+                    เรียงใหม่
                   </button>
                   <button
                     onClick={openFullRoute}
@@ -1284,6 +1452,7 @@ export default function NavigatePage() {
                     "โอนเข้าบริษัท",
                     "จ่ายด้วยเงินสด",
                     "โอนเข้าบัญชีฉัน",
+                    "ไม่มียอด",
                     "อื่นๆ",
                   ].map((option) => (
                     <button
@@ -1398,7 +1567,6 @@ export default function NavigatePage() {
           </div>
         )}
 
-        {/* Modal: ตั้งจุดเริ่มต้น (เวอร์ชันอัตโนมัติเต็มรูปแบบ) */}
         {showStartModal && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
@@ -1411,7 +1579,29 @@ export default function NavigatePage() {
                 </button>
               </div>
 
-              {/* ปุ่มตรวจจับตำแหน่งใหม่ (สำหรับกรณีต้องการรีเฟรช) */}
+              {/* สถานะปัจจุบัน */}
+              <div className="bg-gray-50 rounded-xl p-4 mb-4 text-sm">
+                <p className="font-medium mb-2">สถานะปัจจุบัน:</p>
+                <p
+                  className={
+                    isRealTimeMode
+                      ? "text-green-600 font-bold"
+                      : "text-purple-600 font-bold"
+                  }
+                >
+                  {isRealTimeMode
+                    ? "🟢 เรียลไทม์ (ตามตำแหน่งปัจจุบันตลอด)"
+                    : "🟣 ค่าคงที่ (จากที่ตั้งไว้)"}
+                </p>
+                {startPosition && !isRealTimeMode && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    พิกัด: {startPosition.lat.toFixed(6)},{" "}
+                    {startPosition.lng.toFixed(6)}
+                  </p>
+                )}
+              </div>
+
+              {/* ปุ่มตรวจจับตำแหน่งใหม่ */}
               <button
                 onClick={() => detectCurrentLocation(false)}
                 disabled={isDetecting}
@@ -1422,7 +1612,7 @@ export default function NavigatePage() {
                 ) : (
                   <MapPin className="w-5 h-5" />
                 )}
-                {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบันใหม่"}
+                {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบัน"}
               </button>
 
               {/* กรอกพิกัดด้วยมือ */}
@@ -1440,7 +1630,6 @@ export default function NavigatePage() {
                     setDetectedStartLat(lat);
                     setDetectedStartLng(lng);
                   } else if (value === "") {
-                    // ถ้าลบหมด ให้อนุญาตให้ดึง GPS ใหม่ได้
                     setDetectedStartLat(null);
                     setDetectedStartLng(null);
                   }
@@ -1448,12 +1637,15 @@ export default function NavigatePage() {
                 className="w-full px-4 py-3 border rounded-xl text-center font-mono text-sm mb-3 focus:border-blue-500 outline-none"
               />
 
-              {/* ตรวจสอบบน Google Maps */}
-              {(detectedStartLat !== null || detectedStartLng !== null) && (
+              {/* ตรวจสอบบน Maps */}
+              {(detectedStartLat || startPosition) && (
                 <div className="text-center mb-5">
                   <button
                     onClick={() =>
-                      verifyOnMaps(detectedStartLat!, detectedStartLng!)
+                      verifyOnMaps(
+                        detectedStartLat || startPosition?.lat || 0,
+                        detectedStartLng || startPosition?.lng || 0,
+                      )
                     }
                     className="text-blue-600 text-sm underline flex items-center gap-1 mx-auto hover:gap-2 transition-all"
                   >
@@ -1464,57 +1656,54 @@ export default function NavigatePage() {
               )}
 
               {/* ปุ่มด้านล่าง */}
-              <div className="flex gap-3">
-                {/* ปุ่มล้าง (ลบค่าที่ตั้งไว้ทั้งหมด) */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* ปุ่มสลับโหมดเรียลไทม์ */}
                 <button
                   onClick={() => {
-                    if (
-                      confirm(
-                        "ล้างจุดเริ่มต้นที่ตั้งไว้ และใช้ตำแหน่งปัจจุบันใหม่หรือไม่?",
-                      )
-                    ) {
-                      localStorage.removeItem("todayStartPosition");
-                      setStartPosition(null);
-                      setDetectedStartLat(null);
-                      setDetectedStartLng(null);
-                      setCoordInput("");
+                    setIsRealTimeMode(!isRealTimeMode);
+                    if (!isRealTimeMode) {
                       addToast(
-                        "ล้างจุดเริ่มต้นแล้ว กำลังดึงตำแหน่งใหม่...",
+                        "เปิดโหมดเรียลไทม์แล้ว (ตาม GPS ตลอด)",
                         "success",
                       );
-                      // ดึง GPS ใหม่อัตโนมัติ
-                      detectCurrentLocation();
+                      localStorage.removeItem("todayStartPosition");
+                      setStartPosition(null);
+                    } else {
+                      addToast("ปิดโหมดเรียลไทม์ – ใช้ค่าคงที่", "success");
                     }
+                    setShowStartModal(false);
                   }}
-                  className="flex-1 py-3 bg-red-100 text-red-600 hover:bg-red-200 rounded-xl font-bold transition"
+                  className={`py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
+                    isRealTimeMode
+                      ? "bg-red-500 text-white hover:bg-red-600"
+                      : "bg-green-500 text-white hover:bg-green-600"
+                  }`}
                 >
-                  ล้างจุดเริ่ม
+                  {isRealTimeMode ? <>ปิดเรียลไทม์</> : <>เปิดเรียลไทม์</>}
                 </button>
 
-                {/* ปุ่มบันทึก */}
+                {/* ปุ่มบันทึกค่าคงที่ */}
                 <button
                   onClick={handleSetStartPosition}
                   disabled={
                     isDetecting ||
                     (detectedStartLat === null && detectedStartLng === null)
                   }
-                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50"
                 >
-                  {isDetecting ? "กำลังตรวจจับ..." : "ตั้งเป็นจุดเริ่มต้น"}
+                  ตั้งค่าคงที่
                 </button>
               </div>
 
-              {/* ข้อความแจ้ง */}
-              {detectedStartLat === null &&
-                detectedStartLng === null &&
-                !isDetecting && (
-                  <p className="text-xs text-center text-gray-500 mt-3">
-                    กำลังดึงตำแหน่งอัตโนมัติ...
-                  </p>
-                )}
+              <p className="text-xs text-center text-gray-500 mt-4">
+                {isRealTimeMode
+                  ? "ตำแหน่งจะอัปเดตอัตโนมัติตามการเคลื่อนที่"
+                  : "ใช้จุดเริ่มต้นคงที่จนกว่าจะเปลี่ยน"}
+              </p>
             </div>
           </div>
         )}
+
         {/* Modal: แก้ไขบ้าน (เวอร์ชันเต็มเหมือนหน้า houses) */}
         {showEditModal && currentHouse && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
