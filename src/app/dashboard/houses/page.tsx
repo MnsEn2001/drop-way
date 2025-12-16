@@ -24,6 +24,7 @@ import {
   ChevronDown,
   CheckCircle,
   Phone,
+  ChevronUp,
 } from "lucide-react";
 import Papa from "papaparse";
 
@@ -47,7 +48,7 @@ interface Toast {
 
 const ITEMS_PER_PAGE = 20;
 
-// ข้อมูลหมู่บ้านตามตำบล
+// ข้อมูลหมู่บ้านตามตำบล (เดิม)
 const villageBySubdistrict: Record<string, string[]> = {
   นาโบสถ์: [
     "วังทอง",
@@ -134,6 +135,11 @@ export default function HousesPage() {
   const addEditModalRef = useRef<HTMLDivElement>(null);
   const addressInputRef = useRef<HTMLTextAreaElement>(null);
 
+  // เพิ่ม state สำหรับ autocomplete
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionIndex, setSuggestionIndex] = useState(-1); // สำหรับ arrow key navigation
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const addToast = (message: string, type: "success" | "error" | "info") => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, message, type }]);
@@ -207,12 +213,36 @@ export default function HousesPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showFilterModal, showAdd, showEditModal]);
 
+  // ฟังก์ชัน extractHouseNumber ที่ปรับปรุงให้ดึงได้แม่นยำขึ้น
   const extractHouseNumber = (address: string): string => {
     const match = address.match(
       /(?:บ้านเลขที่|เลขที่|ที่\s*)?\s*([\d\/\\-]+)\s*(?:\/\s*\d+)?/i,
     );
     return match ? match[1].trim() : "";
   };
+
+  // คำนวณ suggestions สำหรับ autocomplete
+  const suggestions = useMemo(() => {
+    if (!search.trim()) return [];
+
+    const lowerSearch = search.toLowerCase().trim();
+
+    // รวบรวม unique house numbers ที่ match กับ search
+    const matchingHouseNumbers = new Set<string>();
+    houses.forEach((h) => {
+      const houseNum = extractHouseNumber(h.address);
+      if (houseNum && houseNum.toLowerCase().includes(lowerSearch)) {
+        matchingHouseNumbers.add(houseNum);
+      }
+    });
+
+    // แปลงเป็น array แล้ว sort แบบ numeric เพื่อให้เรียงสวย
+    return Array.from(matchingHouseNumbers)
+      .sort((a, b) => {
+        return a.localeCompare(b, undefined, { numeric: true });
+      })
+      .slice(0, 10); // แสดงสูงสุด 10 ตัวเลือก
+  }, [search, houses]);
 
   const extractVillageNumber = (address: string): string => {
     const match =
@@ -381,6 +411,35 @@ export default function HousesPage() {
     setShowEditModal(true);
   };
 
+  // Handle keyboard navigation ใน suggestions
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!showSuggestions) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSuggestionIndex((prev) =>
+          prev <= 0 ? suggestions.length - 1 : prev - 1,
+        );
+      } else if (e.key === "Enter" && suggestionIndex >= 0) {
+        e.preventDefault();
+        setSearch(suggestions[suggestionIndex]);
+        setShowSuggestions(false);
+        setSuggestionIndex(-1);
+      } else if (e.key === "Escape") {
+        setShowSuggestions(false);
+        setSuggestionIndex(-1);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [showSuggestions, suggestions, suggestionIndex]);
+
+  // ปรับ addToRoute ให้ไม่ปิด keyboard (ใช้ async แต่ไม่ focus ออก)
   const addToRoute = async (house: House) => {
     const {
       data: { user },
@@ -390,12 +449,11 @@ export default function HousesPage() {
       return;
     }
 
-    // ตรวจสอบว่ามีใน today_houses แล้วหรือยัง (ใช้ id_home ตรวจสอบเร็วสุด)
     const { data: existing } = await supabase
       .from("today_houses")
       .select("id")
       .eq("user_id", user.id)
-      .eq("id_home", house.id) // เร็ว + แม่นยำ 100%
+      .eq("id_home", house.id)
       .maybeSingle();
 
     if (existing) {
@@ -405,7 +463,7 @@ export default function HousesPage() {
 
     const { error } = await supabase.from("today_houses").insert({
       user_id: user.id,
-      id_home: house.id, // ส่ง id_home ไปด้วย!
+      id_home: house.id,
       full_name: house.full_name,
       phone: house.phone,
       address: house.address,
@@ -842,34 +900,38 @@ export default function HousesPage() {
               <div className="relative flex-1 text-gray-800">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                 <input
+                  ref={searchInputRef}
                   type="text"
-                  placeholder="ค้นหาทุกอย่าง (ชื่อ, เบอร์, ที่อยู่, พิกัด...)"
+                  placeholder="ค้นหาทุกอย่าง (ชื่อ, เบอร์, ที่อยู่, บ้านเลขที่...)"
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
                     setCurrentPage(1);
+                    setShowSuggestions(true);
+                    setSuggestionIndex(-1);
                   }}
+                  onFocus={() =>
+                    suggestions.length > 0 && setShowSuggestions(true)
+                  }
                   className="w-full pl-11 pr-12 py-3 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none transition font-medium"
-                  id="house-search-input" // เพิ่ม id เพื่อ ref
+                  id="house-search-input"
                 />
-                {/* ปุ่ม X ล้างข้อความ (สำคัญ: รักษา focus ไว้!) */}
+
+                {/* ปุ่ม X ล้าง */}
                 {search && (
                   <button
                     onClick={() => {
                       setSearch("");
                       setCurrentPage(1);
-                      // สำคัญมาก: โฟกัสกลับทันทีหลังล้าง
-                      const input = document.getElementById(
-                        "house-search-input",
-                      ) as HTMLInputElement;
-                      input?.focus();
+                      setShowSuggestions(false);
+                      searchInputRef.current?.focus();
                     }}
                     className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-gray-200 transition-colors z-10"
-                    title="ล้างการค้นหา"
                   >
                     <X className="w-4 h-4 text-gray-500" />
                   </button>
                 )}
+
                 {/* ปุ่มกรอง */}
                 <button
                   onClick={() => setShowFilterModal(true)}
@@ -877,9 +939,42 @@ export default function HousesPage() {
                 >
                   <Filter className="w-4 h-4 text-gray-700" />
                 </button>
+
+                {/* Autocomplete Suggestions Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                  <div
+                    className="absolute top-full mt-1 left-0 right-0 bg-white border border-gray-300 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    onMouseDown={(e) => e.preventDefault()} // ป้องกันเสีย focus
+                  >
+                    <div className="py-1 max-h-60 overflow-y-auto">
+                      {suggestions.map((sugg, idx) => (
+                        <div
+                          key={sugg}
+                          className={`px-4 py-2.5 cursor-pointer text-sm ${
+                            idx === suggestionIndex
+                              ? "bg-blue-100 text-blue-700 font-semibold"
+                              : "hover:bg-gray-100"
+                          }`}
+                          onClick={() => {
+                            setSearch(sugg);
+                            setShowSuggestions(false);
+                            setSuggestionIndex(-1);
+                            searchInputRef.current?.focus();
+                          }}
+                        >
+                          <span className="font-medium">บ้านเลขที่ {sugg}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="px-4 py-1.5 text-xs text-gray-500 border-t border-gray-200 flex items-center gap-1">
+                      <ChevronUp className="w-3 h-3" />
+                      <ChevronDown className="w-3 h-3" />
+                      <span>ใช้ลูกศรเลือก • Enter ยืนยัน</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-
             {/* Group options */}
             <div className="flex flex-wrap items-center gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
               <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
@@ -963,13 +1058,47 @@ export default function HousesPage() {
                             {h.full_name || "ไม่มีชื่อ"}
                           </h3>
                           <div className="flex gap-1.5 shrink-0">
+                            {/* ปุ่ม + เดิม – เวอร์ชันปรับปรุงสุดเพื่อให้ keyboard ไม่หายเลย */}
                             <button
-                              onClick={() => addToRoute(h)}
-                              className="p-1.5 rounded hover:bg-green-50 transition-colors shadow-sm"
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+
+                                const searchInput = document.getElementById(
+                                  "house-search-input",
+                                ) as HTMLInputElement;
+
+                                const wasFocused =
+                                  document.activeElement === searchInput;
+                                const currentValue = searchInput?.value || "";
+                                const currentSelectionStart =
+                                  searchInput?.selectionStart ?? 0;
+                                const currentSelectionEnd =
+                                  searchInput?.selectionEnd ?? 0;
+
+                                // รันเพิ่มบ้าน
+                                addToRoute(h);
+
+                                // ถ้ากำลังพิมพ์ค้นหาอยู่ → refocus อย่างรวดเร็ว + คืนค่า cursor
+                                if (wasFocused && searchInput) {
+                                  requestAnimationFrame(() => {
+                                    searchInput.focus();
+                                    searchInput.value = "";
+                                    searchInput.value = currentValue;
+                                    searchInput.selectionStart =
+                                      currentSelectionStart;
+                                    searchInput.selectionEnd =
+                                      currentSelectionEnd;
+                                  });
+                                }
+                              }}
+                              className="p-1.5 rounded hover:bg-green-50 transition-colors shadow-sm touch-action-manipulation"
                               title="เพิ่มเข้ารับงาน"
                             >
                               <Plus className="w-4 h-4 text-green-600" />
                             </button>
+
                             <button
                               onClick={() => openEditModal(h)}
                               className="p-1.5 rounded hover:bg-blue-50 transition-colors shadow-sm"
@@ -977,6 +1106,7 @@ export default function HousesPage() {
                             >
                               <Edit3 className="w-4 h-4 text-blue-600" />
                             </button>
+
                             <button
                               onClick={() => deleteHouse(h.id)}
                               className="p-1.5 rounded hover:bg-red-50 transition-colors shadow-sm"
@@ -1027,6 +1157,7 @@ export default function HousesPage() {
                         )}
                       </div>
 
+                      {/* ปุ่มหลักด้านล่าง */}
                       <div className="px-4 pb-4">
                         {h.lat && h.lng ? (
                           <button
@@ -1072,7 +1203,11 @@ export default function HousesPage() {
                             <button
                               key={page}
                               onClick={() => goToPage(page)}
-                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${currentPage === page ? "bg-blue-600 text-white" : "bg-gray-100 hover:bg-gray-200"}`}
+                              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                                currentPage === page
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-gray-100 hover:bg-gray-200"
+                              }`}
                             >
                               {page}
                             </button>

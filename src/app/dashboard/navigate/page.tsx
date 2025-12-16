@@ -118,7 +118,6 @@ export default function NavigatePage() {
   );
   const [deliveredHouses, setDeliveredHouses] = useState<any[]>([]);
   const [reportedHouses, setReportedHouses] = useState<any[]>([]);
-
   // Modal
   const [showStartModal, setShowStartModal] = useState(false);
   const [showDeliverModal, setShowDeliverModal] = useState(false);
@@ -130,17 +129,18 @@ export default function NavigatePage() {
   const [reportReason, setReportReason] = useState("");
   const [filterCoord, setFilterCoord] = useState<"all" | "has" | "none">("all");
   const [isSearchLocked, setIsSearchLocked] = useState(false);
-
-  const [deliverNote, setDeliverNote] = useState("โอนเข้าบริษัท"); // ค่าเริ่มต้น
-  const [deliverNoteCustom, setDeliverNoteCustom] = useState(""); // สำหรับกรณี "อื่นๆ"
+  const [deliverNote, setDeliverNote] = useState("โอนเข้าบริษัท");
+  const [deliverNoteCustom, setDeliverNoteCustom] = useState("");
   const [isRealTimeMode, setIsRealTimeMode] = useState(false);
-
   // Start position
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
   const [detectedStartLng, setDetectedStartLng] = useState<number | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
   const [coordInput, setCoordInput] = useState("");
-
+  // state สำหรับป้องกันกระพริบ
+  const [processedHouseKeys, setProcessedHouseKeys] = useState<Set<string>>(
+    new Set(),
+  );
   // Toast
   const [toasts, setToasts] = useState<
     { id: string; msg: string; type: "success" | "error" }[]
@@ -150,8 +150,6 @@ export default function NavigatePage() {
   const addToast = (msg: string, type: "success" | "error" = "success") => {
     const id = Date.now().toString();
     setToasts((prev) => [...prev, { id, msg, type }]);
-
-    // หายอัตโนมัติใน 2 วินาที
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 1000);
@@ -197,73 +195,89 @@ export default function NavigatePage() {
     }
   };
 
-  // ยืนยันส่งแล้ว
+  // ยืนยันส่งแล้ว (แก้ไขเต็ม)
   const confirmDeliver = async () => {
     if (!houseToDeliver) return;
+    const house = houseToDeliver;
+    const houseKey = house.id || house.id_home || crypto.randomUUID();
 
-    // กำหนดหมายเหตุจริงที่จะบันทึกลงฐานข้อมูล
+    // ลบออกจาก UI ทันทีและถาวร
+    setHouses((prev) => prev.filter((h) => (h.id || h.id_home) !== houseKey));
+    setOptimizedHouses((prev) =>
+      prev.filter((h) => (h.id || h.id_home) !== houseKey),
+    );
+
+    // Mark ว่าจัดการแล้ว → realtime จะข้ามตลอดไป
+    setProcessedHouseKeys((prev) => new Set(prev).add(houseKey));
+
+    // ปิด modal + feedback
+    setShowDeliverModal(false);
+    setHouseToDeliver(null);
+    setDeliverNote("โอนเข้าบริษัท");
+    setDeliverNoteCustom("");
+    addToast("กำลังบันทึกการส่ง...", "success");
+
+    // คำนวณ note
     const finalNote =
       deliverNote === "อื่นๆ"
         ? deliverNoteCustom.trim() || "อื่นๆ (ไม่ระบุรายละเอียด)"
         : deliverNote;
-
     const note = finalNote || "ส่งแล้ว (ไม่ระบุหมายเหตุ)";
+
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("ไม่พบผู้ใช้");
 
-      const delQuery = houseToDeliver.id_home
-        ? supabase
-            .from("today_houses")
-            .delete()
-            .eq("id_home", houseToDeliver.id_home)
-        : supabase.from("today_houses").delete().eq("id", houseToDeliver.id);
-      const { error: delErr } = await delQuery;
-      if (delErr) throw delErr;
+      // ลบจาก DB (background)
+      const delQuery = house.id_home
+        ? supabase.from("today_houses").delete().eq("id_home", house.id_home)
+        : supabase.from("today_houses").delete().eq("id", house.id);
+      await delQuery;
 
-      setHouses((p) => p.filter((h) => h.id !== houseToDeliver.id));
-      setOptimizedHouses((p) => p.filter((h) => h.id !== houseToDeliver.id));
-
+      // เพิ่ม delivered
       const item = {
         id: crypto.randomUUID(),
         user_id: user.id,
-        id_home: houseToDeliver.id_home || null,
-        full_name: houseToDeliver.full_name,
-        phone: houseToDeliver.phone,
-        address: houseToDeliver.address,
-        lat: houseToDeliver.lat,
-        lng: houseToDeliver.lng,
-        note: houseToDeliver.note,
-        quantity: houseToDeliver.quantity,
+        id_home: house.id_home || null,
+        full_name: house.full_name,
+        phone: house.phone,
+        address: house.address,
+        lat: house.lat,
+        lng: house.lng,
+        note: house.note,
+        quantity: house.quantity,
         delivered_note: note,
         delivered_at: new Date().toISOString(),
       };
-
-      const { error: insErr } = await supabase
-        .from("delivered_today")
-        .insert(item);
-      if (insErr) throw insErr;
-
+      await supabase.from("delivered_today").insert(item);
       setDeliveredHouses((p) => [item, ...p]);
-      addToast(`ส่งแล้ว: ${note}`, "success");
+      addToast(`ส่งสำเร็จ: ${note}`, "success");
     } catch (err: any) {
       addToast("ส่งไม่สำเร็จ: " + err.message, "error");
-    } finally {
-      setShowDeliverModal(false);
-      setHouseToDeliver(null);
-      setDeliverNote("โอนเข้าบริษัท"); // รีเซ็ต
-      setDeliverNoteCustom(""); // รีเซ็ต
     }
   };
 
-  // รายงานปัญหา
+  // confirmReport
   const confirmReport = async () => {
     if (!houseToReport || !reportReason.trim()) {
-      addToast("กรุณากรอกเหตุผลการรายงาน", "error");
+      addToast("กรุณากรอกเหตุผล", "error");
       return;
     }
+    const house = houseToReport;
+    const houseKey = house.id || house.id_home || crypto.randomUUID();
+
+    setHouses((prev) => prev.filter((h) => (h.id || h.id_home) !== houseKey));
+    setOptimizedHouses((prev) =>
+      prev.filter((h) => (h.id || h.id_home) !== houseKey),
+    );
+    setProcessedHouseKeys((prev) => new Set(prev).add(houseKey));
+
+    setShowReportModal(false);
+    setHouseToReport(null);
+    setReportReason("");
+    addToast("กำลังบันทึกรายงาน...", "success");
 
     try {
       const {
@@ -271,46 +285,30 @@ export default function NavigatePage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("ไม่พบผู้ใช้");
 
-      const delQuery = houseToReport.id_home
-        ? supabase
-            .from("today_houses")
-            .delete()
-            .eq("id_home", houseToReport.id_home)
-        : supabase.from("today_houses").delete().eq("id", houseToReport.id);
-      const { error: delErr } = await delQuery;
-      if (delErr) throw delErr;
-
-      setHouses((p) => p.filter((h) => h.id !== houseToReport.id));
-      setOptimizedHouses((p) => p.filter((h) => h.id !== houseToReport.id));
+      const delQuery = house.id_home
+        ? supabase.from("today_houses").delete().eq("id_home", house.id_home)
+        : supabase.from("today_houses").delete().eq("id", house.id);
+      await delQuery;
 
       const item = {
         id: crypto.randomUUID(),
         user_id: user.id,
-        id_home: houseToReport.id_home || null,
-        full_name: houseToReport.full_name,
-        phone: houseToReport.phone,
-        address: houseToReport.address,
-        lat: houseToReport.lat,
-        lng: houseToReport.lng,
-        note: houseToReport.note,
-        quantity: houseToReport.quantity,
+        id_home: house.id_home || null,
+        full_name: house.full_name,
+        phone: house.phone,
+        address: house.address,
+        lat: house.lat,
+        lng: house.lng,
+        note: house.note,
+        quantity: house.quantity,
         report_reason: reportReason.trim(),
         reported_at: new Date().toISOString(),
       };
-
-      const { error: insErr } = await supabase
-        .from("reported_houses")
-        .insert(item);
-      if (insErr) throw insErr;
-
+      await supabase.from("reported_houses").insert(item);
       setReportedHouses((p) => [item, ...p]);
       addToast(`รายงานแล้ว: ${reportReason.trim()}`, "success");
     } catch (err: any) {
       addToast("รายงานไม่สำเร็จ: " + err.message, "error");
-    } finally {
-      setShowReportModal(false);
-      setHouseToReport(null);
-      setReportReason("");
     }
   };
 
@@ -339,7 +337,6 @@ export default function NavigatePage() {
         .update(updates)
         .or(`id.eq.${currentHouse.id},id_home.eq.${currentHouse.id_home}`);
       if (error) throw error;
-
       setHouses((prev) =>
         prev.map((h) =>
           h.id === currentHouse.id || h.id_home === currentHouse.id_home
@@ -363,14 +360,13 @@ export default function NavigatePage() {
     }
   };
 
-  // แก้ไข loadTodayHouses ให้ดึงแบบธรรมดา (เร็วมาก)
+  // ฟังก์ชันโหลดข้อมูล – แก้ loadTodayHouses แล้ว
   const loadTodayHouses = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from("today_houses")
         .select("*")
         .order("order_index", { ascending: true });
-
       if (error) throw error;
 
       const cleaned = (data || []).map((h: any) => ({
@@ -383,12 +379,15 @@ export default function NavigatePage() {
         lng: h.lng,
         note: h.note,
         quantity: h.quantity,
-        order_index: h.order_index || 9999,
+        order_index: h.order_index ?? 9999,
       }));
 
-      setHouses(cleaned);
-      setOptimizedHouses(cleaned); // ใช้ order_index ที่มีอยู่แล้ว
-      shouldResort.current = false; // ไม่ต้อง optimize ใหม่ทุกครั้ง
+      const sorted = [...cleaned].sort((a, b) => a.order_index - b.order_index);
+      setHouses(sorted);
+      setOptimizedHouses(sorted);
+
+      // ไม่มีการตั้ง shouldResort.current = false อีกต่อไป
+      // ปล่อยให้เป็น true เพื่อพร้อม optimize ทุกครั้งที่โหลด
     } catch (err: any) {
       addToast("โหลดข้อมูลล้มเหลว: " + err.message, "error");
     }
@@ -430,7 +429,7 @@ export default function NavigatePage() {
     } catch {}
   }, []);
 
-  // Init + Realtime
+  // Init + Realtime (ไม่เปลี่ยนแปลง)
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -441,12 +440,15 @@ export default function NavigatePage() {
 
     const channel = supabase.channel("navigate_realtime");
 
-    // today_houses changes
     channel.on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "today_houses" },
       (payload) => {
         const newHouse = payload.new as any;
+        const houseKey = newHouse.id || newHouse.id_home;
+        if (processedHouseKeys.has(houseKey)) {
+          return;
+        }
         const cleaned = {
           id: newHouse.id,
           id_home: newHouse.id_home || null,
@@ -457,29 +459,13 @@ export default function NavigatePage() {
           lng: newHouse.lng,
           note: newHouse.note,
           quantity: newHouse.quantity,
-          order_index: newHouse.order_index || 9999,
+          order_index: newHouse.order_index ?? 9999,
         };
         setHouses((prev) => {
           const updated = [...prev, cleaned];
-          // เรียงตาม order_index ทันที
-          updated.sort((a, b) => a.order_index - b.order_index);
-          setOptimizedHouses(updated);
-          return updated;
-        });
-      },
-    );
-
-    channel.on(
-      "postgres_changes",
-      { event: "DELETE", schema: "public", table: "today_houses" },
-      (payload) => {
-        const oldHouse = payload.old as any;
-        const id = oldHouse.id;
-        const id_home = oldHouse.id_home;
-        setHouses((p) => {
-          const updated = p.filter((h) => h.id !== id && h.id_home !== id_home);
-          setOptimizedHouses(updated);
-          return updated;
+          const sorted = updated.sort((a, b) => a.order_index - b.order_index);
+          setOptimizedHouses(sorted);
+          return sorted;
         });
       },
     );
@@ -489,6 +475,10 @@ export default function NavigatePage() {
       { event: "UPDATE", schema: "public", table: "today_houses" },
       (payload) => {
         const updatedHouse = payload.new as any;
+        const houseKey = updatedHouse.id || updatedHouse.id_home;
+        if (processedHouseKeys.has(houseKey)) {
+          return;
+        }
         const cleaned = {
           id: updatedHouse.id,
           id_home: updatedHouse.id_home || null,
@@ -499,26 +489,45 @@ export default function NavigatePage() {
           lng: updatedHouse.lng,
           note: updatedHouse.note,
           quantity: updatedHouse.quantity,
-          order_index: updatedHouse.order_index || 9999,
+          order_index: updatedHouse.order_index ?? 9999,
         };
-        setHouses((prev) =>
-          prev
-            .map((h) =>
-              h.id === cleaned.id || h.id_home === cleaned.id_home
-                ? cleaned
-                : h,
-            )
-            .sort((a, b) => a.order_index - b.order_index),
-        );
-        setOptimizedHouses((prev) =>
-          prev.map((h) =>
+        setHouses((prev) => {
+          const updated = prev.map((h) =>
             h.id === cleaned.id || h.id_home === cleaned.id_home ? cleaned : h,
-          ),
-        );
+          );
+          const sorted = updated.sort((a, b) => a.order_index - b.order_index);
+          setOptimizedHouses(sorted);
+          return sorted;
+        });
+        if (
+          payload.new.order_index !== payload.old?.order_index ||
+          payload.new.lat !== payload.old?.lat ||
+          payload.new.lng !== payload.old?.lng
+        ) {
+          shouldResort.current = true;
+        }
       },
     );
 
-    // delivered_today และ reported_houses ก็ทำเหมือนกัน
+    channel.on(
+      "postgres_changes",
+      { event: "DELETE", schema: "public", table: "today_houses" },
+      (payload) => {
+        const oldHouse = payload.old as any;
+        const houseKey = oldHouse.id || oldHouse.id_home;
+        if (processedHouseKeys.has(houseKey)) {
+          return;
+        }
+        setHouses((prev) => {
+          const updated = prev.filter(
+            (h) => h.id !== oldHouse.id && h.id_home !== oldHouse.id_home,
+          );
+          setOptimizedHouses(updated);
+          return updated;
+        });
+      },
+    );
+
     channel.on(
       "postgres_changes",
       { event: "INSERT", schema: "public", table: "delivered_today" },
@@ -560,26 +569,35 @@ export default function NavigatePage() {
     }
   }, []);
 
-  // เรียงลำดับอัตโนมัติ
   useEffect(() => {
     if (!shouldResort.current || houses.length === 0) return;
+
     const run = async () => {
       const origin = startPosition || currentPosition || DEFAULT_POSITION;
       const withCoords = houses.filter((h) => h.lat && h.lng);
       const noCoords = houses.filter((h) => !h.lat || !h.lng);
+
       const optimized = await getOptimizedRouteOrder(origin, withCoords);
       const final = [...optimized, ...noCoords];
+
       setOptimizedHouses(final);
-      final.forEach(async (h, i) => {
-        await supabase
-          .from("today_houses")
-          .update({ order_index: i + 1 })
-          .eq("id", h.id);
-      });
-      shouldResort.current = false;
+
+      // อัปเดต order_index ใน DB
+      for (let i = 0; i < final.length; i++) {
+        const h = final[i];
+        if (h.order_index !== i + 1) {
+          await supabase
+            .from("today_houses")
+            .update({ order_index: i + 1 })
+            .eq("id", h.id);
+        }
+      }
     };
-    run();
-  }, [houses, currentPosition, startPosition]);
+
+    run().finally(() => {
+      shouldResort.current = false;
+    });
+  }, [houses, currentPosition, startPosition, shouldResort.current]);
 
   // รีเฟรช GPS
   const forceRefreshLocation = () => {
@@ -765,30 +783,113 @@ export default function NavigatePage() {
 
   const displayed = useMemo(() => {
     let list = optimizedHouses;
-    if (filterCoord === "has") list = list.filter((h) => h.lat && h.lng);
-    else if (filterCoord === "none")
+
+    // กรองพิกัด
+    if (filterCoord === "has") {
+      list = list.filter((h) => h.lat != null && h.lng != null);
+    } else if (filterCoord === "none") {
       list = list.filter((h) => !h.lat || !h.lng);
-    if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase().trim();
-    return list.filter((h) => {
-      const fullText = [
-        h.full_name || "",
-        h.phone || "",
-        h.address || "",
-        h.note || "",
-        h.quantity?.toString() || "",
-        h.lat ? h.lat.toFixed(6) : "",
-        h.lng ? h.lng.toFixed(6) : "",
-        h.lat && h.lng ? `${h.lat.toFixed(6)},${h.lng.toFixed(6)}` : "",
-        h.address.match(/[\d\/\\-]+/)?.[0] || "",
-        h.address.match(/ม\.\s*(\d+)/i)?.[1] || "",
-        h.address.match(/ต\.\s*([\u0E00-\u0E7F]+)/)?.[1] || "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return fullText.includes(q);
+    }
+
+    // เพิ่มบรรทัดนี้: ซ่อนรายการที่เราจัดการแล้ว
+    list = list.filter((h) => {
+      const key = h.id || h.id_home;
+      return key && !processedHouseKeys.has(key);
     });
-  }, [optimizedHouses, searchQuery, filterCoord]);
+    // ถ้าไม่มี query คืน list ทันที (เร็วที่สุด)
+    if (!searchQuery.trim()) {
+      return list;
+    }
+
+    const q = searchQuery.toLowerCase().trim();
+
+    // ถ้า query สั้นมาก (< 2 ตัวอักษร) อาจคืนผลน้อยลงเพื่อความเร็ว
+    if (q.length < 2) {
+      return list.filter((h) => {
+        const text =
+          `${h.full_name || ""} ${h.phone || ""} ${h.address || ""}`.toLowerCase();
+        return text.includes(q);
+      });
+    }
+
+    // สร้าง regex สำหรับค้นหา "ม." หรือ "หมู่" ที่ตามด้วยเลข (ครอบคลุมรูปแบบต่าง ๆ)
+    const villageMatch =
+      q.match(/ม\.?\s*(\d+)/i) ||
+      q.match(/หมู่ที่?\s*(\d+)/i) ||
+      q.match(/หมู่\s*(\d+)/i);
+    const villageNumber = villageMatch ? villageMatch[1] : null;
+
+    // ค้นหาในตำบล (ถ้ามีคำว่า ต. หรือ ตำบล)
+    const subdistrictMatch = q.match(/ต\.?\s*([\u0E00-\u0E7F]+)/i);
+    const subdistrictName = subdistrictMatch
+      ? subdistrictMatch[1].trim()
+      : null;
+
+    return list.filter((h) => {
+      const fields = {
+        name: (h.full_name || "").toLowerCase(),
+        phone: (h.phone || "").toLowerCase(),
+        address: (h.address || "").toLowerCase(),
+        note: (h.note || "").toLowerCase(),
+        quantity: h.quantity?.toString() || "",
+        lat: h.lat ? h.lat.toFixed(6) : "",
+        lng: h.lng ? h.lng.toFixed(6) : "",
+      };
+
+      // พิกัดแบบเต็ม
+      const coordFull = h.lat && h.lng ? `${fields.lat},${fields.lng}` : "";
+
+      // รวมข้อความทั้งหมดสำหรับค้นหาทั่วไป
+      const fullText = `${fields.name} ${fields.phone} ${fields.address} ${fields.note} ${fields.quantity} ${fields.lat} ${fields.lng} ${coordFull}`;
+
+      // ค้นหาทั่วไปก่อน (เร็ว)
+      if (fullText.includes(q)) return true;
+
+      // ค้นหาเฉพาะเจาะจงเพิ่มเติม
+
+      // 1. ค้นหาหมู่บ้าน
+      if (villageNumber) {
+        const villagePatterns = [
+          `ม.${villageNumber}`,
+          `ม. ${villageNumber}`,
+          `ม${villageNumber}`,
+          `หมู่${villageNumber}`,
+          `หมู่ ${villageNumber}`,
+          `หมู่ที่${villageNumber}`,
+          `หมู่ที่ ${villageNumber}`,
+        ];
+        if (
+          villagePatterns.some((p) => fields.address.includes(p.toLowerCase()))
+        ) {
+          return true;
+        }
+      }
+
+      // 2. ค้นหาตำบล
+      if (subdistrictName) {
+        const subdistrictPatterns = [
+          `ต.${subdistrictName}`,
+          `ต. ${subdistrictName}`,
+          `ตำบล${subdistrictName}`,
+        ];
+        if (
+          subdistrictPatterns.some((p) =>
+            fields.address.includes(p.toLowerCase()),
+          )
+        ) {
+          return true;
+        }
+      }
+
+      // 3. ค้นหาเลขที่บ้าน / ซอย / ถนน (ตัวเลขที่อาจมี / - \)
+      const houseNoMatch = fields.address.match(/(\d+[\d\/\\-]*\d*)/);
+      if (houseNoMatch && q.match(/^\d+$/) && houseNoMatch[1].includes(q)) {
+        return true;
+      }
+
+      return false;
+    });
+  }, [optimizedHouses, filterCoord, searchQuery, processedHouseKeys]);
 
   const displayedDelivered = useMemo(() => {
     if (!searchQuery.trim()) return deliveredHouses;
