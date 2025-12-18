@@ -1,33 +1,28 @@
-// src/middleware.ts
-import { type NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+// middleware.ts
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  const supabase = createServerSupabaseClient();
-
-  let user = null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
-  } catch (error) {
-    // ถ้า error เพราะไม่มี token → ไม่เป็นไร ปล่อยให้ user = null
-    console.log("No session in middleware (normal on first load)");
-  }
-
+export function middleware(request: NextRequest) {
+  // หน้าที่ไม่ต้องล็อกอิน
+  const publicPaths = ["/", "/login", "/register"];
   const pathname = request.nextUrl.pathname;
 
-  if (pathname === "/") {
-    if (user) return NextResponse.redirect(new URL("/dashboard", request.url));
+  if (publicPaths.includes(pathname)) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/dashboard") && !user) {
-    return NextResponse.redirect(new URL("/", request.url));
+  // เช็ก session จาก Supabase cookie
+  const accessToken = request.cookies.get("sb-access-token")?.value;
+  const refreshToken = request.cookies.get("sb-refresh-token")?.value;
+
+  if (!accessToken || !refreshToken) {
+    const loginUrl = new URL("/login", request.url);
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/", "/dashboard/:path*"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
