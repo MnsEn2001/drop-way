@@ -986,65 +986,64 @@ export default function NavigationPage() {
         </>
       )}
 
-      {/* FAB Menu - แก้ไขแล้ว: รูปแบบปุ่มเดิม (สี่เหลี่ยมขอบมน), overlay ไม่บังปุ่มเมื่อปิด */}
-      <div className="fixed inset-0 pointer-events-none z-40">
-        {/* Overlay ดำ - แสดงเฉพาะเมื่อเปิด FAB เท่านั้น และ pointer-events-auto เฉพาะตอนเปิด */}
-        {isFabOpen && (
+      {/* FAB Menu ทั้งหมด - เมื่อปิดจะหายไปสนิท ไม่บังอะไรเลย */}
+      {isFabOpen ? (
+        <>
+          {/* Overlay ดำ - แสดงเฉพาะตอนเปิด */}
           <div
-            className="absolute inset-0 bg-black/30 pointer-events-auto"
+            className="fixed inset-0 bg-black/30 z-40"
             onClick={() => setIsFabOpen(false)}
           />
-        )}
 
-        {/* กลุ่มปุ่ม FAB และปุ่มหลัก */}
-        <div className="fixed bottom-20 right-4 flex flex-col items-end pointer-events-auto">
-          {/* ปุ่มย่อย ๆ ที่โผล่ขึ้นมา */}
-          <div
-            className={`flex flex-col items-end gap-4 mb-4 transition-all duration-300 ease-in-out ${
-              isFabOpen
-                ? "opacity-100 translate-y-0"
-                : "opacity-0 translate-y-4 pointer-events-none"
-            }`}
-          >
+          {/* กลุ่มปุ่มย่อย + ปุ่มหลัก - แสดงเฉพาะตอนเปิด */}
+          <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end">
+            <div className="flex flex-col items-end gap-4 mb-4">
+              <button
+                onClick={clearAllNavigation}
+                className="flex items-center gap-3 px-6 py-3.5 bg-red-600 text-white rounded-2xl shadow-lg hover:bg-red-700 transition-all hover:shadow-xl min-w-44"
+              >
+                <Trash className="w-5 h-5" />
+                <span className="text-base font-medium">ลบทั้งหมด</span>
+              </button>
+              <button
+                onClick={openFullRoute}
+                className="flex items-center gap-3 px-6 py-3.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-2xl shadow-lg hover:from-orange-700 hover:to-red-700 transition-all hover:shadow-xl min-w-44"
+              >
+                <Map className="w-5 h-5" />
+                <span className="text-base font-medium">เส้นทางทั้งหมด</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowStartModal(true);
+                  setIsFabOpen(false);
+                }}
+                className="flex items-center gap-3 px-6 py-3.5 bg-purple-600 text-white rounded-2xl shadow-lg hover:bg-purple-700 transition-all hover:shadow-xl min-w-44"
+              >
+                <MapPin className="w-5 h-5" />
+                <span className="text-base font-medium">ตั้งจุดเริ่มต้น</span>
+              </button>
+            </div>
+
+            {/* ปุ่มหลัก - แสดงตอนเปิด (หมุนลูกศร) */}
             <button
-              onClick={clearAllNavigation}
-              className="flex items-center gap-3 px-6 py-3.5 bg-red-600 text-white rounded-2xl shadow-lg hover:bg-red-700 transition-all hover:shadow-xl min-w-44"
+              onClick={() => setIsFabOpen(false)}
+              className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:bg-indigo-700 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
             >
-              <Trash className="w-5 h-5" />
-              <span className="text-base font-medium">ลบทั้งหมด</span>
-            </button>
-            <button
-              onClick={openFullRoute}
-              className="flex items-center gap-3 px-6 py-3.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-2xl shadow-lg hover:from-orange-700 hover:to-red-700 transition-all hover:shadow-xl min-w-44"
-            >
-              <Map className="w-5 h-5" />
-              <span className="text-base font-medium">เส้นทางทั้งหมด</span>
-            </button>
-            <button
-              onClick={() => {
-                setShowStartModal(true);
-                setIsFabOpen(false);
-              }}
-              className="flex items-center gap-3 px-6 py-3.5 bg-purple-600 text-white rounded-2xl shadow-lg hover:bg-purple-700 transition-all hover:shadow-xl min-w-44"
-            >
-              <MapPin className="w-5 h-5" />
-              <span className="text-base font-medium">ตั้งจุดเริ่มต้น</span>
+              <ChevronUp className="w-6 h-6 rotate-180 transition-transform duration-300" />
             </button>
           </div>
-
-          {/* ปุ่มหลัก FAB - กลับมาใช้รูปแบบเดิมเป๊ะ ๆ (สี่เหลี่ยมขอบมน ขนาดเดิม) */}
+        </>
+      ) : (
+        /* เมื่อปิด FAB - แสดงเฉพาะปุ่มหลักตัวเดียว (ไม่หมุนลูกศร) */
+        <div className="fixed bottom-20 right-4 z-50">
           <button
-            onClick={() => setIsFabOpen(!isFabOpen)}
+            onClick={() => setIsFabOpen(true)}
             className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:bg-indigo-700 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
           >
-            <ChevronUp
-              className={`w-6 h-6 transition-transform duration-300 ${
-                isFabOpen ? "rotate-180" : ""
-              }`}
-            />
+            <ChevronUp className="w-6 h-6 transition-transform duration-300" />
           </button>
         </div>
-      </div>
+      )}
 
       {/* Filter Modal */}
       {showFilterModal && (
