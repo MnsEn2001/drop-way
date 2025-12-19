@@ -467,6 +467,7 @@ export default function NavigationPage() {
   };
 
   const openEditModal = (house: NavigationHouse) => {
+    console.log("House data for editing:", house); // ← ดูว่ามี house_id และ id เป็นอะไร
     setEditingHouse(house);
     setFormData({
       full_name: house.full_name || "",
@@ -517,16 +518,29 @@ export default function NavigationPage() {
 
   const saveHouse = async () => {
     if (!editingHouse) return;
+
+    // ตรวจสอบ house_id ก่อน ถ้าไม่มีหรือเป็น undefined/"undefined" ให้แจ้ง error ชัดเจน
+    if (!editingHouse.house_id || editingHouse.house_id === "undefined") {
+      toast.error("ไม่พบ ID ของบ้าน กรุณารีเฟรชหน้าหรือลองใหม่อีกครั้ง");
+      console.error("Missing or invalid house_id:", editingHouse);
+      return;
+    }
+
     const { error } = await supabase
       .from("houses")
       .update(formData)
-      .eq("id", editingHouse.id);
+      .eq("id", editingHouse.house_id); // ใช้ house_id ที่เชื่อถือได้
+
     if (error) {
       toast.error("บันทึกไม่สำเร็จ: " + error.message);
+      console.error("Supabase update error:", error);
     } else {
       toast.success("บันทึกสำเร็จ");
+      // อัปเดต list โดยใช้ house_id เปรียบเทียบ
       setList((prev) =>
-        prev.map((h) => (h.id === editingHouse.id ? { ...h, ...formData } : h)),
+        prev.map((h) =>
+          h.house_id === editingHouse.house_id ? { ...h, ...formData } : h,
+        ),
       );
       closeModal();
     }
