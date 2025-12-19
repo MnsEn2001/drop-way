@@ -986,20 +986,19 @@ export default function NavigationPage() {
         </>
       )}
 
-      {/* FAB Menu */}
+      {/* (ไม่มีการเปลี่ยนแปลงในส่วนนี้) */}
       <div className="fixed inset-0 pointer-events-none z-40">
-        {/* Overlay ดำ - แสดงเฉพาะเมื่อเปิด FAB เท่านั้น */}
         {isFabOpen && (
           <div
-            className="absolute inset-0 bg-black/30 pointer-events-auto"
+            className="absolute inset-0 bg-black/20 pointer-events-auto"
             onClick={() => setIsFabOpen(false)}
           />
         )}
-        <div className="fixed bottom-20 right-4 flex flex-col items-end">
+        <div className="fixed bottom-20 right-4 flex flex-col items-end pointer-events-auto">
           <div
             className={`flex flex-col items-end gap-4 mb-4 transition-all duration-300 ease-in-out ${
               isFabOpen
-                ? "opacity-100 translate-y-0 pointer-events-auto"
+                ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-4 pointer-events-none"
             }`}
           >
@@ -1028,16 +1027,18 @@ export default function NavigationPage() {
               <span className="text-base font-medium">ตั้งจุดเริ่มต้น</span>
             </button>
           </div>
-          <button
-            onClick={() => setIsFabOpen(!isFabOpen)}
-            className="w-16 h-16 bg-indigo-600 text-white rounded-full shadow-2xl hover:bg-indigo-700 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
-          >
-            <ChevronUp
-              className={`w-8 h-8 transition-transform duration-300 ${
-                isFabOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
+          <div className="ml-auto">
+            <button
+              onClick={() => setIsFabOpen(!isFabOpen)}
+              className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:bg-indigo-700 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+            >
+              <ChevronUp
+                className={`w-6 h-6 transition-transform duration-300 ${
+                  isFabOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 
