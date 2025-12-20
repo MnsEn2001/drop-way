@@ -2,7 +2,7 @@
 "use client";
 import { supabase } from "@/lib/supabase";
 import { House } from "@/types/house";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
@@ -52,6 +52,7 @@ export default function HousesPage() {
   const [isDetecting, setIsDetecting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const router = useRouter();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // เช็ก session
   useEffect(() => {
@@ -487,6 +488,7 @@ export default function HousesPage() {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="ค้นหาด้วยชื่อหรือที่อยู่..."
             value={searchTerm}
@@ -495,8 +497,14 @@ export default function HousesPage() {
           />
           {searchTerm && (
             <button
-              onClick={clearSearch}
-              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-gray-700"
+              onClick={(e) => {
+                e.preventDefault();
+                clearSearch();
+                // ย้าย focus กลับไปที่ input ทันที
+                searchInputRef.current?.focus();
+              }}
+              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-gray-700 z-10"
+              type="button" // สำคัญ: ระบุ type="button" เพื่อไม่ให้ submit form
             >
               <XIcon className="w-5 h-5" />
             </button>

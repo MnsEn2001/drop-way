@@ -58,6 +58,7 @@ interface NavigationHouseWithDistance extends NavigationHouse {
 }
 
 export default function NavigationPage() {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [list, setList] = useState<NavigationHouse[]>([]);
   const [sortedList, setSortedList] = useState<NavigationHouseWithDistance[]>(
     [],
@@ -655,18 +656,40 @@ export default function NavigationPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 pb-32 md:pb-8 relative">
-      {/* หัวข้อ */}
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
           <Home className="w-8 h-8 text-blue-600" />
           การนำทางของฉัน
         </h1>
+        {(() => {
+          const total = list.length;
+          const withCoords = list.filter((h) => h.lat && h.lng).length;
+          const noCoords = total - withCoords;
+          return (
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm font-medium text-gray-600">
+              <span className="flex items-center gap-2">
+                <span className="text-gray-800 font-bold">
+                  ทั้งหมด {total} บ้าน
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-green-700 bg-green-100 rounded-full">
+                  มีพิกัด {withCoords}
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-orange-700 bg-orange-100 rounded-full">
+                  ไม่มีพิกัด {noCoords}
+                </span>
+              </span>
+            </div>
+          );
+        })()}
         <p className="text-gray-600 mt-2 text-sm font-medium">
           {getCountText()}
         </p>
       </div>
 
-      {/* แท็บมุมมอง */}
       <div className="mb-6">
         <div className="flex bg-gray-100 p-1 rounded-xl max-w-lg">
           <button
@@ -718,12 +741,12 @@ export default function NavigationPage() {
           </button>
         </div>
       </div>
-
       {/* ช่องค้นหา + ปุ่มกรอง */}
       <div className="mb-6 relative">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="ค้นหาด้วยชื่อหรือที่อยู่..."
             value={searchTerm}
@@ -732,8 +755,15 @@ export default function NavigationPage() {
           />
           {searchTerm && (
             <button
-              onClick={clearSearch}
-              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-gray-700"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                clearSearch();
+                // คืน focus กลับไปที่ input ทันที
+                searchInputRef.current?.focus();
+              }}
+              className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-gray-700 z-10"
             >
               <XIcon className="w-5 h-5" />
             </button>
@@ -746,7 +776,6 @@ export default function NavigationPage() {
           </button>
         </div>
       </div>
-
       {/* ตัวกรองพิกัด */}
       <div className="flex flex-wrap items-center gap-8 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-200">
         {/* คำนวณจำนวนบ้านที่มีและไม่มีพิกัดจาก list เดิม (ก่อนกรองอื่น ๆ) */}
@@ -791,7 +820,6 @@ export default function NavigationPage() {
           );
         })()}
       </div>
-
       {/* รายการบ้าน */}
       {currentHouses.length === 0 ? (
         <div className="text-center py-20">
@@ -985,7 +1013,6 @@ export default function NavigationPage() {
           )}
         </>
       )}
-
       {/* FAB Menu ทั้งหมด - เมื่อปิดจะหายไปสนิท ไม่บังอะไรเลย */}
       {isFabOpen ? (
         <>
@@ -1044,7 +1071,6 @@ export default function NavigationPage() {
           </button>
         </div>
       )}
-
       {/* Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
@@ -1118,7 +1144,6 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
-
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
@@ -1222,7 +1247,6 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
-
       {/* Modal ตั้งจุดเริ่มต้นทาง */}
       {showStartModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -1348,7 +1372,6 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
-
       {/* Modal ยืนยันส่งแล้ว */}
       {showDeliverModal && houseToDeliver && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -1439,7 +1462,6 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
-
       {/* Modal รายงานปัญหา */}
       {showReportModal && houseToReport && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
