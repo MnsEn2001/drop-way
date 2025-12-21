@@ -125,6 +125,31 @@ export default function NavigationPage() {
   const watchIdRef = useRef<number | null>(null);
   const router = useRouter();
 
+  // Ref เพื่อเก็บค่าตัวกรองก่อนหน้า — ใช้ป้องกันการรีเซ็ตหน้าโดยไม่จำเป็น
+  const prevFiltersRef = useRef<{
+    viewMode: "today" | "delivered" | "reported";
+    searchTerm: string;
+    showNoCoords: boolean;
+    showWithCoords: boolean;
+    houseNumberFilter: string;
+    phoneFilter: string;
+    villageFilter: string;
+    subdistrictFilter: string;
+    districtFilter: string;
+    provinceFilter: string;
+  }>({
+    viewMode,
+    searchTerm: searchTerm.trim(),
+    showNoCoords,
+    showWithCoords,
+    houseNumberFilter,
+    phoneFilter,
+    villageFilter,
+    subdistrictFilter,
+    districtFilter,
+    provinceFilter,
+  });
+
   // โหลดค่าจุดคงที่จาก localStorage
   useEffect(() => {
     const saved = localStorage.getItem("navigationStartPosition");
@@ -217,17 +242,18 @@ export default function NavigationPage() {
   // กรองข้อมูล (ใช้ sortedList เป็นฐาน)
   useEffect(() => {
     let filtered: NavigationHouseWithDistance[] = sortedList;
+
     // กรองตาม viewMode
     if (viewMode === "delivered") {
       filtered = filtered.filter((h) => h.delivery_status === "delivered");
     } else if (viewMode === "reported") {
       filtered = filtered.filter((h) => h.delivery_status === "reported");
     } else {
-      // today: ไม่ส่งและไม่รายงาน
       filtered = filtered.filter(
         (h) => !h.delivery_status || h.delivery_status === "pending",
       );
     }
+
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
       filtered = filtered.filter(
@@ -236,11 +262,13 @@ export default function NavigationPage() {
           h.address?.toLowerCase().includes(lower),
       );
     }
+
     if (showWithCoords && !showNoCoords) {
       filtered = filtered.filter((h) => h.lat && h.lng);
     } else if (showNoCoords && !showWithCoords) {
       filtered = filtered.filter((h) => !h.lat || !h.lng);
     }
+
     if (houseNumberFilter)
       filtered = filtered.filter((h) => h.address?.includes(houseNumberFilter));
     if (phoneFilter)
@@ -263,8 +291,42 @@ export default function NavigationPage() {
       filtered = filtered.filter((h) =>
         h.address?.toLowerCase().includes(provinceFilter.toLowerCase()),
       );
+
     setFilteredList(filtered);
-    setCurrentPage(1);
+
+    // ตรวจสอบว่าตัวกรองเปลี่ยนจริงหรือไม่ → ค่อยรีเซ็ตหน้า 1
+    const prev = prevFiltersRef.current;
+    const currentFilters = {
+      viewMode,
+      searchTerm: searchTerm.trim(),
+      showNoCoords,
+      showWithCoords,
+      houseNumberFilter,
+      phoneFilter,
+      villageFilter,
+      subdistrictFilter,
+      districtFilter,
+      provinceFilter,
+    };
+
+    const hasChanged =
+      prev.viewMode !== currentFilters.viewMode ||
+      prev.searchTerm !== currentFilters.searchTerm ||
+      prev.showNoCoords !== currentFilters.showNoCoords ||
+      prev.showWithCoords !== currentFilters.showWithCoords ||
+      prev.houseNumberFilter !== currentFilters.houseNumberFilter ||
+      prev.phoneFilter !== currentFilters.phoneFilter ||
+      prev.villageFilter !== currentFilters.villageFilter ||
+      prev.subdistrictFilter !== currentFilters.subdistrictFilter ||
+      prev.districtFilter !== currentFilters.districtFilter ||
+      prev.provinceFilter !== currentFilters.provinceFilter;
+
+    if (hasChanged) {
+      setCurrentPage(1);
+    }
+
+    // อัปเดตค่าเก่าสำหรับรอบถัดไป
+    prevFiltersRef.current = currentFilters;
   }, [
     sortedList,
     searchTerm,
@@ -290,22 +352,37 @@ export default function NavigationPage() {
   };
 
   const getCountText = () => {
-    const todayCount = list.filter(
-      (h) => !h.delivery_status || h.delivery_status === "pending",
-    ).length;
-    const deliveredCount = list.filter(
-      (h) => h.delivery_status === "delivered",
-    ).length;
-    const reportedCount = list.filter(
-      (h) => h.delivery_status === "reported",
-    ).length;
-    if (viewMode === "delivered") return `ส่งแล้ว • พบ ${deliveredCount} บ้าน`;
-    if (viewMode === "reported") return `รายงาน • พบ ${reportedCount} บ้าน`;
-    const position = isRealTimeMode ? currentPosition : startPosition;
-    if (position) {
-      return `วันนี้ • เรียงตามระยะห่าง • พบ ${todayCount} บ้าน`;
+    const displayedCount = filteredList.length;
+    const totalInList = list.length;
+
+    let modeText = "";
+    if (viewMode === "delivered") modeText = "ส่งแล้ว";
+    else if (viewMode === "reported") modeText = "รายงาน";
+    else modeText = "วันนี้";
+
+    // ตรวจสอบว่ามีการกรองหรือค้นหาอะไรอยู่หรือไม่
+    const hasFilter =
+      searchTerm.trim() ||
+      showNoCoords ||
+      showWithCoords ||
+      houseNumberFilter ||
+      phoneFilter ||
+      villageFilter ||
+      subdistrictFilter ||
+      districtFilter ||
+      provinceFilter;
+
+    if (hasFilter) {
+      return `${modeText} • กรองแล้ว • พบ ${displayedCount} บ้าน (จากทั้งหมด ${totalInList})`;
     }
-    return `วันนี้ • พบ ${todayCount} บ้าน`;
+
+    // ถ้าเป็นโหมดวันนี้ และมีตำแหน่ง (เรียงตามระยะทาง)
+    const position = isRealTimeMode ? currentPosition : startPosition;
+    if (viewMode === "today" && position) {
+      return `${modeText} • เรียงตามระยะห่าง • พบ ${displayedCount} บ้าน`;
+    }
+
+    return `${modeText} • พบ ${displayedCount} บ้าน`;
   };
 
   // Pagination
@@ -335,66 +412,100 @@ export default function NavigationPage() {
   const renderPageNumbers = () => {
     const pages = [];
     const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    if (endPage - startPage < maxVisible - 1) {
-      startPage = Math.max(1, endPage - maxVisible + 1);
+
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(
+          <button
+            key={i}
+            onClick={() => goToPage(i)}
+            className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+              i === currentPage
+                ? "bg-indigo-600 text-white"
+                : "bg-gray-200 hover:bg-gray-300"
+            }`}
+          >
+            {i}
+          </button>,
+        );
+      }
+      return pages;
     }
+
+    const startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+    if (endPage - startPage + 1 < maxVisible) {
+      endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    }
+
+    // หน้าแรก
     if (startPage > 1) {
       pages.push(
         <button
           key={1}
           onClick={() => goToPage(1)}
-          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300"
+          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition-colors"
         >
           1
         </button>,
       );
+
       if (startPage > 2) {
         pages.push(
           <button
             key="start-ellipsis"
             onClick={() => setShowPageInput(true)}
-            className="w-10 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium"
+            className="w-10 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium transition-colors relative z-10" // เพิ่ม z-10
           >
             ...
           </button>,
         );
       }
     }
+
+    // หน้าตรงกลาง
     for (let i = startPage; i <= endPage; i++) {
       pages.push(
         <button
           key={i}
           onClick={() => goToPage(i)}
-          className={`w-10 h-10 rounded-lg font-medium ${i === currentPage ? "bg-indigo-600 text-white" : "bg-gray-200 hover:bg-gray-300"}`}
+          className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+            i === currentPage
+              ? "bg-indigo-600 text-white"
+              : "bg-gray-200 hover:bg-gray-300"
+          }`}
         >
           {i}
         </button>,
       );
     }
+
+    // หน้าสุดท้าย
     if (endPage < totalPages) {
       if (endPage < totalPages - 1) {
         pages.push(
           <button
             key="end-ellipsis"
             onClick={() => setShowPageInput(true)}
-            className="w-10 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium"
+            className="w-10 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium transition-colors relative z-10" // เพิ่ม z-10
           >
             ...
           </button>,
         );
       }
+
       pages.push(
         <button
           key={totalPages}
           onClick={() => goToPage(totalPages)}
-          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300"
+          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition-colors"
         >
           {totalPages}
         </button>,
       );
     }
+
     return pages;
   };
 
@@ -820,6 +931,7 @@ export default function NavigationPage() {
           );
         })()}
       </div>
+
       {/* รายการบ้าน */}
       {currentHouses.length === 0 ? (
         <div className="text-center py-20">
@@ -880,16 +992,66 @@ export default function NavigationPage() {
                         </p>
                       )}
 
-                      {/* สถานะการส่ง */}
+                      {/* สถานะการส่ง + วันที่เวลา */}
                       {h.delivery_status === "delivered" && (
-                        <p className="text-xs text-green-700 mt-2 font-medium">
-                          ✓ ส่งแล้ว: {h.delivery_note}
-                        </p>
+                        <div className="mt-3 space-y-1">
+                          {h.delivered_at && (
+                            <p className="text-xs text-green-600">
+                              {new Date(h.delivered_at)
+                                .toLocaleDateString("th-TH", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                })
+                                .replace(
+                                  /(\d+)\/(\d+)\/(\d+)/,
+                                  "$1/$2/$3",
+                                )}{" "}
+                              |{" "}
+                              {new Date(h.delivered_at).toLocaleTimeString(
+                                "th-TH",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                },
+                              )}
+                            </p>
+                          )}
+                          <p className="text-xs text-green-700 font-medium">
+                            ✓ ส่งแล้ว: {h.delivery_note || "ไม่มีหมายเหตุ"}
+                          </p>
+                        </div>
                       )}
                       {h.delivery_status === "reported" && (
-                        <p className="text-xs text-orange-700 mt-2 font-medium">
-                          ⚠ รายงาน: {h.report_reason}
-                        </p>
+                        <div className="mt-3 space-y-1">
+                          {h.reported_at && (
+                            <p className="text-xs text-orange-600">
+                              {new Date(h.reported_at)
+                                .toLocaleDateString("th-TH", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                })
+                                .replace(
+                                  /(\d+)\/(\d+)\/(\d+)/,
+                                  "$1/$2/$3",
+                                )}{" "}
+                              |{" "}
+                              {new Date(h.reported_at).toLocaleTimeString(
+                                "th-TH",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                },
+                              )}
+                            </p>
+                          )}
+                          <p className="text-xs text-red-700 font-medium">
+                            ⚠ รายงาน: {h.report_reason || "ไม่มีเหตุผล"}
+                          </p>
+                        </div>
                       )}
                     </div>
 
@@ -950,24 +1112,32 @@ export default function NavigationPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="mt-12 mb-8 flex items-center justify-center gap-3">
-              <button
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <div className="flex items-center gap-2">
-                {renderPageNumbers()}
+            <div className="mt-12 mb-20 flex flex-col items-center gap-4">
+              {" "}
+              {/* เพิ่ม mb-20 เพื่อไม่ให้ FAB ทับ */}
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center transition"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="flex items-center gap-2">
+                  {renderPageNumbers()}
+                </div>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center transition"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center"
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
+              <p className="text-sm text-gray-600 font-medium">
+                หน้า {currentPage} จาก {totalPages} • แสดง {filteredList.length}{" "}
+                รายการ
+              </p>
             </div>
           )}
 
@@ -1013,10 +1183,10 @@ export default function NavigationPage() {
           )}
         </>
       )}
+
       {/* FAB Menu ทั้งหมด - เมื่อปิดจะหายไปสนิท ไม่บังอะไรเลย */}
       {isFabOpen ? (
         <>
-          {/* Overlay ดำ - แสดงเฉพาะตอนเปิด */}
           <div
             className="fixed inset-0 bg-black/30 z-40"
             onClick={() => setIsFabOpen(false)}
