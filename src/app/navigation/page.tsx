@@ -702,6 +702,7 @@ export default function NavigationPage() {
     if (!houseToDeliver) return;
     const note =
       deliverNote === "อื่นๆ" ? deliverNoteCustom.trim() : deliverNote;
+
     const { error } = await supabase
       .from("user_navigation_houses")
       .update({
@@ -710,17 +711,22 @@ export default function NavigationPage() {
         delivered_at: new Date().toISOString(),
       })
       .eq("id", houseToDeliver.nav_id);
+
     if (error) {
       toast.error("บันทึกการส่งไม่สำเร็จ: " + error.message);
     } else {
       toast.success("บันทึกการส่งงานเรียบร้อยแล้ว");
-      setList((prev) =>
-        prev.map((h) =>
-          h.nav_id === houseToDeliver.nav_id
-            ? { ...h, delivery_status: "delivered", delivery_note: note }
-            : h,
-        ),
-      );
+
+      // ← เพิ่มส่วนนี้: รีโหลดข้อมูลใหม่
+      const { data, error: loadError } = await supabase
+        .from("navigation_view")
+        .select("*")
+        .order("nav_priority", { ascending: true });
+
+      if (!loadError && data) {
+        setList(data);
+      }
+
       setShowDeliverModal(false);
       setDeliverNote("โอนเข้าบริษัท");
       setDeliverNoteCustom("");
@@ -729,6 +735,7 @@ export default function NavigationPage() {
 
   const confirmReport = async () => {
     if (!houseToReport) return;
+
     const { error } = await supabase
       .from("user_navigation_houses")
       .update({
@@ -737,21 +744,22 @@ export default function NavigationPage() {
         reported_at: new Date().toISOString(),
       })
       .eq("id", houseToReport.nav_id);
+
     if (error) {
       toast.error("บันทึกรายงานไม่สำเร็จ: " + error.message);
     } else {
       toast.success("บันทึกรายงานเรียบร้อยแล้ว");
-      setList((prev) =>
-        prev.map((h) =>
-          h.nav_id === houseToReport.nav_id
-            ? {
-                ...h,
-                delivery_status: "reported",
-                report_reason: reportReason.trim(),
-              }
-            : h,
-        ),
-      );
+
+      // ← เพิ่มส่วนนี้: รีโหลดข้อมูลใหม่
+      const { data, error: loadError } = await supabase
+        .from("navigation_view")
+        .select("*")
+        .order("nav_priority", { ascending: true });
+
+      if (!loadError && data) {
+        setList(data);
+      }
+
       setShowReportModal(false);
       setReportReason("");
     }
