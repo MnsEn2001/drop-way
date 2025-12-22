@@ -964,6 +964,28 @@ export default function NavigationPage() {
                     key={h.nav_id}
                     className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
                   >
+                    {/* ปุ่มนำทาง / สถานะพิกัด - มุมขวาบน */}
+                    <div className="absolute top-3 right-3 z-10">
+                      {h.lat && h.lng ? (
+                        <button
+                          onClick={() => openNavigation(h.lat!, h.lng!)}
+                          onMouseDown={(e) => e.preventDefault()}
+                          className="px-3 py-2 bg-emerald-600 text-white rounded-lg shadow-md hover:shadow-lg hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-1.5 font-medium text-sm"
+                          title="นำทางไปยังบ้านนี้"
+                        >
+                          <Navigation className="w-4 h-4" />
+                          นำทาง
+                        </button>
+                      ) : (
+                        <div
+                          className="px-3 py-2 bg-orange-500 text-white rounded-lg shadow-md flex items-center gap-1.5 font-medium text-sm opacity-90"
+                          title="บ้านนี้ยังไม่มีพิกัด"
+                        >
+                          <MapPin className="w-4 h-4" />
+                          ไม่มีพิกัด
+                        </div>
+                      )}
+                    </div>
                     <div className="p-5 flex-1 flex flex-col">
                       {/* ลำดับที่ + ชื่อ */}
                       <div className="flex items-baseline gap-2">
@@ -974,16 +996,13 @@ export default function NavigationPage() {
                           {h.full_name || "ไม่มีชื่อ"}
                         </h3>
                       </div>
-
                       {h.phone && (
                         <p className="text-sm text-gray-600 mt-2">{h.phone}</p>
                       )}
-
                       <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">
                         <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
                         <span className="line-clamp-3">{h.address}</span>
                       </div>
-
                       {/* ระยะทางโดยประมาณ */}
                       {h.distance !== undefined && h.distance < Infinity && (
                         <p className="text-xs text-gray-500 mt-3">
@@ -993,13 +1012,11 @@ export default function NavigationPage() {
                           </span>
                         </p>
                       )}
-
                       {h.note && (
                         <p className="text-xs text-amber-700 mt-3 italic">
                           หมายเหตุ: {h.note}
                         </p>
                       )}
-
                       {/* สถานะการส่ง + วันที่เวลา */}
                       {h.delivery_status === "delivered" && (
                         <div className="mt-3 space-y-1">
@@ -1063,6 +1080,7 @@ export default function NavigationPage() {
                       )}
                     </div>
 
+                    {/* ปุ่มด้านล่าง */}
                     <div className="px-5 pb-5 flex flex-wrap justify-center items-center gap-3">
                       <button
                         onClick={() => removeFromNavigation(h.nav_id)}
@@ -1071,15 +1089,7 @@ export default function NavigationPage() {
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
-                      {h.lat && h.lng && (
-                        <button
-                          onClick={() => openNavigation(h.lat!, h.lng!)}
-                          className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition"
-                          title="นำทาง"
-                        >
-                          <Navigation className="w-5 h-5" />
-                        </button>
-                      )}
+
                       {viewMode === "today" && (
                         <>
                           <button
@@ -1104,6 +1114,7 @@ export default function NavigationPage() {
                           </button>
                         </>
                       )}
+
                       <button
                         onClick={() => openEditModal(h)}
                         className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"

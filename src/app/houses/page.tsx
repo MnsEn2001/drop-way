@@ -53,6 +53,67 @@ export default function HousesPage() {
   const [downloading, setDownloading] = useState(false);
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [coordsInput, setCoordsInput] = useState<string>("");
+
+  // เพิ่ม state เหล่านี้ข้างๆ state อื่น ๆ (ใกล้ๆ coordsInput)
+  const [addressInput, setAddressInput] = useState<string>("");
+  const [addressSuggestions, setAddressSuggestions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] =
+    useState<number>(-1);
+
+  // ข้อมูลคงที่ (ใส่ข้างนอก component หรือข้างในก็ได้ แนะนำข้างใน)
+  const villages = Array.from({ length: 25 }, (_, i) => (i + 1).toString()); // "1" ถึง "25"
+
+  const villageBySubdistrict: Record<string, string[]> = {
+    นาโบสถ์: [
+      "ลาดยาว",
+      "นาโบสถ์",
+      "วังตำลึง",
+      "ตะเคียนด้วน",
+      "วังน้ำเย็น",
+      "นาแพะ",
+      "ท่าทองแดง",
+      "เพชรชมภู",
+      "ใหม่พรสวรรค์",
+    ],
+    เชียงทอง: [
+      "วังเจ้า",
+      "เด่นวัว",
+      "เด่นคา",
+      "หนองปลาไหล",
+      "ครองราชย์",
+      "เด่นวัวน้ำทิพย์",
+      "ชุมนุมกลาง",
+      "สบยม",
+      "ดงซ่อม",
+      "ใหม่เสรีธรรม",
+      "ใหม่ชัยมงคล",
+      "สบยมใต้",
+      "ผาผึ้ง",
+      "ศรีคีรีรักษ์",
+    ],
+    ประดาง: ["ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
+  };
+
+  const subdistricts = ["นาโบสถ์", "เชียงทอง", "ประดาง"];
+
+  const subdistrictInfo: Record<
+    string,
+    { district: string; province: string }
+  > = {
+    นาโบสถ์: { district: "วังเจ้า", province: "ตาก" },
+    เชียงทอง: { district: "วังเจ้า", province: "ตาก" },
+    ประดาง: { district: "วังเจ้า", province: "ตาก" },
+  };
+
+  // เพิ่ม useEffect นี้ (ข้างๆ useEffect อื่นๆ)
+  useEffect(() => {
+    if ((editingHouse || isAdding) && formData.address !== undefined) {
+      setAddressInput(formData.address || "");
+    }
+  }, [editingHouse, isAdding, formData.address]);
 
   // เช็ก session
   useEffect(() => {
@@ -299,6 +360,9 @@ export default function HousesPage() {
       lat: house.lat || undefined,
       lng: house.lng || undefined,
     });
+    setCoordsInput(house.lat && house.lng ? `${house.lat},${house.lng}` : "");
+    // สำคัญ: sync addressInput
+    setAddressInput(house.address || "");
   };
 
   const openAddModal = () => {
@@ -312,6 +376,133 @@ export default function HousesPage() {
       lat: undefined,
       lng: undefined,
     });
+    setCoordsInput("");
+    setAddressInput("");
+  };
+
+  const handleAddressChange = (value: string) => {
+    setAddressInput(value);
+    setFormData((prev) => ({ ...prev, address: value }));
+    generateAddressSuggestions(value);
+    setHighlightedSuggestionIndex(-1);
+  };
+
+  const generateAddressSuggestions = (input: string) => {
+    const trimmed = input.trimEnd();
+
+    // 1. พิมพ์บ้านเลขที่แล้วกด space (ยังไม่มี ม. หรือ ต.)
+    if (
+      /\s$/.test(input) &&
+      !trimmed.includes("ม.") &&
+      !trimmed.includes("ต.")
+    ) {
+      setAddressSuggestions(
+        villages.map((v) => ({
+          label: `ม.${v}`,
+          value: `ม.${v} `,
+        })),
+      );
+      return;
+    }
+
+    // 2. มี "ม.X" แล้ว และกด space → แนะนำหมู่บ้าน (บ.)
+    // ตรวจสอบว่ามี ม.เลข แล้วตามด้วย space
+    if (trimmed.match(/ม\.\d+$/) && /\s$/.test(input)) {
+      // ยังไม่มีตำบล → แนะนำหมู่บ้าน (ทุกหมู่บ้านก่อน เพราะยังไม่รู้ตำบล)
+      // หรือถ้าอยากแม่นยำกว่านี้ ต้องรอให้เลือกตำบลก่อน → แต่คุณอยากให้เลือกหมู่บ้านก่อนตำบล
+      // เราจะแนะนำหมู่บ้านทุกตัวก่อน (รวมทุกตำบล)
+      const allVillages = Array.from(
+        new Set(Object.values(villageBySubdistrict).flat()),
+      );
+
+      setAddressSuggestions(
+        allVillages.map((v) => ({
+          label: `บ.${v}`,
+          value: `บ.${v} `,
+        })),
+      );
+      return;
+    }
+
+    // 3. มี "บ.ชื่อหมู่บ้าน" แล้วกด space → แนะนำตำบล
+    if (trimmed.match(/บ\.[^ ]+$/) && /\s$/.test(input)) {
+      setAddressSuggestions(
+        subdistricts.map((sd) => ({
+          label: `ต.${sd}`,
+          value: `ต.${sd}`,
+        })),
+      );
+      return;
+    }
+
+    // 4. พิมพ์ "ต." แล้วกำลังพิมพ์ชื่อตำบล → filter ตำบล
+    const tambonMatch = trimmed.match(/ต\.([^ ]*)$/);
+    if (tambonMatch) {
+      const partial = tambonMatch[1];
+      const matches = subdistricts.filter((sd) => sd.includes(partial));
+      setAddressSuggestions(
+        matches.map((sd) => ({
+          label: `ต.${sd}`,
+          value: `ต.${sd}`,
+        })),
+      );
+      return;
+    }
+
+    // 5. มีตำบลครบแล้ว และกด space → ไม่ต้องแนะนำอะไรเพิ่ม (เพราะ อ.จ. จะเติมเองตอนเลือก)
+    // หรือถ้าอยากให้แนะนำหมู่บ้านที่ถูกต้องตามตำบล (ย้อนกลับมาแก้หมู่บ้านให้ตรง)
+    // แต่ตอนนี้เราปล่อยว่างไว้
+
+    setAddressSuggestions([]);
+  };
+
+  const selectAddressSuggestion = (suggestion: {
+    label: string;
+    value: string;
+  }) => {
+    let newAddress = addressInput.replace(/[^\s]*$/, "") + suggestion.value;
+
+    const tambonMatch = suggestion.value.match(/ต\.(.+)/);
+    if (tambonMatch) {
+      const tambon = tambonMatch[1];
+      const info = subdistrictInfo[tambon];
+      if (info) {
+        newAddress =
+          newAddress.trim() + ` อ.${info.district} จ.${info.province}`;
+      }
+    }
+
+    setAddressInput(newAddress);
+    setFormData((prev) => ({ ...prev, address: newAddress }));
+    setAddressSuggestions([]);
+    setHighlightedSuggestionIndex(-1);
+
+    // ทำให้ dropdown ถัดไปโผล่ทันที
+    setTimeout(() => {
+      generateAddressSuggestions(newAddress + " ");
+    }, 0);
+  };
+
+  const handleAddressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (addressSuggestions.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedSuggestionIndex((prev) =>
+        prev < addressSuggestions.length - 1 ? prev + 1 : 0,
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedSuggestionIndex((prev) =>
+        prev > 0 ? prev - 1 : addressSuggestions.length - 1,
+      );
+    } else if (e.key === "Enter" && highlightedSuggestionIndex >= 0) {
+      e.preventDefault();
+      selectAddressSuggestion(addressSuggestions[highlightedSuggestionIndex]);
+    } else if (e.key === "Escape") {
+      setAddressSuggestions([]);
+      setHighlightedSuggestionIndex(-1);
+    }
   };
 
   const closeModal = () => {
@@ -331,11 +522,19 @@ export default function HousesPage() {
       (position) => {
         const lat = position.coords.latitude.toFixed(6);
         const lng = position.coords.longitude.toFixed(6);
+        const latNum = parseFloat(lat);
+        const lngNum = parseFloat(lng);
+
+        // อัปเดตทั้ง formData และ coordsInput พร้อมกัน
         setFormData((prev) => ({
           ...prev,
-          lat: parseFloat(lat),
-          lng: parseFloat(lng),
+          lat: latNum,
+          lng: lngNum,
         }));
+
+        // <<< สำคัญ: อัปเดตช่อง input ให้แสดงพิกัดด้วย
+        setCoordsInput(`${lat},${lng}`);
+
         setIsDetecting(false);
         toast.success(`ดึงพิกัดสำเร็จ: ${lat},${lng}`);
       },
@@ -346,7 +545,6 @@ export default function HousesPage() {
       { timeout: 10000 },
     );
   };
-
   const verifyOnMaps = (lat: number, lng: number) => {
     const url = `https://www.google.com/maps?q=${lat},${lng}`;
     window.open(url, "_blank");
@@ -785,15 +983,37 @@ export default function HousesPage() {
                 }
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
               />
-              <textarea
-                placeholder="ที่อยู่เต็ม"
-                rows={4}
-                value={formData.address || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, address: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none resize-none"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="ที่อยู่เต็ม (พิมพ์บ้านเลขที่ → space → เลือกหมู่ที่ → space → เลือกตำบล → space → เลือกหมู่บ้าน)"
+                  value={addressInput}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  onKeyDown={handleAddressKeyDown}
+                  className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                />
+
+                {/* Dropdown แนะนำที่อยู่ */}
+                {addressSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                    {addressSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()} // ป้องกัน input เสีย focus
+                        onClick={() => selectAddressSuggestion(suggestion)}
+                        className={`w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 transition ${
+                          index === highlightedSuggestionIndex
+                            ? "bg-indigo-100"
+                            : ""
+                        }`}
+                      >
+                        {suggestion.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <textarea
                 placeholder="หมายเหตุ (เช่น ข้างศูนย์เด็กเล็ก, หลังอบต.)"
                 rows={2}
@@ -818,19 +1038,33 @@ export default function HousesPage() {
               <input
                 type="text"
                 placeholder="พิกัด (lat,lng) เช่น 16.123456,99.123456"
-                value={
-                  formData.lat && formData.lng
-                    ? `${formData.lat},${formData.lng}`
-                    : ""
-                }
+                value={coordsInput}
                 onChange={(e) => {
-                  const parts = e.target.value.split(",");
+                  const value = e.target.value;
+                  setCoordsInput(value);
+
+                  // พยายาม parse เป็น lat,lng เฉพาะเมื่อรูปแบบครบ
+                  const parts = value.split(",");
                   if (parts.length === 2) {
                     const lat = parseFloat(parts[0].trim());
                     const lng = parseFloat(parts[1].trim());
                     if (!isNaN(lat) && !isNaN(lng)) {
                       setFormData((p) => ({ ...p, lat, lng }));
+                    } else {
+                      // ถ้า parse ไม่ได้ ให้ล้าง lat/lng
+                      setFormData((p) => ({
+                        ...p,
+                        lat: undefined,
+                        lng: undefined,
+                      }));
                     }
+                  } else {
+                    // ถ้าไม่ครบรูปแบบ ให้ล้าง lat/lng
+                    setFormData((p) => ({
+                      ...p,
+                      lat: undefined,
+                      lng: undefined,
+                    }));
                   }
                 }}
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
