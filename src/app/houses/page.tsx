@@ -68,9 +68,10 @@ export default function HousesPage() {
 
   const villageBySubdistrict: Record<string, string[]> = {
     นาโบสถ์: [
+      "วังทอง",
+      "วังตำลึง",
       "ลาดยาว",
       "นาโบสถ์",
-      "วังตำลึง",
       "ตะเคียนด้วน",
       "วังน้ำเย็น",
       "นาแพะ",

@@ -102,6 +102,60 @@ export default function NavigationPage() {
   const [coordInput, setCoordInput] = useState("");
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
   const [detectedStartLng, setDetectedStartLng] = useState<number | null>(null);
+
+  const [addressInput, setAddressInput] = useState<string>("");
+  const [addressSuggestions, setAddressSuggestions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] =
+    useState<number>(-1);
+
+  // ข้อมูลคงที่ (เหมือนหน้า houses)
+  const villages = Array.from({ length: 25 }, (_, i) => (i + 1).toString()); // "1" ถึง "25"
+
+  const villageBySubdistrict: Record<string, string[]> = {
+    นาโบสถ์: [
+      "วังทอง",
+      "วังตำลึง",
+      "ลาดยาว",
+      "นาโบสถ์",
+      "ตะเคียนด้วน",
+      "วังน้ำเย็น",
+      "นาแพะ",
+      "ท่าทองแดง",
+      "เพชรชมภู",
+      "ใหม่พรสวรรค์",
+    ],
+    เชียงทอง: [
+      "วังเจ้า",
+      "เด่นวัว",
+      "เด่นคา",
+      "หนองปลาไหล",
+      "ครองราชย์",
+      "เด่นวัวน้ำทิพย์",
+      "ชุมนุมกลาง",
+      "สบยม",
+      "ดงซ่อม",
+      "ใหม่เสรีธรรม",
+      "ใหม่ชัยมงคล",
+      "สบยมใต้",
+      "ผาผึ้ง",
+      "ศรีคีรีรักษ์",
+    ],
+    ประดาง: ["ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
+  };
+
+  const subdistricts = ["นาโบสถ์", "เชียงทอง", "ประดาง"];
+
+  const subdistrictInfo: Record<
+    string,
+    { district: string; province: string }
+  > = {
+    นาโบสถ์: { district: "วังเจ้า", province: "ตาก" },
+    เชียงทอง: { district: "วังเจ้า", province: "ตาก" },
+    ประดาง: { district: "วังเจ้า", province: "ตาก" },
+  };
+
   // FAB Menu
   const [isFabOpen, setIsFabOpen] = useState(false);
   // View Mode: today | delivered | reported
@@ -385,6 +439,130 @@ export default function NavigationPage() {
     return `${modeText} • พบ ${displayedCount} บ้าน`;
   };
 
+  useEffect(() => {
+    if (editingHouse && formData.address !== undefined) {
+      setAddressInput(formData.address || "");
+    }
+  }, [editingHouse, formData.address]);
+
+  const handleAddressChange = (value: string) => {
+    setAddressInput(value);
+    setFormData((prev) => ({ ...prev, address: value }));
+    generateAddressSuggestions(value);
+    setHighlightedSuggestionIndex(-1);
+  };
+
+  const generateAddressSuggestions = (input: string) => {
+    const trimmed = input.trimEnd();
+
+    // 1. พิมพ์บ้านเลขที่แล้วกด space → แนะนำ ม.1-25
+    if (
+      /\s$/.test(input) &&
+      !trimmed.includes("ม.") &&
+      !trimmed.includes("ต.")
+    ) {
+      setAddressSuggestions(
+        villages.map((v) => ({
+          label: `ม.${v}`,
+          value: `ม.${v} `,
+        })),
+      );
+      return;
+    }
+
+    // 2. มี ม.เลข แล้วกด space → แนะนำ บ.หมู่บ้าน (ทุกตำบลก่อน)
+    if (trimmed.match(/ม\.\d+$/) && /\s$/.test(input)) {
+      const allVillages = Array.from(
+        new Set(Object.values(villageBySubdistrict).flat()),
+      );
+      setAddressSuggestions(
+        allVillages.map((v) => ({
+          label: `บ.${v}`,
+          value: `บ.${v} `,
+        })),
+      );
+      return;
+    }
+
+    // 3. มี บ.ชื่อหมู่บ้าน แล้วกด space → แนะนำ ต.
+    if (trimmed.match(/บ\.[^ ]+$/) && /\s$/.test(input)) {
+      setAddressSuggestions(
+        subdistricts.map((sd) => ({
+          label: `ต.${sd}`,
+          value: `ต.${sd}`,
+        })),
+      );
+      return;
+    }
+
+    // 4. พิมพ์ ต. แล้วกำลังพิมพ์ → filter ตำบล
+    const tambonMatch = trimmed.match(/ต\.([^ ]*)$/);
+    if (tambonMatch) {
+      const partial = tambonMatch[1];
+      const matches = subdistricts.filter((sd) => sd.includes(partial));
+      setAddressSuggestions(
+        matches.map((sd) => ({
+          label: `ต.${sd}`,
+          value: `ต.${sd}`,
+        })),
+      );
+      return;
+    }
+
+    // ไม่มีอะไรตรง → ล้าง
+    setAddressSuggestions([]);
+  };
+
+  const selectAddressSuggestion = (suggestion: {
+    label: string;
+    value: string;
+  }) => {
+    let newAddress = addressInput.replace(/[^\s]*$/, "") + suggestion.value;
+
+    // ถ้าเลือกตำบล → เติม อำเภอ + จังหวัด
+    const tambonMatch = suggestion.value.match(/ต\.(.+)/);
+    if (tambonMatch) {
+      const tambon = tambonMatch[1];
+      const info = subdistrictInfo[tambon];
+      if (info) {
+        newAddress =
+          newAddress.trim() + ` อ.${info.district} จ.${info.province}`;
+      }
+    }
+
+    setAddressInput(newAddress);
+    setFormData((prev) => ({ ...prev, address: newAddress }));
+    setAddressSuggestions([]);
+    setHighlightedSuggestionIndex(-1);
+
+    // เปิด suggestion ถัดไปทันที
+    setTimeout(() => {
+      generateAddressSuggestions(newAddress + " ");
+    }, 0);
+  };
+
+  const handleAddressKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (addressSuggestions.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedSuggestionIndex((prev) =>
+        prev < addressSuggestions.length - 1 ? prev + 1 : 0,
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedSuggestionIndex((prev) =>
+        prev > 0 ? prev - 1 : addressSuggestions.length - 1,
+      );
+    } else if (e.key === "Enter" && highlightedSuggestionIndex >= 0) {
+      e.preventDefault();
+      selectAddressSuggestion(addressSuggestions[highlightedSuggestionIndex]);
+    } else if (e.key === "Escape") {
+      setAddressSuggestions([]);
+      setHighlightedSuggestionIndex(-1);
+    }
+  };
+
   // Pagination
   const totalPages = Math.ceil(filteredList.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -579,7 +757,6 @@ export default function NavigationPage() {
   };
 
   const openEditModal = (house: NavigationHouse) => {
-    console.log("House data for editing:", house); // ← ดูว่ามี house_id และ id เป็นอะไร
     setEditingHouse(house);
     setFormData({
       full_name: house.full_name || "",
@@ -589,6 +766,8 @@ export default function NavigationPage() {
       lat: house.lat || undefined,
       lng: house.lng || undefined,
     });
+    // สำคัญ: sync addressInput
+    setAddressInput(house.address || "");
   };
 
   const closeModal = () => {
@@ -1092,16 +1271,7 @@ export default function NavigationPage() {
 
                       {viewMode === "today" && (
                         <>
-                          <button
-                            onClick={() => {
-                              setHouseToDeliver(h);
-                              setShowDeliverModal(true);
-                            }}
-                            className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
-                            title="ส่งงาน"
-                          >
-                            <CheckCircle className="w-5 h-5" />
-                          </button>
+                          {/* ย้ายปุ่มรายงานมาไว้ข้างถังขยะ */}
                           <button
                             onClick={() => {
                               setHouseToReport(h);
@@ -1112,16 +1282,40 @@ export default function NavigationPage() {
                           >
                             <AlertCircle className="w-5 h-5" />
                           </button>
+
+                          {/* ย้ายปุ่มแก้ไขมาต่อจากปุ่มรายงาน */}
+                          <button
+                            onClick={() => openEditModal(h)}
+                            className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
+                            title="แก้ไข"
+                          >
+                            <Edit3 className="w-5 h-5" />
+                          </button>
+
+                          {/* สลับปุ่มส่งงานมาไว้ด้านหลังสุด */}
+                          <button
+                            onClick={() => {
+                              setHouseToDeliver(h);
+                              setShowDeliverModal(true);
+                            }}
+                            className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
+                            title="ส่งงาน"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                          </button>
                         </>
                       )}
 
-                      <button
-                        onClick={() => openEditModal(h)}
-                        className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
-                        title="แก้ไข"
-                      >
-                        <Edit3 className="w-5 h-5" />
-                      </button>
+                      {/* ถ้าไม่ใช่โหมด today (เช่น delivered หรือ reported) ยังคงแสดงแค่ปุ่มลบ + แก้ไข */}
+                      {viewMode !== "today" && (
+                        <button
+                          onClick={() => openEditModal(h)}
+                          className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
+                          title="แก้ไข"
+                        >
+                          <Edit3 className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1357,15 +1551,36 @@ export default function NavigationPage() {
                 }
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
               />
-              <textarea
-                placeholder="ที่อยู่เต็ม"
-                rows={4}
-                value={formData.address || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, address: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none resize-none"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="ที่อยู่เต็ม (พิมพ์บ้านเลขที่ → space → เลือกหมู่ที่ → space → เลือกหมู่บ้าน → space → เลือกตำบล)"
+                  value={addressInput}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  onKeyDown={handleAddressKeyDown}
+                  className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                />
+                {/* Dropdown แนะนำที่อยู่ */}
+                {addressSuggestions.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                    {addressSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()} // ป้องกันเสีย focus
+                        onClick={() => selectAddressSuggestion(suggestion)}
+                        className={`w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 transition ${
+                          index === highlightedSuggestionIndex
+                            ? "bg-indigo-100"
+                            : ""
+                        }`}
+                      >
+                        {suggestion.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <textarea
                 placeholder="หมายเหตุ (เช่น ข้างศูนย์เด็กเล็ก, หลังอบต.)"
                 rows={2}
