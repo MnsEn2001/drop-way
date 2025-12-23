@@ -1261,6 +1261,7 @@ export default function NavigationPage() {
 
                     {/* ปุ่มด้านล่าง */}
                     <div className="px-5 pb-5 flex flex-wrap justify-center items-center gap-3">
+                      {/* ปุ่มลบออกจากการนำทาง - แสดงทุกสถานะ */}
                       <button
                         onClick={() => removeFromNavigation(h.nav_id)}
                         className="p-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
@@ -1269,52 +1270,61 @@ export default function NavigationPage() {
                         <Trash2 className="w-5 h-5" />
                       </button>
 
-                      {viewMode === "today" && (
-                        <>
-                          {/* ย้ายปุ่มรายงานมาไว้ข้างถังขยะ */}
-                          <button
-                            onClick={() => {
-                              setHouseToReport(h);
-                              setShowReportModal(true);
-                            }}
-                            className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition"
-                            title="รายงานปัญหา"
-                          >
-                            <AlertCircle className="w-5 h-5" />
-                          </button>
-
-                          {/* ย้ายปุ่มแก้ไขมาต่อจากปุ่มรายงาน */}
-                          <button
-                            onClick={() => openEditModal(h)}
-                            className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
-                            title="แก้ไข"
-                          >
-                            <Edit3 className="w-5 h-5" />
-                          </button>
-
-                          {/* สลับปุ่มส่งงานมาไว้ด้านหลังสุด */}
-                          <button
-                            onClick={() => {
-                              setHouseToDeliver(h);
-                              setShowDeliverModal(true);
-                            }}
-                            className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
-                            title="ส่งงาน"
-                          >
-                            <CheckCircle className="w-5 h-5" />
-                          </button>
-                        </>
+                      {/* ปุ่มรายงาน - แสดงเฉพาะสถานะ pending และ delivered (ถ้าต้องการให้รายงานซ้ำได้ก็เปิดได้) */}
+                      {(!h.delivery_status ||
+                        h.delivery_status === "pending" ||
+                        h.delivery_status === "delivered") && (
+                        <button
+                          onClick={() => {
+                            setHouseToReport(h);
+                            setShowReportModal(true);
+                          }}
+                          className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition"
+                          title="รายงานปัญหา"
+                        >
+                          <AlertCircle className="w-5 h-5" />
+                        </button>
                       )}
 
-                      {/* ถ้าไม่ใช่โหมด today (เช่น delivered หรือ reported) ยังคงแสดงแค่ปุ่มลบ + แก้ไข */}
-                      {viewMode !== "today" && (
+                      {/* ปุ่มแก้ไข - แสดงทุกสถานะ */}
+                      <button
+                        onClick={() => openEditModal(h)}
+                        className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
+                        title="แก้ไข"
+                      >
+                        <Edit3 className="w-5 h-5" />
+                      </button>
+
+                      {/* === ปุ่มส่งแล้ว === */}
+                      {/* แสดงใน 2 กรณีหลัก: pending และ reported */}
+                      {(!h.delivery_status ||
+                        h.delivery_status === "pending" ||
+                        h.delivery_status === "reported") && (
                         <button
-                          onClick={() => openEditModal(h)}
-                          className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
-                          title="แก้ไข"
+                          onClick={() => {
+                            setHouseToDeliver(h);
+                            setShowDeliverModal(true);
+                          }}
+                          className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition"
+                          title={
+                            h.delivery_status === "reported"
+                              ? "เปลี่ยนเป็นส่งแล้ว"
+                              : "ส่งงาน"
+                          }
                         >
-                          <Edit3 className="w-5 h-5" />
+                          <CheckCircle className="w-5 h-5" />
                         </button>
+                      )}
+
+                      {/* แสดงสถานะส่งแล้ว (สำหรับ delivered) */}
+                      {h.delivery_status === "delivered" && (
+                        <div
+                          className="p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 cursor-default"
+                          title="ส่งงานแล้ว"
+                        >
+                          <CheckCircle className="w-5 h-5" />
+                          <span className="text-xs font-medium">ส่งแล้ว</span>
+                        </div>
                       )}
                     </div>
                   </div>
