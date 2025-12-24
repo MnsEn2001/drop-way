@@ -23,7 +23,7 @@ import {
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 export default function HousesPage() {
   const [houses, setHouses] = useState<House[]>([]);
@@ -326,27 +326,42 @@ export default function HousesPage() {
     return pages;
   };
 
+  const reloadHouses = async () => {
+    const { data } = await supabase
+      .from("houses")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (data) {
+      setHouses(data);
+    }
+  };
+
+  // ⭐ แก้ฟังก์ชัน addToNav ทั้งหมด (แทนที่อันเดิม)
   const addToNav = async (houseId: string) => {
     if (addingIds.includes(houseId)) return;
     setAddingIds((prev) => [...prev, houseId]);
+
     const { data: session } = await supabase.auth.getSession();
     if (!session.session) {
       toast.error("กรุณา login ก่อน");
       setAddingIds((prev) => prev.filter((id) => id !== houseId));
       return;
     }
+
     const { error } = await supabase
       .from("user_navigation_houses")
       .insert({ house_id: houseId });
+
     if (error) {
       if (error.code === "23505") {
-        toast.error("บ้านนี้อยู่ในการนำทางแล้ว");
+        toast.error("🏠 บ้านนี้ถูกเพิ่มเข้าการนำทางแล้ว");
       } else {
-        toast.error(error.message || "เกิดข้อผิดพลาด");
+        toast.error(error.message || "เกิดข้อผิดพลาดในการเพิ่ม");
       }
     } else {
-      toast.success("เพิ่มเข้าการนำทางเรียบร้อย");
+      toast.success("✅ เพิ่มเข้าการนำทางเรียบร้อย");
     }
+
     setAddingIds((prev) => prev.filter((id) => id !== houseId));
   };
 
@@ -558,11 +573,7 @@ export default function HousesPage() {
         toast.error("เพิ่มบ้านไม่สำเร็จ: " + error.message);
       } else {
         toast.success("เพิ่มบ้านสำเร็จ!");
-        const { data } = await supabase
-          .from("houses")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (data) setHouses(data);
+        await reloadHouses(); // รีโหลดข้อมูลใหม่
         closeModal();
       }
     } else {
@@ -571,15 +582,12 @@ export default function HousesPage() {
         .from("houses")
         .update(formData)
         .eq("id", editingHouse.id);
+
       if (error) {
         toast.error("เกิดข้อผิดพลาด: " + error.message);
       } else {
         toast.success("บันทึกสำเร็จ");
-        setHouses((prev) =>
-          prev.map((h) =>
-            h.id === editingHouse.id ? { ...h, ...formData } : h,
-          ),
-        );
+        await reloadHouses(); // รีโหลดข้อมูลใหม่
         closeModal();
       }
     }

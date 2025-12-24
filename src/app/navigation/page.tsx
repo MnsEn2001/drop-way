@@ -1,3 +1,4 @@
+// C:\DropWay\New_Version\dropway-final\src\app\navigation\page.tsx
 "use client";
 import { supabase } from "@/lib/supabase";
 import { NavigationHouse } from "@/types/navigation";
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 
-const ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 20;
 
 // ฟังก์ชันคำนวณระยะทาง Haversine (km)
 function getDistanceFromLatLon(
@@ -70,6 +71,7 @@ export default function NavigationPage() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [showNoCoords, setShowNoCoords] = useState(false);
   const [showWithCoords, setShowWithCoords] = useState(false);
+
   // ตัวกรองเพิ่มเติม
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [houseNumberFilter, setHouseNumberFilter] = useState("");
@@ -78,16 +80,19 @@ export default function NavigationPage() {
   const [subdistrictFilter, setSubdistrictFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [showPageInput, setShowPageInput] = useState(false);
   const [pageInputValue, setPageInputValue] = useState("");
+
   // Modal แก้ไข
   const [editingHouse, setEditingHouse] = useState<NavigationHouse | null>(
     null,
   );
   const [formData, setFormData] = useState<Partial<House>>({});
   const [isDetecting, setIsDetecting] = useState(false);
+
   // จุดเริ่มต้นทาง
   const [showStartModal, setShowStartModal] = useState(false);
   const [isRealTimeMode, setIsRealTimeMode] = useState(true);
@@ -162,6 +167,7 @@ export default function NavigationPage() {
   const [viewMode, setViewMode] = useState<"today" | "delivered" | "reported">(
     "today",
   );
+
   // Modal ส่งงาน
   const [showDeliverModal, setShowDeliverModal] = useState(false);
   const [houseToDeliver, setHouseToDeliver] = useState<NavigationHouse | null>(
@@ -169,6 +175,7 @@ export default function NavigationPage() {
   );
   const [deliverNote, setDeliverNote] = useState<string>("โอนเข้าบริษัท");
   const [deliverNoteCustom, setDeliverNoteCustom] = useState("");
+
   // Modal รายงาน
   const [showReportModal, setShowReportModal] = useState(false);
   const [houseToReport, setHouseToReport] = useState<NavigationHouse | null>(
@@ -809,30 +816,31 @@ export default function NavigationPage() {
 
   const saveHouse = async () => {
     if (!editingHouse) return;
-
-    // ตรวจสอบ house_id ก่อน ถ้าไม่มีหรือเป็น undefined/"undefined" ให้แจ้ง error ชัดเจน
     if (!editingHouse.house_id || editingHouse.house_id === "undefined") {
       toast.error("ไม่พบ ID ของบ้าน กรุณารีเฟรชหน้าหรือลองใหม่อีกครั้ง");
-      console.error("Missing or invalid house_id:", editingHouse);
       return;
     }
 
     const { error } = await supabase
       .from("houses")
       .update(formData)
-      .eq("id", editingHouse.house_id); // ใช้ house_id ที่เชื่อถือได้
+      .eq("id", editingHouse.house_id);
 
     if (error) {
       toast.error("บันทึกไม่สำเร็จ: " + error.message);
-      console.error("Supabase update error:", error);
     } else {
       toast.success("บันทึกสำเร็จ");
-      // อัปเดต list โดยใช้ house_id เปรียบเทียบ
-      setList((prev) =>
-        prev.map((h) =>
-          h.house_id === editingHouse.house_id ? { ...h, ...formData } : h,
-        ),
-      );
+
+      // รีโหลดข้อมูลล่าสุดจาก navigation_view
+      const { data, error: loadError } = await supabase
+        .from("navigation_view")
+        .select("*")
+        .order("nav_priority", { ascending: true });
+
+      if (!loadError && data) {
+        setList(data);
+      }
+
       closeModal();
     }
   };
@@ -877,6 +885,18 @@ export default function NavigationPage() {
     setIsFabOpen(false);
   };
 
+  // ⭐ เพิ่มฟังก์ชัน reloadNavigation ใหม่
+  const reloadNavigation = async () => {
+    const { data } = await supabase
+      .from("navigation_view")
+      .select("*")
+      .order("nav_priority", { ascending: true });
+    if (data) {
+      setList(data);
+    }
+  };
+
+  // ⭐ แก้ confirmDeliver ทั้งหมด
   const confirmDeliver = async () => {
     if (!houseToDeliver) return;
     const note =
@@ -894,27 +914,17 @@ export default function NavigationPage() {
     if (error) {
       toast.error("บันทึกการส่งไม่สำเร็จ: " + error.message);
     } else {
-      toast.success("บันทึกการส่งงานเรียบร้อยแล้ว");
-
-      // ← เพิ่มส่วนนี้: รีโหลดข้อมูลใหม่
-      const { data, error: loadError } = await supabase
-        .from("navigation_view")
-        .select("*")
-        .order("nav_priority", { ascending: true });
-
-      if (!loadError && data) {
-        setList(data);
-      }
-
+      toast.success("✅ บันทึกการส่งงานเรียบร้อยแล้ว");
+      await reloadNavigation(); // รีโหลดข้อมูลใหม่
       setShowDeliverModal(false);
       setDeliverNote("โอนเข้าบริษัท");
       setDeliverNoteCustom("");
     }
   };
 
+  // ⭐ แก้ confirmReport ทั้งหมด
   const confirmReport = async () => {
     if (!houseToReport) return;
-
     const { error } = await supabase
       .from("user_navigation_houses")
       .update({
@@ -927,18 +937,8 @@ export default function NavigationPage() {
     if (error) {
       toast.error("บันทึกรายงานไม่สำเร็จ: " + error.message);
     } else {
-      toast.success("บันทึกรายงานเรียบร้อยแล้ว");
-
-      // ← เพิ่มส่วนนี้: รีโหลดข้อมูลใหม่
-      const { data, error: loadError } = await supabase
-        .from("navigation_view")
-        .select("*")
-        .order("nav_priority", { ascending: true });
-
-      if (!loadError && data) {
-        setList(data);
-      }
-
+      toast.success("⚠️ บันทึกรายงานเรียบร้อยแล้ว");
+      await reloadNavigation(); // รีโหลดข้อมูลใหม่
       setShowReportModal(false);
       setReportReason("");
     }
@@ -1464,6 +1464,7 @@ export default function NavigationPage() {
           </button>
         </div>
       )}
+
       {/* Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
