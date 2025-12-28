@@ -80,7 +80,11 @@ export default function NavigationPage() {
   const [subdistrictFilter, setSubdistrictFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
-
+  // เพิ่มตรงนี้ (ใกล้กับ searchTerm)
+  const [searchInName, setSearchInName] = useState(true);
+  const [searchInAddress, setSearchInAddress] = useState(true);
+  const [searchInPhone, setSearchInPhone] = useState(false);
+  const [searchInNote, setSearchInNote] = useState(true); // เปิดหมายเหตุเป็น default
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [showPageInput, setShowPageInput] = useState(false);
@@ -198,6 +202,10 @@ export default function NavigationPage() {
     subdistrictFilter: string;
     districtFilter: string;
     provinceFilter: string;
+    searchInName: boolean;
+    searchInAddress: boolean;
+    searchInPhone: boolean;
+    searchInNote: boolean;
   }>({
     viewMode,
     searchTerm: searchTerm.trim(),
@@ -209,8 +217,11 @@ export default function NavigationPage() {
     subdistrictFilter,
     districtFilter,
     provinceFilter,
+    searchInName: true, // ค่าเริ่มต้นตาม state
+    searchInAddress: true,
+    searchInPhone: false,
+    searchInNote: true,
   });
-
   // โหลดค่าจุดคงที่จาก localStorage
   useEffect(() => {
     const saved = localStorage.getItem("navigationStartPosition");
@@ -315,15 +326,30 @@ export default function NavigationPage() {
       );
     }
 
+    // ⭐ เปลี่ยนการค้นหา searchTerm ใหม่ (รองรับตัวเลือกฟิลด์)
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (h) =>
-          h.full_name?.toLowerCase().includes(lower) ||
-          h.address?.toLowerCase().includes(lower),
-      );
+      filtered = filtered.filter((h) => {
+        let matches = false;
+
+        if (searchInName && h.full_name?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+        if (searchInAddress && h.address?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+        if (searchInPhone && h.phone?.includes(searchTerm)) {
+          matches = true;
+        }
+        if (searchInNote && h.note?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+
+        return matches;
+      });
     }
 
+    // ส่วนที่เหลือเหมือนเดิม
     if (showWithCoords && !showNoCoords) {
       filtered = filtered.filter((h) => h.lat && h.lng);
     } else if (showNoCoords && !showWithCoords) {
@@ -355,7 +381,7 @@ export default function NavigationPage() {
 
     setFilteredList(filtered);
 
-    // ตรวจสอบว่าตัวกรองเปลี่ยนจริงหรือไม่ → ค่อยรีเซ็ตหน้า 1
+    // รีเซ็ตหน้า 1 เมื่อตัวกรองเปลี่ยน
     const prev = prevFiltersRef.current;
     const currentFilters = {
       viewMode,
@@ -368,6 +394,11 @@ export default function NavigationPage() {
       subdistrictFilter,
       districtFilter,
       provinceFilter,
+      // เพิ่มตัวเลือกค้นหาด้วย (เพื่อให้รีเซ็ตหน้าเมื่อเปลี่ยน)
+      searchInName,
+      searchInAddress,
+      searchInPhone,
+      searchInNote,
     };
 
     const hasChanged =
@@ -380,13 +411,16 @@ export default function NavigationPage() {
       prev.villageFilter !== currentFilters.villageFilter ||
       prev.subdistrictFilter !== currentFilters.subdistrictFilter ||
       prev.districtFilter !== currentFilters.districtFilter ||
-      prev.provinceFilter !== currentFilters.provinceFilter;
+      prev.provinceFilter !== currentFilters.provinceFilter ||
+      prev.searchInName !== currentFilters.searchInName ||
+      prev.searchInAddress !== currentFilters.searchInAddress ||
+      prev.searchInPhone !== currentFilters.searchInPhone ||
+      prev.searchInNote !== currentFilters.searchInNote;
 
     if (hasChanged) {
       setCurrentPage(1);
     }
 
-    // อัปเดตค่าเก่าสำหรับรอบถัดไป
     prevFiltersRef.current = currentFilters;
   }, [
     sortedList,
@@ -400,6 +434,10 @@ export default function NavigationPage() {
     districtFilter,
     provinceFilter,
     viewMode,
+    searchInName,
+    searchInAddress,
+    searchInPhone,
+    searchInNote, // เพิ่ม dependency
   ]);
 
   const clearSearch = () => setSearchTerm("");
@@ -1470,6 +1508,53 @@ export default function NavigationPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-5 text-center">ตัวกรองบ้าน</h2>
+
+            {/* ส่วนใหม่: เลือกค้นหาจากฟิลด์ไหน */}
+            <div className="mb-6 p-4 bg-indigo-50 rounded-xl">
+              <p className="text-sm font-semibold text-indigo-800 mb-3">
+                ช่องค้นหาหลักจะค้นหาจาก:
+              </p>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInName}
+                    onChange={(e) => setSearchInName(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">ชื่อ-นามสกุล</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInAddress}
+                    onChange={(e) => setSearchInAddress(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">ที่อยู่</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInPhone}
+                    onChange={(e) => setSearchInPhone(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">เบอร์โทรศัพท์</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInNote}
+                    onChange={(e) => setSearchInNote(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">หมายเหตุ</span>
+                </label>
+              </div>
+            </div>
+
+            {/* ส่วนเดิม: ตัวกรองอื่น ๆ */}
             <div className="space-y-4">
               <input
                 type="text"
@@ -1518,10 +1603,16 @@ export default function NavigationPage() {
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
               />
             </div>
+
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => {
                   clearFilters();
+                  // รีเซ็ตค่าค้นหาด้วย (หรือจะไม่รีเซ็ตก็ได้ตามต้องการ)
+                  setSearchInName(true);
+                  setSearchInAddress(true);
+                  setSearchInPhone(false);
+                  setSearchInNote(true);
                   setShowFilterModal(false);
                 }}
                 className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300"
@@ -1538,6 +1629,7 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
+
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">

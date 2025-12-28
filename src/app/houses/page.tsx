@@ -29,6 +29,7 @@ export default function HousesPage() {
   const [houses, setHouses] = useState<House[]>([]);
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalInDB, setTotalInDB] = useState<number | null>(null);
   const [addingIds, setAddingIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [showNoCoords, setShowNoCoords] = useState(false);
@@ -41,6 +42,12 @@ export default function HousesPage() {
   const [subdistrictFilter, setSubdistrictFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
+  // เพิ่ม state ใหม่ ๆ ใกล้กับ state อื่น ๆ
+  const [searchInName, setSearchInName] = useState(true);
+  const [searchInAddress, setSearchInAddress] = useState(true);
+  const [searchInPhone, setSearchInPhone] = useState(false);
+  const [searchInNote, setSearchInNote] = useState(true); // เพิ่มหมายเหตุเป็น default เปิด
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [showPageInput, setShowPageInput] = useState(false);
@@ -146,21 +153,39 @@ export default function HousesPage() {
   }, []);
 
   // กรองข้อมูล
+  // แก้ useEffect กรองข้อมูล (แทนที่ useEffect เดิมที่มี searchTerm)
   useEffect(() => {
     let filtered = houses;
+
     if (searchTerm.trim()) {
       const lower = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (h) =>
-          h.full_name?.toLowerCase().includes(lower) ||
-          h.address?.toLowerCase().includes(lower),
-      );
+      filtered = filtered.filter((h) => {
+        let matches = false;
+
+        if (searchInName && h.full_name?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+        if (searchInAddress && h.address?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+        if (searchInPhone && h.phone?.includes(searchTerm)) {
+          // เบอร์ไม่ case-sensitive มากนัก
+          matches = true;
+        }
+        if (searchInNote && h.note?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+
+        return matches;
+      });
     }
+
     if (showWithCoords && !showNoCoords) {
       filtered = filtered.filter((h) => h.lat && h.lng);
     } else if (showNoCoords && !showWithCoords) {
       filtered = filtered.filter((h) => !h.lat || !h.lng);
     }
+
     if (houseNumberFilter)
       filtered = filtered.filter((h) => h.address?.includes(houseNumberFilter));
     if (phoneFilter)
@@ -183,6 +208,7 @@ export default function HousesPage() {
       filtered = filtered.filter((h) =>
         h.address?.toLowerCase().includes(provinceFilter.toLowerCase()),
       );
+
     setFilteredHouses(filtered);
     setCurrentPage(1);
   }, [
@@ -196,6 +222,10 @@ export default function HousesPage() {
     subdistrictFilter,
     districtFilter,
     provinceFilter,
+    searchInName,
+    searchInAddress,
+    searchInPhone,
+    searchInNote, // เพิ่ม dependency ตัวใหม่
   ]);
 
   const clearSearch = () => setSearchTerm("");
@@ -208,27 +238,67 @@ export default function HousesPage() {
     setProvinceFilter("");
   };
 
-  // คำนวณข้อความแสดงจำนวนบ้าน
+  useEffect(() => {
+    const fetchHouses = async () => {
+      setLoading(true);
+
+      const { data, error, count } = await supabase
+        .from("houses")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .range(0, 9999); // ดึงสูงสุด 10,000 (ปรับได้ถ้าต้องการมากกว่านี้)
+
+      if (error) {
+        console.error("Error fetching houses:", error);
+        toast.error("โหลดข้อมูลบ้านไม่สำเร็จ");
+        setLoading(false);
+        return;
+      }
+
+      if (data) {
+        setHouses(data);
+        setTotalInDB(count ?? data.length); // เก็บจำนวนจริงจากฐานข้อมูล
+      }
+
+      setLoading(false);
+    };
+
+    fetchHouses();
+  }, []);
+
+  // แก้ฟังก์ชัน getCountText() ให้แสดงจำนวนจริงทั้งหมด
   const getCountText = () => {
+    const totalAll = totalInDB ?? houses.length;
     const total = filteredHouses.length;
+
     if (
-      searchTerm ||
-      houseNumberFilter ||
-      phoneFilter ||
-      villageFilter ||
-      subdistrictFilter ||
-      districtFilter ||
-      provinceFilter
+      total === totalAll &&
+      !searchTerm &&
+      !showNoCoords &&
+      !showWithCoords &&
+      !houseNumberFilter &&
+      !phoneFilter &&
+      !villageFilter &&
+      !subdistrictFilter &&
+      !districtFilter &&
+      !provinceFilter
     ) {
-      return `พบ ${total} บ้าน`;
+      return `บ้านทั้งหมด ${totalAll.toLocaleString()} หลัง`;
     }
+
+    if (searchTerm) {
+      return `พบ ${total.toLocaleString()} บ้าน จากทั้งหมด ${totalAll.toLocaleString()} หลัง`;
+    }
+
     if (showWithCoords && !showNoCoords) {
-      return `บ้านมีพิกัด ${total} บ้าน`;
+      return `บ้านที่มีพิกัด ${total.toLocaleString()} บ้าน (จากทั้งหมด ${totalAll.toLocaleString()} หลัง)`;
     }
+
     if (showNoCoords && !showWithCoords) {
-      return `บ้านไม่มีพิกัด ${total} บ้าน`;
+      return `บ้านที่ยังไม่มีพิกัด ${total.toLocaleString()} บ้าน (จากทั้งหมด ${totalAll.toLocaleString()} หลัง)`;
     }
-    return `บ้านทั้งหมด ${total} บ้าน`;
+
+    return `พบ ${totalAll.toLocaleString()} บ้าน`;
   };
 
   // Pagination logic
@@ -892,11 +962,58 @@ export default function HousesPage() {
         </>
       )}
 
-      {/* Filter Modal */}
+      {/* แก้ Filter Modal: เพิ่มส่วนตัวเลือกการค้นหา */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
           <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-5 text-center">ตัวกรองบ้าน</h2>
+
+            {/* ส่วนใหม่: ค้นหาจากฟิลด์ไหนบ้าง */}
+            <div className="mb-6 p-4 bg-indigo-50 rounded-xl">
+              <p className="text-sm font-semibold text-indigo-800 mb-3">
+                ช่องค้นหาหลักจะค้นหาจาก:
+              </p>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInName}
+                    onChange={(e) => setSearchInName(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">ชื่อ-นามสกุล</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInAddress}
+                    onChange={(e) => setSearchInAddress(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">ที่อยู่</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInPhone}
+                    onChange={(e) => setSearchInPhone(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">เบอร์โทรศัพท์</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInNote}
+                    onChange={(e) => setSearchInNote(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">หมายเหตุ</span>
+                </label>
+              </div>
+            </div>
+
+            {/* ส่วนเดิม: ตัวกรองอื่น ๆ */}
             <div className="space-y-4">
               <input
                 type="text"
@@ -945,6 +1062,7 @@ export default function HousesPage() {
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
               />
             </div>
+
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => {
