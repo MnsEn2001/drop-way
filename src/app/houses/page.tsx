@@ -61,6 +61,8 @@ export default function HousesPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [coordsInput, setCoordsInput] = useState<string>("");
+  const [hasShownVillageSuggestions, setHasShownVillageSuggestions] =
+    useState(false);
 
   // เพิ่ม state เหล่านี้ข้างๆ state อื่น ๆ (ใกล้ๆ coordsInput)
   const [addressInput, setAddressInput] = useState<string>("");
@@ -75,6 +77,7 @@ export default function HousesPage() {
 
   const villageBySubdistrict: Record<string, string[]> = {
     นาโบสถ์: [
+      "...",
       "วังทอง",
       "วังตำลึง",
       "ลาดยาว",
@@ -87,6 +90,7 @@ export default function HousesPage() {
       "ใหม่พรสวรรค์",
     ],
     เชียงทอง: [
+      "...",
       "วังเจ้า",
       "เด่นวัว",
       "เด่นคา",
@@ -102,7 +106,7 @@ export default function HousesPage() {
       "ผาผึ้ง",
       "ศรีคีรีรักษ์",
     ],
-    ประดาง: ["ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
+    ประดาง: ["...", "ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
   };
 
   const subdistricts = ["นาโบสถ์", "เชียงทอง", "ประดาง"];
@@ -435,22 +439,6 @@ export default function HousesPage() {
     setAddingIds((prev) => prev.filter((id) => id !== houseId));
   };
 
-  const openEditModal = (house: House) => {
-    setIsAdding(false);
-    setEditingHouse(house);
-    setFormData({
-      full_name: house.full_name || "",
-      phone: house.phone || "",
-      address: house.address || "",
-      note: house.note || "",
-      lat: house.lat || undefined,
-      lng: house.lng || undefined,
-    });
-    setCoordsInput(house.lat && house.lng ? `${house.lat},${house.lng}` : "");
-    // สำคัญ: sync addressInput
-    setAddressInput(house.address || "");
-  };
-
   const openAddModal = () => {
     setIsAdding(true);
     setEditingHouse(null);
@@ -464,6 +452,23 @@ export default function HousesPage() {
     });
     setCoordsInput("");
     setAddressInput("");
+    setHasShownVillageSuggestions(false); // เพิ่มบรรทัดนี้
+  };
+
+  const openEditModal = (house: House) => {
+    setIsAdding(false);
+    setEditingHouse(house);
+    setFormData({
+      full_name: house.full_name || "",
+      phone: house.phone || "",
+      address: house.address || "",
+      note: house.note || "",
+      lat: house.lat || undefined,
+      lng: house.lng || undefined,
+    });
+    setCoordsInput(house.lat && house.lng ? `${house.lat},${house.lng}` : "");
+    setAddressInput(house.address || "");
+    setHasShownVillageSuggestions(false); // เพิ่มบรรทัดนี้
   };
 
   const handleAddressChange = (value: string) => {
@@ -476,7 +481,7 @@ export default function HousesPage() {
   const generateAddressSuggestions = (input: string) => {
     const trimmed = input.trimEnd();
 
-    // 1. พิมพ์บ้านเลขที่แล้วกด space (ยังไม่มี ม. หรือ ต.)
+    // 1. ยังไม่มี ม. หรือ ต. → แนะนำ ม.1-25
     if (
       /\s$/.test(input) &&
       !trimmed.includes("ม.") &&
@@ -488,29 +493,43 @@ export default function HousesPage() {
           value: `ม.${v} `,
         })),
       );
+      // รีเซ็ต flag เมื่อเริ่มใหม่
+      setHasShownVillageSuggestions(false);
       return;
     }
 
-    // 2. มี "ม.X" แล้ว และกด space → แนะนำหมู่บ้าน (บ.)
-    // ตรวจสอบว่ามี ม.เลข แล้วตามด้วย space
+    // 2. มี ม.เลข แล้วกด space
     if (trimmed.match(/ม\.\d+$/) && /\s$/.test(input)) {
-      // ยังไม่มีตำบล → แนะนำหมู่บ้าน (ทุกหมู่บ้านก่อน เพราะยังไม่รู้ตำบล)
-      // หรือถ้าอยากแม่นยำกว่านี้ ต้องรอให้เลือกตำบลก่อน → แต่คุณอยากให้เลือกหมู่บ้านก่อนตำบล
-      // เราจะแนะนำหมู่บ้านทุกตัวก่อน (รวมทุกตำบล)
+      // ถ้าเคยแสดงรายการหมู่บ้านแล้ว → ไปแสดง ต. ทันที (รวมถึงกรณีข้าม)
+      if (hasShownVillageSuggestions) {
+        setAddressSuggestions(
+          subdistricts.map((sd) => ({
+            label: `ต.${sd}`,
+            value: `ต.${sd}`,
+          })),
+        );
+        return;
+      }
+
+      // ครั้งแรกที่เห็น ม. + space → แสดงรายการหมู่บ้าน + ข้าม
       const allVillages = Array.from(
         new Set(Object.values(villageBySubdistrict).flat()),
       );
+      const suggestions = ["...", ...allVillages.filter((v) => v !== "...")];
 
       setAddressSuggestions(
-        allVillages.map((v) => ({
-          label: `บ.${v}`,
-          value: `บ.${v} `,
+        suggestions.map((v) => ({
+          label: v === "..." ? "➜ ข้ามการระบุหมู่บ้าน" : `บ.${v}`,
+          value: v === "..." ? "" : `บ.${v} `,
         })),
       );
+
+      // ตั้ง flag ว่าแสดงแล้ว
+      setHasShownVillageSuggestions(true);
       return;
     }
 
-    // 3. มี "บ.ชื่อหมู่บ้าน" แล้วกด space → แนะนำตำบล
+    // 3. มี "บ." แล้วกด space → แสดง ต.
     if (trimmed.match(/บ\.[^ ]+$/) && /\s$/.test(input)) {
       setAddressSuggestions(
         subdistricts.map((sd) => ({
@@ -521,7 +540,7 @@ export default function HousesPage() {
       return;
     }
 
-    // 4. พิมพ์ "ต." แล้วกำลังพิมพ์ชื่อตำบล → filter ตำบล
+    // 4. พิมพ์ "ต." แล้วกำลังพิมพ์ตำบล
     const tambonMatch = trimmed.match(/ต\.([^ ]*)$/);
     if (tambonMatch) {
       const partial = tambonMatch[1];
@@ -534,10 +553,6 @@ export default function HousesPage() {
       );
       return;
     }
-
-    // 5. มีตำบลครบแล้ว และกด space → ไม่ต้องแนะนำอะไรเพิ่ม (เพราะ อ.จ. จะเติมเองตอนเลือก)
-    // หรือถ้าอยากให้แนะนำหมู่บ้านที่ถูกต้องตามตำบล (ย้อนกลับมาแก้หมู่บ้านให้ตรง)
-    // แต่ตอนนี้เราปล่อยว่างไว้
 
     setAddressSuggestions([]);
   };

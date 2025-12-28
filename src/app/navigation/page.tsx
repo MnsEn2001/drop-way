@@ -80,6 +80,8 @@ export default function NavigationPage() {
   const [subdistrictFilter, setSubdistrictFilter] = useState("");
   const [districtFilter, setDistrictFilter] = useState("");
   const [provinceFilter, setProvinceFilter] = useState("");
+  const [hasShownVillageSuggestions, setHasShownVillageSuggestions] =
+    useState(false);
   // เพิ่มตรงนี้ (ใกล้กับ searchTerm)
   const [searchInName, setSearchInName] = useState(true);
   const [searchInAddress, setSearchInAddress] = useState(true);
@@ -124,6 +126,7 @@ export default function NavigationPage() {
 
   const villageBySubdistrict: Record<string, string[]> = {
     นาโบสถ์: [
+      "...",
       "วังทอง",
       "วังตำลึง",
       "ลาดยาว",
@@ -136,6 +139,7 @@ export default function NavigationPage() {
       "ใหม่พรสวรรค์",
     ],
     เชียงทอง: [
+      "...",
       "วังเจ้า",
       "เด่นวัว",
       "เด่นคา",
@@ -151,9 +155,8 @@ export default function NavigationPage() {
       "ผาผึ้ง",
       "ศรีคีรีรักษ์",
     ],
-    ประดาง: ["ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
+    ประดาง: ["...", "ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
   };
-
   const subdistricts = ["นาโบสถ์", "เชียงทอง", "ประดาง"];
 
   const subdistrictInfo: Record<
@@ -500,7 +503,7 @@ export default function NavigationPage() {
   const generateAddressSuggestions = (input: string) => {
     const trimmed = input.trimEnd();
 
-    // 1. พิมพ์บ้านเลขที่แล้วกด space → แนะนำ ม.1-25
+    // 1. ยังไม่มี ม. หรือ ต. → แนะนำ ม.1-25
     if (
       /\s$/.test(input) &&
       !trimmed.includes("ม.") &&
@@ -512,24 +515,41 @@ export default function NavigationPage() {
           value: `ม.${v} `,
         })),
       );
+      setHasShownVillageSuggestions(false);
       return;
     }
 
-    // 2. มี ม.เลข แล้วกด space → แนะนำ บ.หมู่บ้าน (ทุกตำบลก่อน)
+    // 2. มี ม.เลข แล้วกด space
     if (trimmed.match(/ม\.\d+$/) && /\s$/.test(input)) {
+      // ถ้าเคยแสดงรายการหมู่บ้านแล้ว → ไปแสดง ต. ทันที
+      if (hasShownVillageSuggestions) {
+        setAddressSuggestions(
+          subdistricts.map((sd) => ({
+            label: `ต.${sd}`,
+            value: `ต.${sd}`,
+          })),
+        );
+        return;
+      }
+
+      // ครั้งแรก → แสดงรายการหมู่บ้าน + ข้าม
       const allVillages = Array.from(
         new Set(Object.values(villageBySubdistrict).flat()),
       );
+      const suggestions = ["...", ...allVillages.filter((v) => v !== "...")];
+
       setAddressSuggestions(
-        allVillages.map((v) => ({
-          label: `บ.${v}`,
-          value: `บ.${v} `,
+        suggestions.map((v) => ({
+          label: v === "..." ? "➜ ข้ามการระบุหมู่บ้าน" : `บ.${v}`,
+          value: v === "..." ? "" : `บ.${v} `,
         })),
       );
+
+      setHasShownVillageSuggestions(true);
       return;
     }
 
-    // 3. มี บ.ชื่อหมู่บ้าน แล้วกด space → แนะนำ ต.
+    // 3. มี "บ." แล้วกด space → แสดง ต.
     if (trimmed.match(/บ\.[^ ]+$/) && /\s$/.test(input)) {
       setAddressSuggestions(
         subdistricts.map((sd) => ({
@@ -540,7 +560,7 @@ export default function NavigationPage() {
       return;
     }
 
-    // 4. พิมพ์ ต. แล้วกำลังพิมพ์ → filter ตำบล
+    // 4. พิมพ์ "ต." แล้วกำลังพิมพ์ตำบล
     const tambonMatch = trimmed.match(/ต\.([^ ]*)$/);
     if (tambonMatch) {
       const partial = tambonMatch[1];
@@ -554,7 +574,6 @@ export default function NavigationPage() {
       return;
     }
 
-    // ไม่มีอะไรตรง → ล้าง
     setAddressSuggestions([]);
   };
 
@@ -811,8 +830,8 @@ export default function NavigationPage() {
       lat: house.lat || undefined,
       lng: house.lng || undefined,
     });
-    // สำคัญ: sync addressInput
     setAddressInput(house.address || "");
+    setHasShownVillageSuggestions(false); // เพิ่มบรรทัดนี้
   };
 
   const closeModal = () => {
