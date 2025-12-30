@@ -19,6 +19,7 @@ import {
   X as XIcon,
   ChevronLeft,
   ChevronRight,
+  Copy,
 } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";
@@ -869,7 +870,23 @@ export default function HousesPage() {
                     {h.full_name || "ไม่มีชื่อ"}
                   </h3>
                   {h.phone && (
-                    <p className="text-sm text-gray-600 mt-2">{h.phone}</p>
+                    <div className="flex items-center gap-2 mt-2 group">
+                      <p className="text-sm text-gray-600 select-none">
+                        {h.phone}
+                      </p>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigator.clipboard.writeText(h.phone!);
+                          toast.success("คัดลอกเบอร์เรียบร้อยแล้ว!");
+                        }}
+                        className="opacity-40 group-hover:opacity-100 transition-opacity duration-200"
+                        title="คัดลอกเบอร์โทร"
+                        aria-label="คัดลอกเบอร์โทร"
+                      >
+                        <Copy className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" />
+                      </button>
+                    </div>
                   )}
                   <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">
                     <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
