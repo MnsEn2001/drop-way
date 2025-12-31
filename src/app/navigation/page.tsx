@@ -1434,10 +1434,10 @@ export default function NavigationPage() {
                             <div
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm ${
                                 h.delivery_note?.includes("เงินสด")
-                                  ? "bg-emerald-600"
+                                  ? "bg-amber-600"
                                   : h.delivery_note?.includes("โอนเข้าบัญชีฉัน")
                                     ? "bg-blue-600"
-                                    : "bg-indigo-600"
+                                    : "bg-purple-600"
                               }`}
                             >
                               <CheckCircle className="w-4 h-4" />
