@@ -1420,7 +1420,7 @@ export default function NavigationPage() {
                                           "โอนเข้าบัญชีฉัน",
                                         )
                                       ? "bg-blue-600"
-                                      : "bg-purple-600"
+                                      : "bg-green-600"
                                 }`}
                               >
                                 <CheckCircle className="w-4 h-4" />
@@ -1437,13 +1437,12 @@ export default function NavigationPage() {
                                   ? "bg-amber-600"
                                   : h.delivery_note?.includes("โอนเข้าบัญชีฉัน")
                                     ? "bg-blue-600"
-                                    : "bg-purple-600"
+                                    : "bg-green-600"
                               }`}
                             >
                               <CheckCircle className="w-4 h-4" />
                               <span>
-                                ส่งแล้ว
-                                {h.delivery_note ? `: ${h.delivery_note}` : ""}
+                                {h.delivery_note ? `${h.delivery_note}` : ""}
                               </span>
                             </div>
                           )}
