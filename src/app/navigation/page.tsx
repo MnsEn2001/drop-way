@@ -159,9 +159,9 @@ export default function NavigationPage() {
   // FAB Menu
   const [isFabOpen, setIsFabOpen] = useState(false);
   // View Mode: today | delivered | reported
-  const [viewMode, setViewMode] = useState<"today" | "delivered" | "reported">(
-    "today",
-  );
+  const [viewMode, setViewMode] = useState<
+    "today" | "delivered" | "reported" | "qr_pending"
+  >("today");
 
   // Modal ส่งงาน
   const [showDeliverModal, setShowDeliverModal] = useState(false);
@@ -170,6 +170,10 @@ export default function NavigationPage() {
   );
   const [deliverNote, setDeliverNote] = useState<string>("โอนเข้าบริษัท");
   const [deliverNoteCustom, setDeliverNoteCustom] = useState("");
+
+  // เพิ่มในส่วน state
+  const [cashAmount, setCashAmount] = useState<string>("");
+  const [transferAmount, setTransferAmount] = useState<string>("");
   // Modal รายงาน
   const [showReportModal, setShowReportModal] = useState(false);
   const [houseToReport, setHouseToReport] = useState<NavigationHouse | null>(
@@ -276,7 +280,7 @@ export default function NavigationPage() {
 
   // Ref เพื่อเก็บค่าตัวกรองก่อนหน้า — ใช้ป้องกันการรีเซ็ตหน้าโดยไม่จำเป็น
   const prevFiltersRef = useRef<{
-    viewMode: "today" | "delivered" | "reported";
+    viewMode: "today" | "delivered" | "reported" | "qr_pending";
     searchTerm: string;
     showNoCoords: boolean;
     showWithCoords: boolean;
@@ -291,22 +295,21 @@ export default function NavigationPage() {
     searchInPhone: boolean;
     searchInNote: boolean;
   }>({
-    viewMode,
-    searchTerm: searchTerm.trim(),
-    showNoCoords,
-    showWithCoords,
-    houseNumberFilter,
-    phoneFilter,
-    villageFilter,
-    subdistrictFilter,
-    districtFilter,
-    provinceFilter,
-    searchInName: true, // ค่าเริ่มต้นตาม state
+    viewMode: "today" as const, // ใช้ as const เพื่อให้ TypeScript รู้ว่าเป็น literal
+    searchTerm: "",
+    showNoCoords: false,
+    showWithCoords: false,
+    houseNumberFilter: "",
+    phoneFilter: "",
+    villageFilter: "",
+    subdistrictFilter: "",
+    districtFilter: "",
+    provinceFilter: "",
+    searchInName: true,
     searchInAddress: true,
     searchInPhone: false,
     searchInNote: true,
   });
-
   // โหลดค่าจุดคงที่จาก localStorage
   useEffect(() => {
     const saved = localStorage.getItem("navigationStartPosition");
@@ -317,12 +320,6 @@ export default function NavigationPage() {
       setIsRealTimeMode(savedMode !== "false");
     } else {
       setIsRealTimeMode(true);
-      // แจ้งผู้ใช้ครั้งแรก
-      setTimeout(() => {
-        toast.success(
-          "โหมดเรียลไทม์เปิดอยู่ – รายการจะเรียงบ้านต่อบ้านตามตำแหน่งคุณอัตโนมัติ",
-        );
-      }, 2000);
     }
   }, []);
 
@@ -388,9 +385,16 @@ export default function NavigationPage() {
     // กรองตาม viewMode
     if (viewMode === "delivered") {
       filtered = filtered.filter((h) => h.delivery_status === "delivered");
+    } else if (viewMode === "qr_pending") {
+      filtered = filtered.filter(
+        (h) =>
+          h.delivery_status === "delivered" &&
+          h.delivery_note?.includes("รอปิดยอด QR"),
+      );
     } else if (viewMode === "reported") {
       filtered = filtered.filter((h) => h.delivery_status === "reported");
     } else {
+      // "today"
       filtered = filtered.filter(
         (h) => !h.delivery_status || h.delivery_status === "pending",
       );
@@ -410,6 +414,10 @@ export default function NavigationPage() {
           matches = true;
         }
         if (searchInNote && h.note?.toLowerCase().includes(lower)) {
+          matches = true;
+        }
+        // ⭐ เพิ่มค้นใน delivery_note (หมายเหตุการชำระเงิน)
+        if (h.delivery_note?.toLowerCase().includes(lower)) {
           matches = true;
         }
         return matches;
@@ -534,7 +542,7 @@ export default function NavigationPage() {
     }
 
     if (viewMode === "today" && position) {
-      return `${modeText} • เรียงบ้านต่อบ้านเรียลไทม์ (เส้นทางสั้นที่สุด) • พบ ${displayedCount} บ้าน`;
+      return `${modeText} • เรียงบ้านอัตโนมัติ • พบ ${displayedCount} บ้าน`;
     }
 
     return `${modeText} • พบ ${displayedCount} บ้าน`;
@@ -962,8 +970,27 @@ export default function NavigationPage() {
   // ⭐ แก้ confirmDeliver ทั้งหมด
   const confirmDeliver = async () => {
     if (!houseToDeliver) return;
-    const note =
-      deliverNote === "อื่นๆ" ? deliverNoteCustom.trim() : deliverNote;
+
+    let note = deliverNote;
+
+    if (deliverNote === "จ่ายด้วยเงินสด") {
+      if (!cashAmount.trim() || isNaN(Number(cashAmount))) {
+        toast.error("กรุณากรอกจำนวนเงินสดให้ถูกต้อง");
+        return;
+      }
+      const amount = Number(cashAmount).toLocaleString();
+      note = `เงินสดจำนวน ${amount} บาท รอปิดยอด QR`;
+    } else if (deliverNote === "โอนเข้าบัญชีฉัน") {
+      if (!transferAmount.trim() || isNaN(Number(transferAmount))) {
+        toast.error("กรุณากรอกจำนวนเงินที่โอนให้ถูกต้อง");
+        return;
+      }
+      const amount = Number(transferAmount).toLocaleString();
+      note = `โอนเข้าบัญชีฉัน จำนวน ${amount} บาท รอปิดยอด QR`;
+    } else if (deliverNote === "อื่นๆ") {
+      note = deliverNoteCustom.trim() || "ไม่มีหมายเหตุ";
+    }
+
     const { error } = await supabase
       .from("user_navigation_houses")
       .update({
@@ -972,16 +999,20 @@ export default function NavigationPage() {
         delivered_at: new Date().toISOString(),
       })
       .eq("id", houseToDeliver.nav_id);
+
     if (error) {
       toast.error("บันทึกการส่งไม่สำเร็จ: " + error.message);
     } else {
       toast.success("✅ บันทึกการส่งงานเรียบร้อยแล้ว");
-      await reloadNavigation(); // รีโหลดข้อมูลใหม่
+      await reloadNavigation();
       setShowDeliverModal(false);
       setDeliverNote("โอนเข้าบริษัท");
       setDeliverNoteCustom("");
+      setCashAmount("");
+      setTransferAmount("");
     }
   };
+
   // ⭐ แก้ confirmReport ทั้งหมด
   const confirmReport = async () => {
     if (!houseToReport) return;
@@ -1051,11 +1082,13 @@ export default function NavigationPage() {
           {getCountText()}
         </p>
       </div>
+
+      {/* Tab หลัก - เพิ่ม Tab "รอปิดยอด QR" */}
       <div className="mb-6">
-        <div className="flex bg-gray-100 p-1 rounded-xl max-w-lg">
+        <div className="flex bg-gray-100 p-1 rounded-xl max-w-2xl overflow-x-auto">
           <button
             onClick={() => setViewMode("today")}
-            className={`flex-1 px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
               viewMode === "today"
                 ? "bg-blue-600 text-white shadow-md"
                 : "text-gray-600"
@@ -1072,23 +1105,48 @@ export default function NavigationPage() {
               )
             </span>
           </button>
+
           <button
             onClick={() => setViewMode("delivered")}
-            className={`flex-1 px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
               viewMode === "delivered"
                 ? "bg-green-600 text-white shadow-md"
                 : "text-gray-600"
             }`}
           >
             <CheckCircle className="w-4 h-4" />
-            ส่ง
+            ส่งแล้ว
             <span className="text-sm font-normal">
               ({list.filter((h) => h.delivery_status === "delivered").length})
             </span>
           </button>
+
+          <button
+            onClick={() => setViewMode("qr_pending")}
+            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
+              viewMode === "qr_pending"
+                ? "bg-purple-600 text-white shadow-md"
+                : "text-gray-600"
+            }`}
+          >
+            <ExternalLink className="w-4 h-4" />
+            QR
+            <span className="text-sm font-normal">
+              (
+              {
+                list.filter(
+                  (h) =>
+                    h.delivery_status === "delivered" &&
+                    h.delivery_note?.includes("รอปิดยอด QR"),
+                ).length
+              }
+              )
+            </span>
+          </button>
+
           <button
             onClick={() => setViewMode("reported")}
-            className={`flex-1 px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
+            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
               viewMode === "reported"
                 ? "bg-orange-600 text-white shadow-md"
                 : "text-gray-600"
@@ -1102,6 +1160,7 @@ export default function NavigationPage() {
           </button>
         </div>
       </div>
+
       {/* ช่องค้นหา + ปุ่มกรอง */}
       <div className="mb-6 relative">
         <div className="relative max-w-md">
@@ -1202,9 +1261,10 @@ export default function NavigationPage() {
                     key={h.nav_id}
                     className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
                   >
-                    {/* ปุ่มนำทาง / สถานะพิกัด - มุมขวาบน */}
-                    <div className="absolute top-3 right-3 z-10">
-                      {h.lat && h.lng ? (
+                    {/* ปุ่มนำทาง + ปุ่มแก้ไขสถานะ - มุมขวาบน */}
+                    <div className="absolute top-3 right-3 z-10 flex gap-2 flex-col">
+                      {/* ปุ่มนำทาง (ถ้ามีพิกัด) */}
+                      {h.lat && h.lng && (
                         <button
                           onClick={() => openNavigation(h.lat!, h.lng!)}
                           onMouseDown={(e) => e.preventDefault()}
@@ -1214,7 +1274,81 @@ export default function NavigationPage() {
                           <Navigation className="w-4 h-4" />
                           นำทาง
                         </button>
-                      ) : (
+                      )}
+
+                      {/* ปุ่มแก้ไขสถานะ - แสดงเฉพาะเมื่อส่งแล้วหรือรายงานแล้ว */}
+                      {h.delivery_status === "delivered" && (
+                        <button
+                          onClick={() => {
+                            setHouseToDeliver(h);
+                            // โหลดหมายเหตุเดิมมาให้แก้ไข
+                            setDeliverNote(
+                              h.delivery_note?.includes("เงินสด")
+                                ? "จ่ายด้วยเงินสด"
+                                : h.delivery_note?.includes("โอนเข้าบัญชีฉัน")
+                                  ? "โอนเข้าบัญชีฉัน"
+                                  : h.delivery_note?.includes("ไม่มียอด")
+                                    ? "ไม่มียอด"
+                                    : h.delivery_note === "โอนเข้าบริษัท"
+                                      ? "โอนเข้าบริษัท"
+                                      : "อื่นๆ",
+                            );
+                            // ดึงจำนวนเงิน (ถ้ามี)
+                            const cashMatch = h.delivery_note?.match(
+                              /เงินสดจำนวน ([\d,]+) บาท/,
+                            );
+                            const transferMatch = h.delivery_note?.match(
+                              /โอนเข้าบัญชีฉัน.*?([\d,]+) บาท/,
+                            );
+                            setCashAmount(
+                              cashMatch ? cashMatch[1].replace(/,/g, "") : "",
+                            );
+                            setTransferAmount(
+                              transferMatch
+                                ? transferMatch[1].replace(/,/g, "")
+                                : "",
+                            );
+                            setDeliverNoteCustom(
+                              deliverNote === "อื่นๆ"
+                                ? h.delivery_note || ""
+                                : "",
+                            );
+                            setShowDeliverModal(true);
+                          }}
+                          className="px-3 py-2 bg-orange-600 text-white rounded-lg shadow-md hover:bg-orange-700 transition-all active:scale-95 flex items-center gap-1 font-medium text-xs"
+                          title="แก้ไขการส่งงาน"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          แก้ส่งแล้ว
+                        </button>
+                      )}
+
+                      {h.delivery_status === "reported" && (
+                        <button
+                          onClick={() => {
+                            setHouseToReport(h);
+                            const reason = h.report_reason || "โทรไม่รับ";
+                            if (
+                              ["โทรไม่รับ", "เลื่อน", "ตีกลับ"].includes(reason)
+                            ) {
+                              setReportReason(reason);
+                              setReportReasonCustom("");
+                            } else {
+                              setReportReason("อื่นๆ");
+                              setReportReasonCustom(reason);
+                            }
+                            setShowReportModal(true);
+                          }}
+                          className="px-3 py-2 bg-orange-600 text-white rounded-lg shadow-md hover:bg-orange-700 transition-all active:scale-95 flex items-center gap-1 font-medium text-xs"
+                          title="แก้ไขรายงาน"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          แก้รายงาน
+                        </button>
+                      )}
+
+                      {/* ถ้าไม่มีพิกัดเลย */}
+                      {!h.lat && !h.lng && (
                         <div
                           className="px-3 py-2 bg-orange-500 text-white rounded-lg shadow-md flex items-center gap-1.5 font-medium text-sm opacity-90"
                           title="บ้านนี้ยังไม่มีพิกัด"
@@ -1271,68 +1405,74 @@ export default function NavigationPage() {
                           หมายเหตุ: {h.note}
                         </p>
                       )}
-                      {/* สถานะการส่ง + วันที่เวลา */}
+                      {/* สถานะการส่ง - แตกต่างตาม Tab */}
                       {h.delivery_status === "delivered" && (
-                        <div className="mt-3 space-y-1">
-                          {h.delivered_at && (
-                            <p className="text-xs text-green-600">
-                              {new Date(h.delivered_at)
-                                .toLocaleDateString("th-TH", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                })
-                                .replace(
-                                  /(\d+)\/(\d+)\/(\d+)/,
-                                  "$1/$2/$3",
-                                )}{" "}
-                              |{" "}
-                              {new Date(h.delivered_at).toLocaleTimeString(
-                                "th-TH",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                },
-                              )}
-                            </p>
+                        <div className="mt-3">
+                          {/* ใน Tab QR → แสดงแท็กสีเล็ก + ปุ่มปิดยอดขนาดพอดี */}
+                          {viewMode === "qr_pending" ? (
+                            <div className="space-y-2">
+                              {/* แท็กสีขนาดเล็ก */}
+                              <div
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm ${
+                                  h.delivery_note?.includes("เงินสด")
+                                    ? "bg-amber-600"
+                                    : h.delivery_note?.includes(
+                                          "โอนเข้าบัญชีฉัน",
+                                        )
+                                      ? "bg-blue-600"
+                                      : "bg-purple-600"
+                                }`}
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                <span className="line-clamp-1">
+                                  {h.delivery_note || "รอปิดยอด QR"}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            /* ใน Tab ส่งแล้ว → แสดงแบบเดิม แต่ใช้แท็กสีเล็กเหมือนกัน */
+                            <div
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm ${
+                                h.delivery_note?.includes("เงินสด")
+                                  ? "bg-emerald-600"
+                                  : h.delivery_note?.includes("โอนเข้าบัญชีฉัน")
+                                    ? "bg-blue-600"
+                                    : "bg-indigo-600"
+                              }`}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                              <span>
+                                ส่งแล้ว
+                                {h.delivery_note ? `: ${h.delivery_note}` : ""}
+                              </span>
+                            </div>
                           )}
-                          <p className="text-xs text-green-700 font-medium">
-                            ✓ ส่งแล้ว: {h.delivery_note || "ไม่มีหมายเหตุ"}
-                          </p>
                         </div>
                       )}
+
+                      {/* สถานะรายงาน - ใช้แท็กสีเล็กเหมือนกัน */}
                       {h.delivery_status === "reported" && (
-                        <div className="mt-3 space-y-1">
-                          {h.reported_at && (
-                            <p className="text-xs text-orange-600">
-                              {new Date(h.reported_at)
-                                .toLocaleDateString("th-TH", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                })
-                                .replace(
-                                  /(\d+)\/(\d+)\/(\d+)/,
-                                  "$1/$2/$3",
-                                )}{" "}
-                              |{" "}
-                              {new Date(h.reported_at).toLocaleTimeString(
-                                "th-TH",
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                },
-                              )}
-                            </p>
-                          )}
-                          <p className="text-xs text-red-700 font-medium">
-                            ⚠ รายงาน: {h.report_reason || "ไม่มีเหตุผล"}
-                          </p>
+                        <div className="mt-3">
+                          <div
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm ${
+                              h.report_reason?.includes("โทรไม่รับ")
+                                ? "bg-red-600"
+                                : h.report_reason?.includes("เลื่อน")
+                                  ? "bg-orange-600"
+                                  : h.report_reason?.includes("ตีกลับ")
+                                    ? "bg-pink-600"
+                                    : "bg-gray-600"
+                            }`}
+                          >
+                            <AlertCircle className="w-4 h-4" />
+                            <span className="line-clamp-1">
+                              รายงาน: {h.report_reason || "ไม่มีเหตุผล"}
+                            </span>
+                          </div>
                         </div>
                       )}
                     </div>
+
                     {/* ปุ่มด้านล่าง */}
                     <div className="px-5 pb-5 flex flex-wrap justify-center items-center gap-3">
                       {/* ปุ่มลบออกจากการนำทาง - แสดงทุกสถานะ */}
@@ -1343,22 +1483,39 @@ export default function NavigationPage() {
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
-                      {/* ปุ่มรายงาน - แสดงเฉพาะสถานะ pending และ delivered (ถ้าต้องการให้รายงานซ้ำได้ก็เปิดได้) */}
-                      {(!h.delivery_status ||
-                        h.delivery_status === "pending" ||
-                        h.delivery_status === "delivered") && (
+
+                      {/* ปุ่มรายงาน / แก้ไขหมายเหตุ */}
+                      {h.delivery_status !== "delivered" && (
                         <button
                           onClick={() => {
                             setHouseToReport(h);
+                            const existingReason =
+                              h.report_reason || "โทรไม่รับ";
+                            if (
+                              ["โทรไม่รับ", "เลื่อน", "ตีกลับ"].includes(
+                                existingReason,
+                              )
+                            ) {
+                              setReportReason(existingReason);
+                              setReportReasonCustom("");
+                            } else {
+                              setReportReason("อื่นๆ");
+                              setReportReasonCustom(existingReason);
+                            }
                             setShowReportModal(true);
                           }}
                           className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition"
-                          title="รายงานปัญหา"
+                          title={
+                            h.delivery_status === "reported"
+                              ? "แก้ไขหมายเหตุรายงาน"
+                              : "รายงานปัญหา"
+                          }
                         >
                           <AlertCircle className="w-5 h-5" />
                         </button>
                       )}
-                      {/* ปุ่มแก้ไข - แสดงทุกสถานะ */}
+
+                      {/* ปุ่มแก้ไขบ้าน - แสดงทุกสถานะ */}
                       <button
                         onClick={() => openEditModal(h)}
                         className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
@@ -1366,8 +1523,8 @@ export default function NavigationPage() {
                       >
                         <Edit3 className="w-5 h-5" />
                       </button>
-                      {/* === ปุ่มส่งแล้ว === */}
-                      {/* แสดงใน 2 กรณีหลัก: pending และ reported */}
+
+                      {/* ปุ่มส่งงาน (สำหรับ pending/reported) */}
                       {(!h.delivery_status ||
                         h.delivery_status === "pending" ||
                         h.delivery_status === "reported") && (
@@ -1386,16 +1543,28 @@ export default function NavigationPage() {
                           <CheckCircle className="w-5 h-5" />
                         </button>
                       )}
-                      {/* แสดงสถานะส่งแล้ว (สำหรับ delivered) */}
-                      {h.delivery_status === "delivered" && (
-                        <div
-                          className="p-3 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 cursor-default"
-                          title="ส่งงานแล้ว"
-                        >
-                          <CheckCircle className="w-5 h-5" />
-                          <span className="text-xs font-medium">ส่งแล้ว</span>
-                        </div>
-                      )}
+
+                      {/* ปุ่มปิดยอดแล้ว - เฉพาะใน Tab QR */}
+                      {viewMode === "qr_pending" &&
+                        h.delivery_status === "delivered" && (
+                          <button
+                            onClick={() => {
+                              setHouseToDeliver(h);
+                              setDeliverNote("โอนเข้าบริษัท"); // ลบคำว่า "รอปิดยอด QR" ออก
+                              setCashAmount("");
+                              setTransferAmount("");
+                              setDeliverNoteCustom("");
+                              setShowDeliverModal(true);
+                            }}
+                            className="p-3 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition flex items-center gap-2"
+                            title="ปิดยอด QR แล้ว"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                            <span className="text-sm font-medium">
+                              ปิดยอด QR
+                            </span>
+                          </button>
+                        )}
                     </div>
                   </div>
                 );
@@ -1901,10 +2070,11 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
+
       {/* Modal ยืนยันส่งแล้ว */}
       {showDeliverModal && houseToDeliver && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-green-600 mb-4">
               ยืนยันส่งแล้ว
             </h2>
@@ -1915,11 +2085,12 @@ export default function NavigationPage() {
                 {houseToDeliver.address}
               </p>
             </div>
+
             <div className="mb-5">
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 การชำระเงิน
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mb-3">
                 {[
                   "โอนเข้าบริษัท",
                   "จ่ายด้วยเงินสด",
@@ -1929,7 +2100,11 @@ export default function NavigationPage() {
                 ].map((option) => (
                   <button
                     key={option}
-                    onClick={() => setDeliverNote(option)}
+                    onClick={() => {
+                      setDeliverNote(option);
+                      if (option !== "จ่ายด้วยเงินสด") setCashAmount("");
+                      if (option !== "โอนเข้าบัญชีฉัน") setTransferAmount("");
+                    }}
                     className={`py-3 px-4 rounded-xl font-medium transition-all border-2 ${
                       deliverNote === option
                         ? "bg-green-600 text-white border-green-600 shadow-md"
@@ -1940,6 +2115,38 @@ export default function NavigationPage() {
                   </button>
                 ))}
               </div>
+
+              {/* กรอกจำนวนเงินสด */}
+              {deliverNote === "จ่ายด้วยเงินสด" && (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="จำนวนเงิน (บาท)"
+                  value={cashAmount}
+                  onChange={(e) =>
+                    setCashAmount(e.target.value.replace(/\D/g, ""))
+                  }
+                  className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
+                  autoFocus
+                />
+              )}
+
+              {/* กรอกจำนวนเงินโอน */}
+              {deliverNote === "โอนเข้าบัญชีฉัน" && (
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="จำนวนเงิน (บาท)"
+                  value={transferAmount}
+                  onChange={(e) =>
+                    setTransferAmount(e.target.value.replace(/\D/g, ""))
+                  }
+                  className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
+                  autoFocus
+                />
+              )}
+
+              {/* อื่นๆ */}
               {deliverNote === "อื่นๆ" && (
                 <textarea
                   placeholder="กรอกรายละเอียดการชำระเงิน..."
@@ -1947,24 +2154,39 @@ export default function NavigationPage() {
                   onChange={(e) => setDeliverNoteCustom(e.target.value)}
                   rows={3}
                   autoFocus
-                  className="w-full mt-4 px-4 py-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none resize-none transition-all"
+                  className="w-full mt-4 px-4 py-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none resize-none"
                 />
               )}
+
+              {/* Preview หมายเหตุ */}
               <div className="mt-4 p-3 bg-green-50 rounded-xl">
                 <p className="text-sm text-green-800 font-medium">
-                  หมายเหตุ:{" "}
-                  {deliverNote === "อื่นๆ"
-                    ? deliverNoteCustom.trim() || "กำลังกรอกรายละเอียด..."
-                    : deliverNote}
+                  หมายเหตุที่จะบันทึก:
+                  <span className="block font-bold mt-1">
+                    {deliverNote === "จ่ายด้วยเงินสด"
+                      ? cashAmount
+                        ? `เงินสดจำนวน ${Number(cashAmount).toLocaleString()} บาท รอปิดยอด QR`
+                        : "กรอกจำนวนเงิน"
+                      : deliverNote === "โอนเข้าบัญชีฉัน"
+                        ? transferAmount
+                          ? `โอนเข้าบัญชีฉัน จำนวน ${Number(transferAmount).toLocaleString()} บาท รอปิดยอด QR`
+                          : "กรอกจำนวนเงิน"
+                        : deliverNote === "อื่นๆ"
+                          ? deliverNoteCustom.trim() || "กำลังกรอกรายละเอียด..."
+                          : deliverNote}
+                  </span>
                 </p>
               </div>
             </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowDeliverModal(false);
                   setDeliverNote("โอนเข้าบริษัท");
                   setDeliverNoteCustom("");
+                  setCashAmount("");
+                  setTransferAmount("");
                 }}
                 className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
               >
@@ -1974,9 +2196,12 @@ export default function NavigationPage() {
                 onClick={confirmDeliver}
                 disabled={
                   !deliverNote ||
+                  (deliverNote === "จ่ายด้วยเงินสด" && !cashAmount.trim()) ||
+                  (deliverNote === "โอนเข้าบัญชีฉัน" &&
+                    !transferAmount.trim()) ||
                   (deliverNote === "อื่นๆ" && !deliverNoteCustom.trim())
                 }
-                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50"
               >
                 ส่งแล้ว
               </button>
@@ -1984,6 +2209,7 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
+
       {/* Modal รายงานปัญหา */}
       {showReportModal && houseToReport && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
