@@ -337,19 +337,51 @@ export default function NavigationPage() {
     };
     checkSession();
   }, [router]);
+
   // โหลดข้อมูลการนำทาง
   useEffect(() => {
-    supabase
-      .from("navigation_view")
-      .select("*")
-      .order("nav_priority", { ascending: true })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setList(data);
+    const fetchNavigation = async () => {
+      setLoading(true);
+      let allHouses: NavigationHouse[] = [];
+      let start = 0;
+      const pageSize = 1000; // ปลอดภัยสุดสำหรับแผน Free
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("navigation_view")
+          .select("*")
+          .order("nav_priority", { ascending: true })
+          .range(start, start + pageSize - 1);
+
+        if (error) {
+          console.error("Error fetching navigation:", error);
+          toast.error("โหลดรายการนำทางไม่สำเร็จ");
+          break;
         }
-        setLoading(false);
-      });
+
+        if (!data || data.length === 0) {
+          break;
+        }
+
+        allHouses = [...allHouses, ...data];
+        start += pageSize;
+
+        if (data.length < pageSize) {
+          break;
+        }
+
+        // เพิ่ม delay เพื่อไม่ให้โดน rate limit
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+
+      setList(allHouses);
+      toast.success(`โหลดรายการนำทางครบ ${allHouses.length} บ้าน`);
+      setLoading(false);
+    };
+
+    fetchNavigation();
   }, []);
+
   // เริ่ม/หยุด watchPosition ตามโหมด
   useEffect(() => {
     if (isRealTimeMode) {

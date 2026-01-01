@@ -143,20 +143,6 @@ export default function HousesPage() {
     checkSession();
   }, [router]);
 
-  // โหลดข้อมูล houses
-  useEffect(() => {
-    supabase
-      .from("houses")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setHouses(data);
-        }
-        setLoading(false);
-      });
-  }, []);
-
   // กรองข้อมูล
   // แก้ useEffect กรองข้อมูล (แทนที่ useEffect เดิมที่มี searchTerm)
   useEffect(() => {
@@ -246,28 +232,36 @@ export default function HousesPage() {
   useEffect(() => {
     const fetchHouses = async () => {
       setLoading(true);
+      let allHouses: House[] = [];
+      let start = 0;
+      const pageSize = 1000;
 
-      const { data, error, count } = await supabase
-        .from("houses")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false })
-        .range(0, 9999); // ดึงสูงสุด 10,000 (ปรับได้ถ้าต้องการมากกว่านี้)
+      while (true) {
+        const { data, error } = await supabase
+          .from("houses")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(start, start + pageSize - 1);
 
-      if (error) {
-        console.error("Error fetching houses:", error);
-        toast.error("โหลดข้อมูลบ้านไม่สำเร็จ");
-        setLoading(false);
-        return;
+        if (error) {
+          console.error("Error:", error);
+          toast.error("โหลดข้อมูลไม่สำเร็จ");
+          break;
+        }
+
+        if (!data || data.length === 0) break;
+
+        allHouses = [...allHouses, ...data];
+        start += pageSize;
+
+        // ถ้าได้น้อยกว่า pageSize → จบแล้ว
+        if (data.length < pageSize) break;
       }
 
-      if (data) {
-        setHouses(data);
-        setTotalInDB(count ?? data.length); // เก็บจำนวนจริงจากฐานข้อมูล
-      }
-
+      setHouses(allHouses);
+      setTotalInDB(allHouses.length);
       setLoading(false);
     };
-
     fetchHouses();
   }, []);
 
