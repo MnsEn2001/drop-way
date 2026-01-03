@@ -549,11 +549,26 @@ export default function NavigationPage() {
     setProvinceFilter("");
   };
 
+  // ⭐ เพิ่มฟังก์ชันช่วยแยกยอดเงินจาก delivery_note
+  function extractAmountFromNote(note: string | null | undefined): number {
+    if (!note) return 0;
+
+    // รองรับทั้งรูปแบบที่มีและไม่มี "รอปิดยอด QR"
+    const match = note.match(/([\d,]+\.?\d*)\s*บาท/);
+    if (match) {
+      return parseFloat(match[1].replace(/,/g, ""));
+    }
+    return 0;
+  }
+
+  // ⭐ แก้ไข getCountText() ทั้งหมดเป็นแบบใหม่
   const getCountText = () => {
     const displayedCount = filteredList.length;
     const totalInList = list.length;
+
     let modeText = "";
     if (viewMode === "delivered") modeText = "ส่งแล้ว";
+    else if (viewMode === "qr_pending") modeText = "ยอด QR";
     else if (viewMode === "reported") modeText = "รายงาน";
     else modeText = "วันนี้";
 
@@ -569,12 +584,29 @@ export default function NavigationPage() {
       districtFilter ||
       provinceFilter;
 
+    // ⭐ คำนวณยอดรวมเฉพาะในแท็บ QR
+    let totalAmount = 0;
+    if (viewMode === "qr_pending") {
+      totalAmount = filteredList.reduce((sum, h) => {
+        return sum + extractAmountFromNote(h.delivery_note);
+      }, 0);
+    }
+
+    // กรณีมีการกรอง
     if (hasFilter) {
+      if (viewMode === "qr_pending") {
+        return `${modeText} • กรองแล้ว • พบ ${displayedCount} บ้าน รวมยอด ${totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท (จากทั้งหมด ${totalInList})`;
+      }
       return `${modeText} • กรองแล้ว • พบ ${displayedCount} บ้าน (จากทั้งหมด ${totalInList})`;
     }
 
+    // กรณีไม่กรอง
     if (viewMode === "today" && position) {
-      return `${modeText} • เรียงบ้านอัตโนมัติ • พบ ${displayedCount} บ้าน`;
+      return `ที่ต้องส่ง • พบ ${displayedCount} บ้าน`;
+    }
+
+    if (viewMode === "qr_pending") {
+      return `ยอด QR • พบ ${displayedCount} บ้าน รวมยอด ${totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
     }
 
     return `${modeText} • พบ ${displayedCount} บ้าน`;
@@ -2151,12 +2183,16 @@ export default function NavigationPage() {
               {deliverNote === "จ่ายด้วยเงินสด" && (
                 <input
                   type="text"
-                  inputMode="numeric"
-                  placeholder="จำนวนเงิน (บาท)"
+                  inputMode="decimal"
+                  placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
                   value={cashAmount}
-                  onChange={(e) =>
-                    setCashAmount(e.target.value.replace(/\D/g, ""))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // อนุญาตเฉพาะตัวเลขและจุดทศนิยมจุดเดียว (สูงสุด 2 ตำแหน่ง)
+                    if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
+                      setCashAmount(value);
+                    }
+                  }}
                   className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
                   autoFocus
                 />
@@ -2166,12 +2202,16 @@ export default function NavigationPage() {
               {deliverNote === "โอนเข้าบัญชีฉัน" && (
                 <input
                   type="text"
-                  inputMode="numeric"
-                  placeholder="จำนวนเงิน (บาท)"
+                  inputMode="decimal"
+                  placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
                   value={transferAmount}
-                  onChange={(e) =>
-                    setTransferAmount(e.target.value.replace(/\D/g, ""))
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // อนุญาตเฉพาะตัวเลขและจุดทศนิยมจุดเดียว (สูงสุด 2 ตำแหน่ง)
+                    if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
+                      setCashAmount(value);
+                    }
+                  }}
                   className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
                   autoFocus
                 />
@@ -2196,11 +2236,22 @@ export default function NavigationPage() {
                   <span className="block font-bold mt-1">
                     {deliverNote === "จ่ายด้วยเงินสด"
                       ? cashAmount
-                        ? `เงินสดจำนวน ${Number(cashAmount).toLocaleString()} บาท รอปิดยอด QR`
+                        ? `เงินสดจำนวน ${Number(cashAmount || 0).toLocaleString(
+                            "th-TH",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            },
+                          )} บาท รอปิดยอด QR`
                         : "กรอกจำนวนเงิน"
                       : deliverNote === "โอนเข้าบัญชีฉัน"
                         ? transferAmount
-                          ? `โอนเข้าบัญชีฉัน จำนวน ${Number(transferAmount).toLocaleString()} บาท รอปิดยอด QR`
+                          ? `โอนเข้าบัญชีฉัน จำนวน ${Number(
+                              transferAmount || 0,
+                            ).toLocaleString("th-TH", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })} บาท รอปิดยอด QR`
                           : "กรอกจำนวนเงิน"
                         : deliverNote === "อื่นๆ"
                           ? deliverNoteCustom.trim() || "กำลังกรอกรายละเอียด..."

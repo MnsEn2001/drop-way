@@ -395,13 +395,43 @@ export default function HousesPage() {
     return pages;
   };
 
+  // แก้ฟังก์ชันนี้ทั้งหมด (แทนที่อันเดิม)
   const reloadHouses = async () => {
-    const { data } = await supabase
-      .from("houses")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (data) {
-      setHouses(data);
+    let allHouses: House[] = [];
+    let start = 0;
+    const pageSize = 1000;
+
+    setLoading(true);
+
+    try {
+      while (true) {
+        const { data, error } = await supabase
+          .from("houses")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(start, start + pageSize - 1);
+
+        if (error) {
+          toast.error("รีโหลดข้อมูลไม่สำเร็จ");
+          console.error(error);
+          break;
+        }
+
+        if (!data || data.length === 0) break;
+
+        allHouses = [...allHouses, ...data];
+        start += pageSize;
+
+        if (data.length < pageSize) break;
+      }
+
+      setHouses(allHouses);
+      setTotalInDB(allHouses.length);
+      toast.success("รีโหลดข้อมูลสำเร็จ");
+    } catch {
+      toast.error("เกิดข้อผิดพลาดในการรีโหลด");
+    } finally {
+      setLoading(false);
     }
   };
 
