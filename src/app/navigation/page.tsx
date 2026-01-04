@@ -2207,9 +2207,8 @@ export default function NavigationPage() {
                   value={transferAmount}
                   onChange={(e) => {
                     const value = e.target.value;
-                    // อนุญาตเฉพาะตัวเลขและจุดทศนิยมจุดเดียว (สูงสุด 2 ตำแหน่ง)
                     if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
-                      setCashAmount(value);
+                      setTransferAmount(value);
                     }
                   }}
                   className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
