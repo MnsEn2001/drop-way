@@ -35,6 +35,7 @@ export default function HousesPage() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [showNoCoords, setShowNoCoords] = useState(false);
   const [showWithCoords, setShowWithCoords] = useState(false);
+  const [lastAdded, setLastAdded] = useState<Record<string, number>>({});
   // ตัวกรองเพิ่มเติม
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [houseNumberFilter, setHouseNumberFilter] = useState("");
@@ -327,42 +328,43 @@ export default function HousesPage() {
   // แสดงเลขหน้าแบบย่อ
   const renderPageNumbers = () => {
     const pages = [];
-    const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - 2);
+
+    const maxVisible = 5; // จำนวนปุ่มเลขหน้าที่แสดงสูงสุด (รวมหน้าปัจจุบัน)
+
+    // คำนวณช่วงหน้าที่จะแสดง (ไม่เปลี่ยนค่าอีก → ใช้ const)
+    const startPage = Math.max(1, currentPage - 2);
     const endPage = Math.min(totalPages, startPage + maxVisible - 1);
-    if (endPage - startPage < maxVisible - 1) {
-      startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-    if (startPage > 1) {
+
+    // ถ้าช่วงสั้นเกินไป ให้ยืดไปทางซ้ายเพื่อให้ครบ maxVisible
+    const adjustedStartPage = Math.max(1, endPage - maxVisible + 1);
+    const finalStartPage = Math.max(startPage, adjustedStartPage);
+
+    // แสดงหน้า 1 เสมอ ถ้าปัจจุบันอยู่ไกลจากหน้าแรก
+    if (currentPage > 3) {
       pages.push(
         <button
           key={1}
+          type="button"
           onClick={() => goToPage(1)}
-          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300"
+          onMouseDown={(e) => e.preventDefault()}
+          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition-all active:scale-95"
         >
           1
         </button>,
       );
-      if (startPage > 2) {
-        pages.push(
-          <button
-            key="start-ellipsis"
-            onClick={() => setShowPageInput(true)}
-            className="w-10 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium"
-          >
-            ...
-          </button>,
-        );
-      }
     }
-    for (let i = startPage; i <= endPage; i++) {
+
+    // แสดงเลขหน้าช่วงปัจจุบัน
+    for (let i = finalStartPage; i <= endPage; i++) {
       pages.push(
         <button
           key={i}
+          type="button"
           onClick={() => goToPage(i)}
-          className={`w-10 h-10 rounded-lg font-medium ${
+          onMouseDown={(e) => e.preventDefault()}
+          className={`w-10 h-10 rounded-lg font-medium transition-all active:scale-95 ${
             i === currentPage
-              ? "bg-indigo-600 text-white"
+              ? "bg-indigo-600 text-white shadow-md"
               : "bg-gray-200 hover:bg-gray-300"
           }`}
         >
@@ -370,28 +372,34 @@ export default function HousesPage() {
         </button>,
       );
     }
+
+    // แสดง ... และหน้าสุดท้าย (ถ้ายังมีหน้าอยู่ข้างหน้า)
     if (endPage < totalPages) {
-      if (endPage < totalPages - 1) {
-        pages.push(
-          <button
-            key="end-ellipsis"
-            onClick={() => setShowPageInput(true)}
-            className="w-10 h-10 rounded-lg bg-gray-200 hover:bg-gray-300 font-medium"
-          >
-            ...
-          </button>,
-        );
-      }
+      pages.push(
+        <button
+          key="ellipsis-right"
+          type="button"
+          onClick={() => setShowPageInput(true)}
+          onMouseDown={(e) => e.preventDefault()}
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-gray-500 font-medium hover:bg-gray-200 transition-all active:scale-95 mx-1"
+        >
+          ...
+        </button>,
+      );
+
       pages.push(
         <button
           key={totalPages}
+          type="button"
           onClick={() => goToPage(totalPages)}
-          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300"
+          onMouseDown={(e) => e.preventDefault()}
+          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition-all active:scale-95"
         >
           {totalPages}
         </button>,
       );
     }
+
     return pages;
   };
 
@@ -437,15 +445,15 @@ export default function HousesPage() {
 
   // ⭐ แก้ฟังก์ชัน addToNav ทั้งหมด (แทนที่อันเดิม)
   const addToNav = async (houseId: string) => {
-    if (addingIds.includes(houseId)) return;
-    setAddingIds((prev) => [...prev, houseId]);
-
-    const { data: session } = await supabase.auth.getSession();
-    if (!session.session) {
-      toast.error("กรุณา login ก่อน");
-      setAddingIds((prev) => prev.filter((id) => id !== houseId));
-      return;
+    const now = Date.now();
+    if (lastAdded[houseId] && now - lastAdded[houseId] < 1000) {
+      return; // ป้องกันกดซ้ำภายใน 1 วิ
     }
+
+    if (addingIds.includes(houseId)) return;
+
+    setAddingIds((prev) => [...prev, houseId]);
+    setLastAdded((prev) => ({ ...prev, [houseId]: now }));
 
     const { error } = await supabase
       .from("user_navigation_houses")
@@ -453,12 +461,15 @@ export default function HousesPage() {
 
     if (error) {
       if (error.code === "23505") {
-        toast.error("🏠 บ้านนี้ถูกเพิ่มเข้าการนำทางแล้ว");
+        toast("บ้านนี้อยู่ในรายการนำทางแล้ว", {
+          icon: "ℹ️",
+          duration: 1000,
+        });
       } else {
-        toast.error(error.message || "เกิดข้อผิดพลาดในการเพิ่ม");
+        toast.error("เพิ่มไม่สำเร็จ");
       }
     } else {
-      toast.success("✅ เพิ่มเข้าการนำทางเรียบร้อย");
+      toast.success(" เพิ่มเรียบร้อย");
     }
 
     setAddingIds((prev) => prev.filter((id) => id !== houseId));
@@ -874,17 +885,25 @@ export default function HousesPage() {
                 <div className="absolute top-3 right-3 z-10">
                   <button
                     onClick={() => addToNav(h.id)}
-                    onMouseDown={(e) => e.preventDefault()} // <<< ป้องกันไม่ให้คีย์บอร์ดปิดเมื่อกดปุ่มนี้
+                    onMouseDown={(e) => e.preventDefault()}
                     disabled={addingIds.includes(h.id)}
-                    className={`px-3 py-2 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-50 transition-all active:scale-95 flex items-center gap-1.5 font-medium text-sm ${
+                    className={`px-4 py-3 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium text-sm min-w-28 ${
                       h.lat && h.lng
                         ? "bg-green-600 hover:bg-green-700"
                         : "bg-orange-500 hover:bg-orange-600"
                     }`}
-                    title="เพิ่มเข้าการนำทาง"
                   >
-                    <Plus className="w-4 h-4" />
-                    เพิ่ม
+                    {addingIds.includes(h.id) ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        กำลังเพิ่ม...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-5 h-5" />
+                        เพิ่ม
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -923,27 +942,35 @@ export default function HousesPage() {
                   )}
                 </div>
 
-                {/* ปุ่มด้านล่าง: ลบ (ซ้ายสุด), นำทาง, แก้ไข */}
+                {/* ปุ่มด้านล่าง: ลบ, นำทาง, แก้ไข */}
                 <div className="px-5 pb-5 flex justify-center items-center gap-4">
                   <button
+                    type="button"
                     onClick={() => deleteHouse(h.id)}
-                    className="p-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+                    onMouseDown={(e) => e.preventDefault()} // เพิ่มบรรทัดนี้
+                    className="p-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition active:scale-95"
                     title="ลบ"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
+
                   {h.lat && h.lng && (
                     <button
+                      type="button"
                       onClick={() => openNavigation(h.lat!, h.lng!)}
-                      className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition"
+                      onMouseDown={(e) => e.preventDefault()} // เพิ่ม
+                      className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition active:scale-95"
                       title="นำทาง"
                     >
                       <Navigation className="w-5 h-5" />
                     </button>
                   )}
+
                   <button
+                    type="button"
                     onClick={() => openEditModal(h)}
-                    className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition"
+                    onMouseDown={(e) => e.preventDefault()} // เพิ่ม
+                    className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition active:scale-95"
                     title="แก้ไข"
                   >
                     <Edit3 className="w-5 h-5" />
@@ -956,9 +983,11 @@ export default function HousesPage() {
           {totalPages > 1 && (
             <div className="mt-12 mb-8 flex items-center justify-center gap-3">
               <button
+                type="button"
                 onClick={() => goToPage(currentPage - 1)}
+                onMouseDown={(e) => e.preventDefault()}
                 disabled={currentPage === 1}
-                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center"
+                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center active:scale-95"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -966,9 +995,11 @@ export default function HousesPage() {
                 {renderPageNumbers()}
               </div>
               <button
+                type="button"
                 onClick={() => goToPage(currentPage + 1)}
+                onMouseDown={(e) => e.preventDefault()}
                 disabled={currentPage === totalPages}
-                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center"
+                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center active:scale-95"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -1265,14 +1296,19 @@ export default function HousesPage() {
               )}
               <div className="flex gap-3 pt-4">
                 <button
+                  type="button"
                   onClick={closeModal}
-                  className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300"
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300 active:scale-95"
                 >
                   ยกเลิก
                 </button>
+
                 <button
+                  type="button"
                   onClick={saveHouse}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold"
+                  onMouseDown={(e) => e.preventDefault()}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold active:scale-95"
                 >
                   {isAdding ? "เพิ่มบ้าน" : "บันทึก"}
                 </button>
