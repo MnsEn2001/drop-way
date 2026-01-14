@@ -988,31 +988,36 @@ export default function NavigationPage() {
     const url = `https://www.google.com/maps?q=${lat},${lng}`;
     window.open(url, "_blank");
   };
+
   const saveHouse = async () => {
     if (!editingHouse) return;
     if (!editingHouse.house_id || editingHouse.house_id === "undefined") {
       toast.error("ไม่พบ ID ของบ้าน กรุณารีเฟรชหน้าหรือลองใหม่อีกครั้ง");
       return;
     }
+
+    // สร้างข้อมูลสุดท้าย แปลง undefined เป็น null ชัดเจน
+    const finalData = {
+      ...formData,
+      lat: formData.lat ?? null, // ถ้า undefined → null
+      lng: formData.lng ?? null,
+    };
+
     const { error } = await supabase
       .from("houses")
-      .update(formData)
+      .update(finalData)
       .eq("id", editingHouse.house_id);
+
     if (error) {
       toast.error("บันทึกไม่สำเร็จ: " + error.message);
     } else {
       toast.success("บันทึกสำเร็จ");
       // รีโหลดข้อมูลล่าสุดจาก navigation_view
-      const { data, error: loadError } = await supabase
-        .from("navigation_view")
-        .select("*")
-        .order("nav_priority", { ascending: true });
-      if (!loadError && data) {
-        setList(data);
-      }
+      await reloadNavigation(); // ใช้ฟังก์ชันที่มีอยู่แล้ว
       closeModal();
     }
   };
+
   const openNavigation = (lat: number, lng: number) => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
     window.location.href = url;
@@ -2026,21 +2031,51 @@ export default function NavigationPage() {
                 placeholder="พิกัด (lat,lng) เช่น 16.123456,99.123456"
                 value={
                   formData.lat && formData.lng
-                    ? `${formData.lat},${formData.lng}`
+                    ? `${formData.lat.toFixed(6)},${formData.lng.toFixed(6)}`
                     : ""
                 }
                 onChange={(e) => {
-                  const parts = e.target.value.split(",");
-                  if (parts.length === 2) {
-                    const lat = parseFloat(parts[0].trim());
-                    const lng = parseFloat(parts[1].trim());
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                      setFormData((p) => ({ ...p, lat, lng }));
-                    }
+                  const value = e.target.value.trim();
+
+                  // ถ้าช่องว่าง → ถือว่าต้องการลบพิกัด
+                  if (value === "") {
+                    setFormData((prev) => ({ ...prev, lat: null, lng: null }));
+                    return;
+                  }
+
+                  const parts = value.split(",");
+                  if (parts.length !== 2) {
+                    // รูปแบบไม่ครบ → ถือว่าไม่ต้องการพิกัด (หรือจะปล่อยไว้ก็ได้ แต่ที่นี่ให้ลบ)
+                    setFormData((prev) => ({ ...prev, lat: null, lng: null }));
+                    return;
+                  }
+
+                  const latStr = parts[0].trim();
+                  const lngStr = parts[1].trim();
+
+                  const lat = parseFloat(latStr);
+                  const lng = parseFloat(lngStr);
+
+                  if (
+                    !isNaN(lat) &&
+                    !isNaN(lng) &&
+                    latStr !== "" &&
+                    lngStr !== ""
+                  ) {
+                    setFormData((prev) => ({ ...prev, lat, lng }));
+                  } else {
+                    // รูปแบบผิด → ลบพิกัด
+                    setFormData((prev) => ({ ...prev, lat: null, lng: null }));
                   }
                 }}
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
               />
+
+              {formData.lat == null && formData.lng == null && (
+                <p className="text-xs text-gray-500 mt-1">
+                  ไม่มีพิกัด (บ้านนี้จะไม่แสดงบนแผนที่/การนำทาง)
+                </p>
+              )}
               {formData.lat && formData.lng && (
                 <div className="text-center -mt-2 mb-2">
                   <button

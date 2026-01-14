@@ -688,27 +688,33 @@ export default function HousesPage() {
   };
 
   const saveHouse = async () => {
+    // ปรับ lat/lng ให้เป็น null ถ้าไม่มีค่า (ป้องกัน undefined)
+    const finalData = {
+      ...formData,
+      lat: formData.lat ?? null, // ถ้า undefined → กลายเป็น null
+      lng: formData.lng ?? null,
+    };
+
     if (isAdding) {
-      const { error } = await supabase.from("houses").insert(formData);
+      const { error } = await supabase.from("houses").insert(finalData);
       if (error) {
         toast.error("เพิ่มบ้านไม่สำเร็จ: " + error.message);
       } else {
         toast.success("เพิ่มบ้านสำเร็จ!");
-        await reloadHouses(); // รีโหลดข้อมูลใหม่
+        await reloadHouses();
         closeModal();
       }
     } else {
       if (!editingHouse) return;
       const { error } = await supabase
         .from("houses")
-        .update(formData)
+        .update(finalData)
         .eq("id", editingHouse.id);
-
       if (error) {
         toast.error("เกิดข้อผิดพลาด: " + error.message);
       } else {
         toast.success("บันทึกสำเร็จ");
-        await reloadHouses(); // รีโหลดข้อมูลใหม่
+        await reloadHouses();
         closeModal();
       }
     }
@@ -1254,31 +1260,41 @@ export default function HousesPage() {
                 placeholder="พิกัด (lat,lng) เช่น 16.123456,99.123456"
                 value={coordsInput}
                 onChange={(e) => {
-                  const value = e.target.value;
+                  const value = e.target.value.trim(); // trim เพื่อความสะอาด
                   setCoordsInput(value);
 
-                  // พยายาม parse เป็น lat,lng เฉพาะเมื่อรูปแบบครบ
+                  if (value === "") {
+                    // ช่องว่าง = ต้องการลบพิกัด
+                    setFormData((prev) => ({ ...prev, lat: null, lng: null }));
+                    return;
+                  }
+
                   const parts = value.split(",");
                   if (parts.length === 2) {
-                    const lat = parseFloat(parts[0].trim());
-                    const lng = parseFloat(parts[1].trim());
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                      setFormData((p) => ({ ...p, lat, lng }));
+                    const latStr = parts[0].trim();
+                    const lngStr = parts[1].trim();
+
+                    const lat = parseFloat(latStr);
+                    const lng = parseFloat(lngStr);
+
+                    if (
+                      !isNaN(lat) &&
+                      !isNaN(lng) &&
+                      latStr !== "" &&
+                      lngStr !== ""
+                    ) {
+                      setFormData((prev) => ({ ...prev, lat, lng }));
                     } else {
-                      // ถ้า parse ไม่ได้ ให้ล้าง lat/lng
-                      setFormData((p) => ({
-                        ...p,
-                        lat: undefined,
-                        lng: undefined,
+                      // รูปแบบผิด → ถือว่าไม่ต้องการพิกัด (หรือจะแจ้งเตือนก็ได้ แต่ที่นี่ให้ลบ)
+                      setFormData((prev) => ({
+                        ...prev,
+                        lat: null,
+                        lng: null,
                       }));
                     }
                   } else {
-                    // ถ้าไม่ครบรูปแบบ ให้ล้าง lat/lng
-                    setFormData((p) => ({
-                      ...p,
-                      lat: undefined,
-                      lng: undefined,
-                    }));
+                    // ไม่ครบ 2 ส่วน → ไม่บันทึกพิกัด (ถือเป็นลบ)
+                    setFormData((prev) => ({ ...prev, lat: null, lng: null }));
                   }
                 }}
                 className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
