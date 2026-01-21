@@ -910,6 +910,7 @@ export default function NavigationPage() {
     setList([]);
     setIsFabOpen(false);
   };
+
   const openFullRoute = () => {
     const position = isRealTimeMode ? currentPosition : startPosition;
     if (!position) {
@@ -941,6 +942,7 @@ export default function NavigationPage() {
     toast.success(msg);
     setIsFabOpen(false);
   };
+
   const openEditModal = (house: NavigationHouse) => {
     setEditingHouse(house);
     setFormData({
@@ -1563,11 +1565,11 @@ export default function NavigationPage() {
                           <div
                             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm ${
                               h.report_reason?.includes("โทรไม่รับ")
-                                ? "bg-red-600"
+                                ? "bg-pink-600"
                                 : h.report_reason?.includes("เลื่อน")
                                   ? "bg-orange-600"
                                   : h.report_reason?.includes("ตีกลับ")
-                                    ? "bg-pink-600"
+                                    ? "bg-red-600"
                                     : "bg-gray-600"
                             }`}
                           >
