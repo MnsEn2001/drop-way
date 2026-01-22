@@ -87,6 +87,11 @@ export default function NavigationPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showPageInput, setShowPageInput] = useState(false);
   const [pageInputValue, setPageInputValue] = useState("");
+
+  // เพิ่มตรงนี้ (ใกล้กับ [deliverNote, setDeliverNote])
+  const [localCash, setLocalCash] = useState<string>("");
+  const [localTransfer, setLocalTransfer] = useState<string>("");
+
   // Modal แก้ไข
   const [editingHouse, setEditingHouse] = useState<NavigationHouse | null>(
     null,
@@ -172,9 +177,6 @@ export default function NavigationPage() {
   const [deliverNote, setDeliverNote] = useState<string>("โอนเข้าบริษัท");
   const [deliverNoteCustom, setDeliverNoteCustom] = useState("");
 
-  // เพิ่มในส่วน state
-  const [cashAmount, setCashAmount] = useState<string>("");
-  const [transferAmount, setTransferAmount] = useState<string>("");
   // Modal รายงาน
   const [showReportModal, setShowReportModal] = useState(false);
   const [houseToReport, setHouseToReport] = useState<NavigationHouse | null>(
@@ -255,6 +257,32 @@ export default function NavigationPage() {
     const noCoordsHouses = houses.filter((h) => !h.lat || !h.lng);
     return [...ordered, ...noCoordsHouses];
   }
+
+  // โหลดค่าเงินเดิมเมื่อ modal เปิด หรือ houseToDeliver เปลี่ยน
+  useEffect(() => {
+    if (showDeliverModal && houseToDeliver) {
+      const note = houseToDeliver.delivery_note || "";
+
+      // เงินสด / จ่ายรวมเงินสด
+      const cashMatch = note.match(
+        /(เงินสด|จ่ายรวมเงินสด)จำนวน\s*([\d,]+\.?\d*)\s*บาท/,
+      );
+      setLocalCash(cashMatch ? cashMatch[2].replace(/,/g, "") : "");
+
+      // โอนเข้าบัญชีฉัน
+      const transferMatch = note.match(
+        /โอนเข้าบัญชีฉัน.*?([\d,]+\.?\d*)\s*บาท/,
+      );
+      setLocalTransfer(transferMatch ? transferMatch[1].replace(/,/g, "") : "");
+    }
+  }, [showDeliverModal, houseToDeliver]); // ขึ้นกับทั้งสองตัวนี้
+
+  useEffect(() => {
+    if (!showDeliverModal) {
+      setLocalCash("");
+      setLocalTransfer("");
+    }
+  }, [showDeliverModal]);
 
   useEffect(() => {
     const position = isRealTimeMode ? currentPosition : startPosition;
@@ -1069,45 +1097,40 @@ export default function NavigationPage() {
   };
 
   // ⭐ แก้ confirmDeliver ทั้งหมด (รองรับจุดทศนิยม + ป้องกันกดซ้ำ)
-  const confirmDeliver = async () => {
+  const confirmDeliver = async (
+    cash: string, // รับจาก localCash
+    transfer: string, // รับจาก localTransfer
+  ) => {
     if (isSubmitting || !houseToDeliver) return;
-
     setIsSubmitting(true);
 
     try {
       let note = deliverNote;
 
-      // จ่ายด้วยเงินสด + จ่ายรวมเงินสด (ใช้ cashAmount ร่วมกัน)
       if (deliverNote === "จ่ายด้วยเงินสด" || deliverNote === "จ่ายรวมเงินสด") {
-        if (!cashAmount.trim() || isNaN(Number(cashAmount))) {
+        if (!cash.trim() || isNaN(Number(cash))) {
           toast.error("กรุณากรอกจำนวนเงินสดให้ถูกต้อง");
           return;
         }
-        const amount = Number(cashAmount).toLocaleString("th-TH", {
+        const amount = Number(cash).toLocaleString("th-TH", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         });
         note = `${deliverNote}จำนวน ${amount} บาท รอปิดยอด QR`;
-      }
-      // โอนเข้าบัญชีฉัน
-      else if (deliverNote === "โอนเข้าบัญชีฉัน") {
-        if (!transferAmount.trim() || isNaN(Number(transferAmount))) {
+      } else if (deliverNote === "โอนเข้าบัญชีฉัน") {
+        if (!transfer.trim() || isNaN(Number(transfer))) {
           toast.error("กรุณากรอกจำนวนเงินที่โอนให้ถูกต้อง");
           return;
         }
-        const amount = Number(transferAmount).toLocaleString("th-TH", {
+        const amount = Number(transfer).toLocaleString("th-TH", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         });
         note = `โอนเข้าบัญชีฉัน จำนวน ${amount} บาท รอปิดยอด QR`;
-      }
-      // อื่นๆ
-      else if (deliverNote === "อื่นๆ") {
+      } else if (deliverNote === "อื่นๆ") {
         note = deliverNoteCustom.trim() || "ไม่มีหมายเหตุ";
-      }
-      // โอนเข้าบริษัท / ไม่มียอด
-      else {
-        note = deliverNote + (note.includes("รอปิดยอด QR") ? "" : ""); // ไม่เติม QR ถ้าไม่มี
+      } else {
+        note = deliverNote;
       }
 
       const { error } = await supabase
@@ -1399,29 +1422,12 @@ export default function NavigationPage() {
                       {/* ปุ่มแก้ไขสถานะ - แสดงเฉพาะเมื่อส่งแล้วหรือรายงานแล้ว */}
                       {h.delivery_status === "delivered" && (
                         <button
-                          // ใน currentHouses.map() ตรงปุ่ม "แก้ส่งแล้ว"
                           onClick={() => {
                             setHouseToDeliver(h);
 
-                            // ⭐ แก้ไข: ดึงหมายเหตุเดิม + แยกประเภท + แยกจำนวนเงิน (รองรับจุดทศนิยม)
                             const note = h.delivery_note || "";
 
-                            // ดึงจำนวนเงินสด (รองรับ 1,250.50)
-                            const cashMatch = note.match(
-                              /(เงินสด|จ่ายรวมเงินสด)จำนวน\s*([\d,]+\.?\d*)\s*บาท/,
-                            );
-                            const transferMatch = note.match(
-                              /โอนเข้าบัญชีฉัน.*?([\d,]+\.?\d*)\s*บาท/,
-                            );
-
-                            const cashAmountStr = cashMatch
-                              ? cashMatch[2].replace(/,/g, "")
-                              : "";
-                            const transferAmountStr = transferMatch
-                              ? transferMatch[1].replace(/,/g, "")
-                              : "";
-
-                            // กำหนด deliverNote จาก note เดิม
+                            // ดึงประเภทการชำระเงินเดิมจาก note
                             if (note.includes("จ่ายรวมเงินสด")) {
                               setDeliverNote("จ่ายรวมเงินสด");
                             } else if (note.includes("เงินสด")) {
@@ -1429,20 +1435,19 @@ export default function NavigationPage() {
                             } else if (note.includes("โอนเข้าบัญชีฉัน")) {
                               setDeliverNote("โอนเข้าบัญชีฉัน");
                             } else if (
-                              note === "โอนเข้าบริษัท" ||
-                              note.includes("โอนเข้าบริษัท")
+                              note.includes("โอนเข้าบริษัท") ||
+                              note === "โอนเข้าบริษัท"
                             ) {
                               setDeliverNote("โอนเข้าบริษัท");
                             } else if (note === "ไม่มียอด") {
                               setDeliverNote("ไม่มียอด");
                             } else {
                               setDeliverNote("อื่นๆ");
-                              setDeliverNoteCustom(note);
+                              setDeliverNoteCustom(note.trim());
                             }
 
-                            // ⭐ สำคัญ: ตั้งค่าเงินที่ดึงมา (ไม่รีเซ็ต)
-                            setCashAmount(cashAmountStr);
-                            setTransferAmount(transferAmountStr);
+                            // ไม่ต้อง setCashAmount / setTransferAmount อีกต่อไป
+                            // เพราะ modal จะดึงค่าเงินเดิมจาก delivery_note เอง ผ่าน useEffect
 
                             setShowDeliverModal(true);
                           }}
@@ -2240,6 +2245,7 @@ export default function NavigationPage() {
             <h2 className="text-xl font-bold text-green-600 mb-4">
               ยืนยันส่งแล้ว
             </h2>
+
             <div className="bg-gray-50 p-4 rounded-xl mb-4">
               <p className="font-bold">{houseToDeliver.full_name}</p>
               <p className="text-sm text-gray-600">{houseToDeliver.phone}</p>
@@ -2252,6 +2258,7 @@ export default function NavigationPage() {
               <label className="block text-sm font-medium text-gray-700 mb-3">
                 การชำระเงิน
               </label>
+
               <div className="grid grid-cols-2 gap-3 mb-3">
                 {[
                   "โอนเข้าบริษัท",
@@ -2263,9 +2270,7 @@ export default function NavigationPage() {
                 ].map((option) => (
                   <button
                     key={option}
-                    onClick={() => {
-                      setDeliverNote(option);
-                    }}
+                    onClick={() => setDeliverNote(option)}
                     className={`py-3 px-4 rounded-xl font-medium transition-all border-2 ${
                       deliverNote === option
                         ? "bg-green-600 text-white border-green-600 shadow-md"
@@ -2277,43 +2282,40 @@ export default function NavigationPage() {
                 ))}
               </div>
 
-              {/* กรอกจำนวนเงินสด – รองรับทั้ง "จ่ายด้วยเงินสด" และ "จ่ายรวมเงินสด" */}
+              {/* จำนวนเงินสด */}
               {(deliverNote === "จ่ายด้วยเงินสด" ||
                 deliverNote === "จ่ายรวมเงินสด") && (
                 <input
                   type="text"
                   inputMode="decimal"
                   placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
-                  value={cashAmount}
+                  value={localCash}
                   onChange={(e) => {
                     const value = e.target.value;
                     if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
-                      setCashAmount(value);
+                      setLocalCash(value);
                     }
                   }}
                   className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
-                  autoFocus={
-                    deliverNote === "จ่ายด้วยเงินสด" ||
-                    deliverNote === "จ่ายรวมเงินสด"
-                  }
+                  autoFocus
                 />
               )}
 
-              {/* กรอกจำนวนเงินโอน */}
+              {/* จำนวนเงินโอน */}
               {deliverNote === "โอนเข้าบัญชีฉัน" && (
                 <input
                   type="text"
                   inputMode="decimal"
                   placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
-                  value={transferAmount}
+                  value={localTransfer}
                   onChange={(e) => {
                     const value = e.target.value;
                     if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
-                      setTransferAmount(value);
+                      setLocalTransfer(value);
                     }
                   }}
                   className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
-                  autoFocus={deliverNote === "โอนเข้าบัญชีฉัน"}
+                  autoFocus
                 />
               )}
 
@@ -2329,25 +2331,26 @@ export default function NavigationPage() {
                 />
               )}
 
-              {/* Preview หมายเหตุ */}
+              {/* Preview */}
               <div className="mt-4 p-3 bg-green-50 rounded-xl">
                 <p className="text-sm text-green-800 font-medium">
                   หมายเหตุที่จะบันทึก:
                   <span className="block font-bold mt-1">
                     {deliverNote === "จ่ายด้วยเงินสด" ||
                     deliverNote === "จ่ายรวมเงินสด"
-                      ? cashAmount
-                        ? `${deliverNote} ${Number(
-                            cashAmount || 0,
-                          ).toLocaleString("th-TH", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })} บาท`
+                      ? localCash
+                        ? `${deliverNote} ${Number(localCash).toLocaleString(
+                            "th-TH",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            },
+                          )} บาท`
                         : "กรอกจำนวนเงิน"
                       : deliverNote === "โอนเข้าบัญชีฉัน"
-                        ? transferAmount
-                          ? `โอนเข้าบัญชี ${Number(
-                              transferAmount || 0,
+                        ? localTransfer
+                          ? `โอนเข้าบัญชีฉัน ${Number(
+                              localTransfer,
                             ).toLocaleString("th-TH", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
@@ -2367,23 +2370,23 @@ export default function NavigationPage() {
                   setShowDeliverModal(false);
                   setDeliverNote("โอนเข้าบริษัท");
                   setDeliverNoteCustom("");
-                  setCashAmount("");
-                  setTransferAmount("");
+                  // ไม่ต้อง reset localCash / localTransfer เพราะ useEffect จะจัดการตอนเปิด modal ใหม่
                 }}
                 className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
               >
                 ยกเลิก
               </button>
+
               <button
                 type="button"
-                onClick={confirmDeliver}
+                onClick={() => confirmDeliver(localCash, localTransfer)}
                 disabled={
                   isSubmitting ||
                   ((deliverNote === "จ่ายด้วยเงินสด" ||
                     deliverNote === "จ่ายรวมเงินสด") &&
-                    !cashAmount.trim()) ||
+                    !localCash.trim()) ||
                   (deliverNote === "โอนเข้าบัญชีฉัน" &&
-                    !transferAmount.trim()) ||
+                    !localTransfer.trim()) ||
                   (deliverNote === "อื่นๆ" && !deliverNoteCustom.trim())
                 }
                 className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
