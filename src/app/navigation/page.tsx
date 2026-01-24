@@ -2600,8 +2600,11 @@ export default function NavigationPage() {
               ))}
               <button
                 onClick={() => {
-                  setCalculatorInput((prev) => prev + "0");
-                  updateChangeResult(prev + "0");
+                  setCalculatorInput((prev) => {
+                    const newVal = prev + "0";
+                    updateChangeResult(newVal);
+                    return newVal;
+                  });
                 }}
                 className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
               >
