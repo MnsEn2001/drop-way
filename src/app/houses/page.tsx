@@ -21,8 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Scan,
 } from "lucide-react";
-import { Camera, Scan, Barcode, Image } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";
 
@@ -1372,10 +1372,11 @@ export default function HousesPage() {
             {/* แสดงภาพที่ถ่ายแล้ว */}
             {capturedImage && !ocrTexts.length && (
               <div className="flex justify-center py-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={capturedImage}
                   alt="Captured"
-                  className="w-full h-auto max-h-64 object-contain rounded-lg mx-auto"
+                  className="w-full max-w-md h-auto max-h-[70vh] object-contain rounded-lg mx-auto"
                 />
               </div>
             )}
