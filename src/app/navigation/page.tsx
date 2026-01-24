@@ -25,6 +25,7 @@ import {
   CheckCircle,
   AlertCircle,
   Copy,
+  Calculator,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 const ITEMS_PER_PAGE = 20;
@@ -91,6 +92,10 @@ export default function NavigationPage() {
   // เพิ่มตรงนี้ (ใกล้กับ [deliverNote, setDeliverNote])
   const [localCash, setLocalCash] = useState<string>("");
   const [localTransfer, setLocalTransfer] = useState<string>("");
+
+  const [showCalculatorModal, setShowCalculatorModal] = useState(false);
+  const [calculatorInput, setCalculatorInput] = useState("");
+  const [calculatorResult, setCalculatorResult] = useState<string | null>(null);
 
   // Modal แก้ไข
   const [editingHouse, setEditingHouse] = useState<NavigationHouse | null>(
@@ -1045,6 +1050,35 @@ export default function NavigationPage() {
       // รีโหลดข้อมูลล่าสุดจาก navigation_view
       await reloadNavigation(); // ใช้ฟังก์ชันที่มีอยู่แล้ว
       closeModal();
+    }
+  };
+
+  // ฟังก์ชันแยกเพื่ออัปเดตเงินทอนทันทีที่พิมพ์
+  const updateChangeResult = (input: string) => {
+    const paid = parseFloat(input.replace(/[^\d.]/g, ""));
+    const due = deliverNote.includes("เงินสด")
+      ? parseFloat(localCash || "0")
+      : parseFloat(localTransfer || "0");
+
+    if (!isNaN(paid) && !isNaN(due) && due > 0) {
+      const change = paid - due;
+      if (change >= 0) {
+        setCalculatorResult(
+          `เงินทอน: ${change.toLocaleString("th-TH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} บาท`,
+        );
+      } else {
+        setCalculatorResult(
+          `ขาด: ${Math.abs(change).toLocaleString("th-TH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} บาท`,
+        );
+      }
+    } else {
+      setCalculatorResult(null);
     }
   };
 
@@ -2285,40 +2319,85 @@ export default function NavigationPage() {
               {/* จำนวนเงินสด */}
               {(deliverNote === "จ่ายด้วยเงินสด" ||
                 deliverNote === "จ่ายรวมเงินสด") && (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
-                  value={localCash}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
-                      setLocalCash(value);
-                    }
-                  }}
-                  className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
-                  autoFocus
-                />
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
+                      value={localCash}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
+                          setLocalCash(value);
+                        }
+                      }}
+                      className="flex-1 px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCalculatorInput("");
+                        setCalculatorResult(null);
+                        setShowCalculatorModal(true);
+                      }}
+                      className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 active:scale-95 transition shadow-md"
+                      title="เปิดเครื่องคิดเลขคำนวณเงินทอน"
+                    >
+                      <Calculator className="w-6 h-6" />
+                    </button>
+                  </div>
+                  {localCash && parseFloat(localCash) > 0 && (
+                    <p className="text-xs text-green-700 text-center mt-2">
+                      ยอดที่ต้องชำระ:{" "}
+                      {parseFloat(localCash).toLocaleString("th-TH", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      บาท
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* จำนวนเงินโอน */}
               {deliverNote === "โอนเข้าบัญชีฉัน" && (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
-                  value={localTransfer}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
-                      setLocalTransfer(value);
-                    }
-                  }}
-                  className="w-full px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
-                  autoFocus
-                />
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="จำนวนเงิน (บาท) เช่น 1250.50"
+                      value={localTransfer}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (/^\d*\.?\d{0,2}$/.test(value) || value === "") {
+                          setLocalTransfer(value);
+                        }
+                      }}
+                      className="flex-1 px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCalculatorInput("");
+                        setCalculatorResult(null);
+                        setShowCalculatorModal(true);
+                        // ปิด keyboard ทันที
+                        if (document.activeElement instanceof HTMLElement) {
+                          document.activeElement.blur();
+                        }
+                      }}
+                      className="p-3 bg-green-600 text-white rounded-xl hover:bg-green-700 active:scale-95 transition shadow-md"
+                      title="เครื่องคิดเลขเงินทอน"
+                    >
+                      <Calculator className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
               )}
-
               {/* อื่นๆ */}
               {deliverNote === "อื่นๆ" && (
                 <textarea
@@ -2399,6 +2478,171 @@ export default function NavigationPage() {
                 ) : (
                   "ส่งแล้ว"
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ */}
+      {showCalculatorModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          {/* กล่องเครื่องคิดเลขขนาดกะทัดรัด อยู่กึ่งกลาง ไม่เลื่อนได้ */}
+          <div className="bg-white rounded-2xl shadow-2xl w-80 max-w-full overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 text-center">
+              <h3 className="text-lg font-bold">เครื่องคิดเลขเงินทอน</h3>
+            </div>
+
+            {/* ยอดที่ต้องชำระ */}
+            <div className="p-4 bg-gray-50 text-center border-b">
+              <p className="text-xs text-gray-600">ยอดที่ต้องชำระ</p>
+              <p className="text-2xl font-bold text-indigo-700 mt-1">
+                {(() => {
+                  const amount = deliverNote.includes("เงินสด")
+                    ? localCash
+                    : localTransfer;
+                  return amount && parseFloat(amount) > 0
+                    ? parseFloat(amount).toLocaleString("th-TH", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }) + " บาท"
+                    : "กรุณากรอกยอด";
+                })()}
+              </p>
+            </div>
+
+            {/* ช่องแสดงเงินที่จ่าย + ผลลัพธ์เงินทอน */}
+            <div className="p-5 bg-gray-100">
+              <div className="bg-white rounded-xl px-4 py-5 text-center shadow-inner mb-3">
+                <p className="text-3xl font-bold text-gray-800">
+                  {calculatorInput || "0"} บาท
+                </p>
+              </div>
+
+              {calculatorResult && (
+                <div
+                  className={`py-3 px-4 rounded-xl text-center text-xl font-bold mb-4 transition-all ${
+                    calculatorResult.includes("เงินทอน")
+                      ? "bg-green-100 text-green-700 border-2 border-green-300"
+                      : "bg-red-100 text-red-700 border-2 border-red-300"
+                  }`}
+                >
+                  {calculatorResult}
+                </div>
+              )}
+            </div>
+
+            {/* แป้นตัวเลข - ปุ่มใหญ่ ใช้งานง่าย */}
+            <div className="grid grid-cols-4 gap-2 p-4 bg-gray-50">
+              {["1", "2", "3", "C"].map((key) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    if (key === "C") {
+                      setCalculatorInput("");
+                      setCalculatorResult(null);
+                    } else {
+                      setCalculatorInput((prev) => {
+                        const newVal = prev + key;
+                        updateChangeResult(newVal);
+                        return newVal;
+                      });
+                    }
+                  }}
+                  className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
+                >
+                  {key}
+                </button>
+              ))}
+              {["4", "5", "6", "00"].map((key) => (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setCalculatorInput((prev) => {
+                      const newVal = prev + key;
+                      updateChangeResult(newVal);
+                      return newVal;
+                    });
+                  }}
+                  className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
+                >
+                  {key}
+                </button>
+              ))}
+              {["7", "8", "9", ""].map((key, index) => (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (index === 3) {
+                      // ปุ่ม Backspace (ตำแหน่งสุดท้าย)
+                      setCalculatorInput((prev) => {
+                        const newVal = prev.slice(0, -1);
+                        updateChangeResult(newVal);
+                        return newVal;
+                      });
+                    } else {
+                      setCalculatorInput((prev) => {
+                        const newVal = prev + key;
+                        updateChangeResult(newVal);
+                        return newVal;
+                      });
+                    }
+                  }}
+                  className={`h-14 text-2xl font-bold rounded-xl shadow-md active:scale-95 transition-transform ${
+                    index === 3
+                      ? "bg-red-500 text-white hover:bg-red-600"
+                      : "bg-white hover:bg-gray-100"
+                  }`}
+                >
+                  {index === 3 ? "←" : key}
+                </button>
+              ))}
+              <button
+                onClick={() => {
+                  setCalculatorInput((prev) => prev + "0");
+                  updateChangeResult(prev + "0");
+                }}
+                className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
+              >
+                0
+              </button>
+
+              {/* ปุ่มใช้ยอดนี้ - เต็มแถว */}
+              <button
+                onClick={() => {
+                  const paid = parseFloat(calculatorInput || "0");
+                  const due = deliverNote.includes("เงินสด")
+                    ? parseFloat(localCash || "0")
+                    : parseFloat(localTransfer || "0");
+
+                  if (!isNaN(paid) && due > 0) {
+                    const paidStr = paid.toFixed(2);
+                    if (deliverNote.includes("เงินสด")) {
+                      setLocalCash(paidStr);
+                    } else {
+                      setLocalTransfer(paidStr);
+                    }
+                    setShowCalculatorModal(false);
+                    toast.success(
+                      `ตั้งเงินที่จ่ายเป็น ${paid.toLocaleString("th-TH")} บาท`,
+                    );
+                  }
+                }}
+                disabled={!calculatorInput || parseFloat(calculatorInput) <= 0}
+                className="h-14 col-span-4 mt-3 text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl shadow-lg disabled:opacity-50 active:scale-95 transition-transform"
+              >
+                ใช้ยอดนี้
+              </button>
+            </div>
+
+            {/* ปุ่มปิด */}
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => setShowCalculatorModal(false)}
+                className="w-full py-3 bg-gray-200 rounded-xl font-medium hover:bg-gray-300 active:scale-95 transition"
+              >
+                ปิด
               </button>
             </div>
           </div>

@@ -71,6 +71,7 @@ export default function HousesPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [coordsInput, setCoordsInput] = useState<string>("");
+  const [cameraKey, setCameraKey] = useState(0);
   const closeScanner = () => {
     setShowScanner(false);
     setOcrTexts([]);
@@ -193,22 +194,57 @@ export default function HousesPage() {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, [showScanner]);
+  }, [showScanner, cameraKey]);
 
   useEffect(() => {
     if (!capturedImage) return;
 
     const recognizeText = async () => {
-      const worker = await createWorker("tha"); // ภาษาไทย
-      const ret = await worker.recognize(capturedImage);
-      await worker.terminate();
+      try {
+        const worker = await createWorker("tha+eng");
 
-      const lines = ret.data.text
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+        // สร้าง canvas และ preprocess
+        const img = new Image();
+        img.src = capturedImage;
+        await new Promise((resolve) => (img.onload = resolve));
 
-      setOcrTexts(lines);
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Cannot get canvas context");
+
+        ctx.drawImage(img, 0, 0);
+
+        // Grayscale + Binarize
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const gray =
+            data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          const value = gray > 140 ? 255 : 0;
+          data[i] = data[i + 1] = data[i + 2] = value;
+        }
+        ctx.putImageData(imageData, 0, 0);
+
+        // ⭐ ส่ง canvas โดยตรงให้ worker แทน data URL
+        const {
+          data: { text },
+        } = await worker.recognize(canvas);
+
+        await worker.terminate();
+
+        const lines = text
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter((line) => line.length >= 3 && /[\u0E00-\u0E7F]/.test(line));
+
+        setOcrTexts(lines.length > 0 ? lines : ["ไม่พบข้อความที่ชัดเจน"]);
+      } catch (err) {
+        console.error("OCR Error:", err);
+        toast.error("สแกนไม่สำเร็จ");
+        setOcrTexts(["เกิดข้อผิดพลาด"]);
+      }
     };
 
     recognizeText();
@@ -1278,165 +1314,158 @@ export default function HousesPage() {
         </div>
       )}
 
-      {/* Scanner Modal */}
+      {/* Scanner Modal - เวอร์ชันปรับปรุง */}
       {showScanner && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl p-4 w-full max-w-md">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">
-                {!capturedImage
-                  ? "ถ่ายภาพเพื่อสแกนข้อความ"
-                  : "กำลังประมวลผล..."}
+              <h3 className="text-xl font-bold">
+                {!capturedImage ? "สแกนข้อความจากภาพ" : "ผลการสแกน"}
               </h3>
               <button
                 onClick={closeScanner}
                 className="p-2 text-gray-500 hover:text-gray-700"
               >
-                <XIcon className="w-5 h-5" />
+                <XIcon className="w-6 h-6" />
               </button>
             </div>
 
-            {/* แสดงกล้อง */}
+            {/* กล้อง + กรอบสแกน */}
             {!capturedImage && !ocrTexts.length && (
-              <>
+              <div className="relative">
                 <div
-                  id="qr-reader"
                   ref={scannerRef}
-                  className="w-full h-64 bg-black rounded-lg overflow-hidden relative"
-                ></div>
-                {/* 👇 ปุ่มถ่ายภาพแบบ JSX — ชัดเจนและควบคุมง่าย */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const video = scannerRef.current?.querySelector("video");
-                    if (!video || !scannerRef.current) return;
+                  className="w-full h-96 bg-black rounded-xl overflow-hidden relative"
+                />
+                {/* กรอบสแกนกลางจอ */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-80 h-48 border-4 border-white border-dashed rounded-2xl opacity-80" />
+                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-4 py-2 rounded-full">
+                    วางข้อความในกรอบนี้
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 text-center mt-4">
+                  💡 ถือกล้องให้ตรง แสงสว่างสม่ำเสมอ หลีกเลี่ยงเงาและการสะท้อน
+                </p>
+              </div>
+            )}
 
-                    // ขนาดของ container ที่แสดงกล้อง
-                    const containerRect =
-                      scannerRef.current.getBoundingClientRect();
-                    const containerWidth = containerRect.width;
-                    const containerHeight = containerRect.height;
+            {/* ปุ่มถ่ายภาพ (แสดงเฉพาะตอนกล้องเปิด) */}
+            {!capturedImage && !ocrTexts.length && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const video = scannerRef.current?.querySelector("video");
+                  if (!video) return;
 
-                    // ขนาดจริงของวิดีโอ (อาจต่างจากที่แสดง)
-                    const videoWidth = video.videoWidth;
-                    const videoHeight = video.videoHeight;
+                  const canvas = document.createElement("canvas");
+                  const ctx = canvas.getContext("2d");
+                  if (!ctx) return;
 
-                    // สร้าง canvas ขนาดเท่า container
-                    const canvas = document.createElement("canvas");
-                    canvas.width = containerWidth;
-                    canvas.height = containerHeight;
-                    const ctx = canvas.getContext("2d");
-                    if (!ctx) return;
+                  // Crop เฉพาะบริเวณกรอบกลางจอ (80% ของความกว้าง/สูง)
+                  const cropWidth = video.videoWidth * 0.7;
+                  const cropHeight = video.videoHeight * 0.5;
+                  const cropX = (video.videoWidth - cropWidth) / 2;
+                  const cropY = (video.videoHeight - cropHeight) / 2;
 
-                    // คำนวณ scale และ offset เพื่อ crop แบบ center
-                    const scaleX = videoWidth / containerWidth;
-                    const scaleY = videoHeight / containerHeight;
-                    const scale = Math.max(scaleX, scaleY); // ครอบคลุมทั้งหมด (cover)
+                  canvas.width = cropWidth;
+                  canvas.height = cropHeight;
 
-                    const srcWidth = containerWidth * scale;
-                    const srcHeight = containerHeight * scale;
-                    const srcX = (videoWidth - srcWidth) / 2;
-                    const srcY = (videoHeight - srcHeight) / 2;
+                  ctx.drawImage(
+                    video,
+                    cropX,
+                    cropY,
+                    cropWidth,
+                    cropHeight,
+                    0,
+                    0,
+                    cropWidth,
+                    cropHeight,
+                  );
 
-                    // วาดภาพที่ถูก crop ลง canvas
-                    ctx.drawImage(
-                      video,
-                      srcX,
-                      srcY,
-                      srcWidth,
-                      srcHeight,
-                      0,
-                      0,
-                      containerWidth,
-                      containerHeight,
-                    );
+                  const imgUrl = canvas.toDataURL("image/png");
+                  setCapturedImage(imgUrl);
 
-                    const imgUrl = canvas.toDataURL("image/png");
-                    setCapturedImage(imgUrl);
-
-                    // หยุด stream
-                    const stream = (video as HTMLVideoElement)
-                      .srcObject as MediaStream | null;
-                    if (stream) {
-                      stream.getTracks().forEach((track) => track.stop());
-                    }
-                    if (video.parentNode) video.parentNode.removeChild(video);
-                  }}
-                  className="mt-4 w-full py-3 bg-blue-600 text-white rounded-lg font-medium"
-                >
-                  📸 ถ่ายภาพ
-                </button>
-              </>
+                  // หยุดกล้อง
+                  const stream = video.srcObject as MediaStream;
+                  stream.getTracks().forEach((track) => track.stop());
+                  video.remove();
+                }}
+                className="mt-6 w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-lg font-bold rounded-xl shadow-lg active:scale-95 transition"
+              >
+                📸 ถ่ายภาพ
+              </button>
             )}
 
             {/* แสดงภาพที่ถ่ายแล้ว */}
             {capturedImage && !ocrTexts.length && (
-              <div className="flex justify-center py-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
+              <div className="my-4">
                 <img
                   src={capturedImage}
                   alt="Captured"
-                  className="w-full max-w-md h-auto max-h-[70vh] object-contain rounded-lg mx-auto"
+                  className="w-full rounded-xl shadow-md"
                 />
+                <p className="text-center text-sm text-gray-500 mt-2">
+                  กำลังประมวลผลข้อความ...
+                </p>
               </div>
             )}
 
-            {/* แสดงรายการข้อความ OCR */}
+            {/* แสดงผล OCR */}
             {ocrTexts.length > 0 && (
-              <div className="max-h-60 overflow-y-auto space-y-2 mt-2">
-                {ocrTexts.map((text, i) => (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700">
+                  แตะข้อความที่ต้องการเพื่อใช้ค้นหา:
+                </p>
+                <div className="max-h-60 overflow-y-auto space-y-2">
+                  {ocrTexts.map((text, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedText(text)}
+                      className={`w-full text-left p-4 rounded-xl text-base transition-all ${
+                        selectedText === text
+                          ? "bg-indigo-600 text-white shadow-md"
+                          : "bg-gray-100 hover:bg-gray-200"
+                      }`}
+                    >
+                      {text}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-3 mt-4">
                   <button
-                    key={i}
-                    type="button"
-                    onClick={() => setSelectedText(text)}
-                    className={`w-full text-left p-3 rounded-lg text-sm break-words transition ${
-                      selectedText === text
-                        ? "bg-indigo-600 text-white"
-                        : "bg-gray-100 hover:bg-gray-200"
+                    onClick={() => {
+                      setOcrTexts([]);
+                      setCapturedImage(null);
+                      setSelectedText(null);
+                      setCameraKey((prev) => prev + 1); // บังคับรีสตาร์ทกล้อง
+                    }}
+                    className="flex-1 py-3 bg-gray-200 rounded-xl font-medium hover:bg-gray-300"
+                  >
+                    ถ่ายใหม่
+                  </button>
+                  <button
+                    disabled={!selectedText}
+                    onClick={() => {
+                      if (selectedText) {
+                        setSearchTerm(selectedText);
+                        closeScanner();
+                        toast.success("นำข้อความไปค้นหาแล้ว!");
+                      }
+                    }}
+                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${
+                      selectedText
+                        ? "bg-green-600 text-white shadow-md hover:bg-green-700"
+                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
                   >
-                    {text}
+                    ใช้ข้อความนี้ค้นหา
                   </button>
-                ))}
-                <button
-                  type="button"
-                  disabled={!selectedText}
-                  onClick={() => {
-                    if (selectedText) {
-                      setSearchTerm(selectedText);
-                      closeScanner();
-                    }
-                  }}
-                  className={`w-full py-3 rounded-lg font-medium text-white mt-4 ${
-                    selectedText
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-gray-400 cursor-not-allowed"
-                  }`}
-                >
-                  ใช้ข้อความนี้ในการค้นหา
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOcrTexts([]);
-                    setCapturedImage(null);
-                    setSelectedText(null);
-                    setShowScanner(true); // เปิดกล้องใหม่
-                  }}
-                  className="w-full py-2 text-gray-600 border-t mt-3"
-                >
-                  ถ่ายภาพใหม่
-                </button>
+                </div>
               </div>
             )}
-
-            <p className="text-xs text-gray-500 mt-2 text-center">
-              {!capturedImage
-                ? "วางข้อความที่ต้องการสแกนไว้ในกรอบ"
-                : ocrTexts.length > 0
-                  ? "แตะข้อความเพื่อเลือก แล้วกดยืนยัน"
-                  : "กำลังดึงข้อความ..."}
-            </p>
           </div>
         </div>
       )}
