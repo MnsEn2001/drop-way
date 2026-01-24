@@ -1676,8 +1676,8 @@ export default function NavigationPage() {
                             onClick={() => {
                               setHouseToDeliver(h);
                               setDeliverNote("โอนเข้าบริษัท");
-                              setCashAmount("");
-                              setTransferAmount("");
+                              setLocalCash("");
+                              setLocalTransfer("");
                               setDeliverNoteCustom("");
                               setShowDeliverModal(true);
                             }}
