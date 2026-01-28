@@ -26,6 +26,7 @@ import {
   AlertCircle,
   Copy,
   Calculator,
+  MessageSquare,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 const ITEMS_PER_PAGE = 20;
@@ -68,7 +69,15 @@ export default function NavigationPage() {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [showNoCoords, setShowNoCoords] = useState(false);
   const [showWithCoords, setShowWithCoords] = useState(false);
+  const [sortByRoad, setSortByRoad] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Modal คอมเมนต์
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [houseToComment, setHouseToComment] = useState<NavigationHouse | null>(
+    null,
+  );
+  const [commentText, setCommentText] = useState("");
   // ตัวกรองเพิ่มเติม
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [houseNumberFilter, setHouseNumberFilter] = useState("");
@@ -291,26 +300,38 @@ export default function NavigationPage() {
 
   useEffect(() => {
     const position = isRealTimeMode ? currentPosition : startPosition;
-
     if (!position || list.length === 0) {
-      // ยังไม่มีจุดเริ่มต้น → เรียงตามลำดับเดิม
       setSortedList(list.map((h) => ({ ...h, distance: Infinity })));
       return;
     }
 
-    // เรียงแบบบ้านต่อบ้าน (Nearest Neighbor) เต็มรูปแบบ
-    const ordered = nearestNeighborTSP(position.lat, position.lng, list);
+    let processed: NavigationHouseWithDistance[];
 
-    const processed: NavigationHouseWithDistance[] = ordered.map((h) => ({
-      ...h,
-      distance:
-        h.lat && h.lng
-          ? getDistanceFromLatLon(position.lat, position.lng, h.lat, h.lng)
-          : Infinity,
-    }));
+    if (sortByRoad) {
+      // โหมดเรียงตามถนน (Nearest Neighbor TSP)
+      const ordered = nearestNeighborTSP(position.lat, position.lng, list);
+      processed = ordered.map((h) => ({
+        ...h,
+        distance:
+          h.lat && h.lng
+            ? getDistanceFromLatLon(position.lat, position.lng, h.lat, h.lng)
+            : Infinity,
+      }));
+    } else {
+      // โหมดเรียงตามระยะทางเส้นตรง (sort by distance)
+      processed = list
+        .map((h) => ({
+          ...h,
+          distance:
+            h.lat && h.lng
+              ? getDistanceFromLatLon(position.lat, position.lng, h.lat, h.lng)
+              : Infinity,
+        }))
+        .sort((a, b) => a.distance - b.distance); // เรียงจากใกล้ไปไกล
+    }
 
     setSortedList(processed);
-  }, [list, currentPosition, startPosition, isRealTimeMode]);
+  }, [list, currentPosition, startPosition, isRealTimeMode, sortByRoad]); // ← เพิ่ม sortByRoad เข้า dependency
 
   // Ref เพื่อเก็บค่าตัวกรองก่อนหน้า — ใช้ป้องกันการรีเซ็ตหน้าโดยไม่จำเป็น
   const prevFiltersRef = useRef<{
@@ -409,7 +430,6 @@ export default function NavigationPage() {
       }
 
       setList(allHouses);
-      toast.success(`โหลดรายการนำทางครบ ${allHouses.length} บ้าน`);
       setLoading(false);
     };
 
@@ -583,6 +603,35 @@ export default function NavigationPage() {
     setProvinceFilter("");
   };
 
+  const openCommentModal = (house: NavigationHouse) => {
+    setHouseToComment(house);
+    setCommentText(house.driver_note || ""); // โหลดคอมเมนต์เดิมถ้ามี
+    setShowCommentModal(true);
+  };
+
+  const confirmComment = async () => {
+    if (!houseToComment) return;
+
+    const trimmed = commentText.trim();
+    const { error } = await supabase
+      .from("user_navigation_houses")
+      .update({
+        driver_note: trimmed || null, // ถ้าว่างให้เป็น null
+      })
+      .eq("id", houseToComment.nav_id);
+
+    if (error) {
+      toast.error("บันทึกคอมเมนต์ไม่สำเร็จ: " + error.message);
+    } else {
+      toast.success("บันทึกคอมเมนต์เรียบร้อย");
+      // รีโหลดข้อมูล
+      await reloadNavigation();
+      setShowCommentModal(false);
+      setHouseToComment(null);
+      setCommentText("");
+    }
+  };
+
   // ⭐ แก้ไขฟังก์ชัน extractAmountFromNote รองรับ 1,250.50
   function extractAmountFromNote(note: string | null | undefined): number {
     if (!note) return 0;
@@ -594,17 +643,21 @@ export default function NavigationPage() {
     return 0;
   }
 
-  // ⭐ แก้ไข getCountText() ทั้งหมดเป็นแบบใหม่
+  // ⭐ แก้ไข getCountText() เป็นเวอร์ชันใหม่ – กระชับและจัดการทุกกรณี
   const getCountText = () => {
     const displayedCount = filteredList.length;
     const totalInList = list.length;
-    let modeText = "";
-    if (viewMode === "delivered") modeText = "ส่งแล้ว";
-    else if (viewMode === "qr_pending") modeText = "ยอด QR";
-    else if (viewMode === "reported") modeText = "รายงาน";
-    else modeText = "วันนี้";
 
-    const position = isRealTimeMode ? currentPosition : startPosition;
+    // กำหนดชื่อโหมดหลัก
+    const modeNames: Record<typeof viewMode, string> = {
+      today: "วันนี้ (ที่ต้องส่ง)",
+      delivered: "ส่งแล้ว",
+      qr_pending: "ยอด QR (รอปิด)",
+      reported: "รายงาน",
+    };
+    const modeText = modeNames[viewMode];
+
+    // ตรวจสอบว่ามีการกรองหรือไม่
     const hasFilter =
       searchTerm.trim() ||
       showNoCoords ||
@@ -616,34 +669,47 @@ export default function NavigationPage() {
       districtFilter ||
       provinceFilter;
 
-    // คำนวณยอดรวมสำหรับทั้ง "ส่งแล้ว" และ "ยอด QR"
+    // คำนวณยอดรวม (เฉพาะโหมดที่เกี่ยวข้อง)
     let totalAmount = 0;
     if (viewMode === "delivered" || viewMode === "qr_pending") {
-      totalAmount = filteredList.reduce((sum, h) => {
-        return sum + extractAmountFromNote(h.delivery_note);
-      }, 0);
+      totalAmount = filteredList.reduce(
+        (sum, h) => sum + extractAmountFromNote(h.delivery_note),
+        0,
+      );
+    }
+    const amountText =
+      totalAmount > 0
+        ? ` รวมยอด ${totalAmount.toLocaleString("th-TH", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })} บาท`
+        : "";
+
+    // สร้างข้อความหลัก
+    let mainText = `${modeText} • พบ ${displayedCount} บ้าน`;
+
+    // เพิ่มส่วนยอดเงิน (ถ้ามี)
+    if (amountText) {
+      mainText += amountText;
     }
 
+    // เพิ่มสถานะกรอง
     if (hasFilter) {
-      if (viewMode === "delivered") {
-        return `${modeText} • กรองแล้ว • พบ ${displayedCount} บ้าน รวมยอด ${totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท (จากทั้งหมด ${totalInList})`;
-      }
-      if (viewMode === "qr_pending") {
-        return `${modeText} • กรองแล้ว • พบ ${displayedCount} บ้าน รวมยอด ${totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท (จากทั้งหมด ${totalInList})`;
-      }
-      return `${modeText} • กรองแล้ว • พบ ${displayedCount} บ้าน (จากทั้งหมด ${totalInList})`;
+      mainText += ` (กรองแล้ว จากทั้งหมด ${totalInList} บ้าน)`;
+    } else if (totalInList !== displayedCount) {
+      mainText += ` (จากทั้งหมด ${totalInList} บ้าน)`;
     }
 
+    // กรณีพิเศษ: วันนี้ + มีตำแหน่ง → เปลี่ยนข้อความให้ชัดเจนขึ้น
+    const position = isRealTimeMode ? currentPosition : startPosition;
     if (viewMode === "today" && position) {
-      return `ที่ต้องส่ง • พบ ${displayedCount} บ้าน`;
+      mainText = `ที่ต้องส่งวันนี้ • พบ ${displayedCount} บ้าน`;
+      if (!hasFilter && totalInList !== displayedCount) {
+        mainText += ` (จากทั้งหมด ${totalInList} บ้าน)`;
+      }
     }
-    if (viewMode === "delivered") {
-      return `ส่งแล้ว • พบ ${displayedCount} บ้าน รวมยอด ${totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
-    }
-    if (viewMode === "qr_pending") {
-      return `ยอด QR • พบ ${displayedCount} บ้าน รวมยอด ${totalAmount.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท`;
-    }
-    return `${modeText} • พบ ${displayedCount} บ้าน`;
+
+    return mainText;
   };
 
   // แสดงหมายเหตุแบบสั้น (ใช้ในแท็บ ส่งแล้ว และ QR)
@@ -950,31 +1016,74 @@ export default function NavigationPage() {
       toast.error("กรุณาตั้งจุดเริ่มต้นทางก่อน");
       return;
     }
+
     const validHouses = filteredList.filter(
       (h): h is NavigationHouseWithDistance & { lat: number; lng: number } =>
         !!h.lat && !!h.lng,
     );
+
     if (validHouses.length === 0) {
       toast.error("ไม่มีบ้านที่มีพิกัดในรายการปัจจุบัน");
       return;
     }
-    const maxPoints = 20;
-    const housesToUse = validHouses.slice(0, maxPoints);
+
+    const maxPoints = 20; // Google Maps จำกัดจำนวน waypoints
+    let housesToUse = validHouses.slice(0, maxPoints);
+
+    // Offset พิกัดที่ซ้ำกัน
+    const offsetCoords = offsetDuplicateCoordinates(housesToUse);
+
     const coords = [
-      `${position.lat},${position.lng}`,
-      ...housesToUse.map((h) => `${h.lat},${h.lng}`),
+      `${position.lat},${position.lng}`, // จุดเริ่มต้น
+      ...offsetCoords.map((c) => `${c.lat.toFixed(6)},${c.lng.toFixed(6)}`),
     ].join("/");
+
     const url = `https://www.google.com/maps/dir/${coords}`;
     window.open(url, "_blank");
+
     const total = validHouses.length;
     const used = housesToUse.length;
     const msg =
       used < total
         ? `เปิดเส้นทาง ${used} จุดแรก (จากทั้งหมด ${total} จุด)`
-        : `เปิดเส้นทางทั้งหมด ${used} จุด`;
+        : `เปิดเส้นทางทั้งหมด ${used} จุด (ปรับตำแหน่งบ้านที่ซ้ำกันแล้ว)`;
+
     toast.success(msg);
     setIsFabOpen(false);
   };
+
+  // ฟังก์ชันช่วย offset พิกัดเมื่อซ้ำกัน (หน่วย ≈ เมตร)
+  function offsetDuplicateCoordinates(
+    houses: (NavigationHouseWithDistance & { lat: number; lng: number })[],
+    radiusMeters: number = 25, // รัศมีเริ่มต้น (ปรับได้)
+    angleStepDegrees: number = 60, // มุมหมุนแต่ละจุด (60° = 6 จุดรอบวงกลม)
+  ): Array<{ lat: number; lng: number }> {
+    const coordMap = new globalThis.Map<string, number>();
+    const offsetHouses: Array<{ lat: number; lng: number }> = [];
+
+    houses.forEach((house) => {
+      const key = `${house.lat.toFixed(6)},${house.lng.toFixed(6)}`;
+      const count = (coordMap.get(key) || 0) + 1;
+      coordMap.set(key, count);
+
+      if (count === 1) {
+        // จุดแรก ไม่ต้อง offset
+        offsetHouses.push({ lat: house.lat, lng: house.lng });
+      } else {
+        // offset จุดที่ซ้ำ
+        const angle = (count - 1) * angleStepDegrees * (Math.PI / 180);
+        const offsetLat = house.lat + (radiusMeters / 111320) * Math.cos(angle);
+        const offsetLng =
+          house.lng +
+          (radiusMeters / (111320 * Math.cos(house.lat * (Math.PI / 180)))) *
+            Math.sin(angle);
+
+        offsetHouses.push({ lat: offsetLat, lng: offsetLng });
+      }
+    });
+
+    return offsetHouses;
+  }
 
   const openEditModal = (house: NavigationHouse) => {
     setEditingHouse(house);
@@ -1372,48 +1481,75 @@ export default function NavigationPage() {
           </button>
         </div>
       </div>
-      {/* ตัวกรองพิกัด */}
-      <div className="flex flex-wrap items-center gap-8 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-200">
-        {/* คำนวณจำนวนบ้านที่มีและไม่มีพิกัดจาก list เดิม (ก่อนกรองอื่น ๆ) */}
-        {(() => {
-          const noCoordsCount = list.filter((h) => !h.lat || !h.lng).length;
-          const withCoordsCount = list.filter((h) => h.lat && h.lng).length;
-          return (
-            <>
-              {/* เพิ่มพิกัดแล้ว – แสดงด้านหน้า */}
-              <label className="flex items-center gap-3 text-sm font-medium text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showWithCoords}
-                  onChange={(e) => setShowWithCoords(e.target.checked)}
-                  className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
-                />
-                <span className="flex items-center gap-2">
-                  เพิ่มพิกัดแล้ว
-                  <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-green-700 bg-green-100 rounded-full">
-                    {withCoordsCount}
+
+      {/* ตัวกรองพิกัด + เรียงตามถนน – แถวเดียวแนวนอน */}
+      <div className="mb-8 overflow-x-auto">
+        <div className="flex items-center gap-6 md:gap-8 bg-gray-50 px-5 py-4 rounded-xl border border-gray-200 min-w-max">
+          {(() => {
+            const noCoordsCount = list.filter((h) => !h.lat || !h.lng).length;
+            const withCoordsCount = list.filter((h) => h.lat && h.lng).length;
+
+            return (
+              <>
+                {/* มีพิกัด */}
+                <label className="flex items-center gap-3 text-sm font-medium text-gray-700 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={showWithCoords}
+                    onChange={(e) => setShowWithCoords(e.target.checked)}
+                    className="w-5 h-5 text-green-600 rounded focus:ring-green-500"
+                  />
+                  <span className="flex items-center gap-2">
+                    มีพิกัด
+                    <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-green-700 bg-green-100 rounded-full min-w-[2rem]">
+                      {withCoordsCount}
+                    </span>
                   </span>
-                </span>
-              </label>
-              {/* ยังไม่เพิ่มพิกัด – แสดงด้านหลัง */}
-              <label className="flex items-center gap-3 text-sm font-medium text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showNoCoords}
-                  onChange={(e) => setShowNoCoords(e.target.checked)}
-                  className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500"
-                />
-                <span className="flex items-center gap-2">
-                  ยังไม่เพิ่มพิกัด
-                  <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-orange-700 bg-orange-100 rounded-full">
-                    {noCoordsCount}
+                </label>
+
+                {/* ไม่มีพิกัด */}
+                <label className="flex items-center gap-3 text-sm font-medium text-gray-700 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={showNoCoords}
+                    onChange={(e) => setShowNoCoords(e.target.checked)}
+                    className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500"
+                  />
+                  <span className="flex items-center gap-2">
+                    ไม่มีพิกัด
+                    <span className="inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold text-orange-700 bg-orange-100 rounded-full min-w-[2rem]">
+                      {noCoordsCount}
+                    </span>
                   </span>
-                </span>
-              </label>
-            </>
-          );
-        })()}
+                </label>
+
+                {/* เรียงตามถนน */}
+                <label className="flex items-center gap-3 text-sm font-medium text-gray-700 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={sortByRoad}
+                    onChange={(e) => setSortByRoad(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="flex items-center gap-2">
+                    เรียงตามถนน
+                    <span
+                      className={`inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold rounded-full min-w-[2rem] transition-colors ${
+                        sortByRoad
+                          ? "text-indigo-700 bg-indigo-100"
+                          : "text-gray-600 bg-gray-200"
+                      }`}
+                    >
+                      {sortByRoad ? "เปิด" : "ปิด"}
+                    </span>
+                  </span>
+                </label>
+              </>
+            );
+          })()}
+        </div>
       </div>
+
       {/* รายการบ้าน */}
       {currentHouses.length === 0 ? (
         <div className="text-center py-20">
@@ -1576,6 +1712,13 @@ export default function NavigationPage() {
                         </p>
                       )}
 
+                      {/* เพิ่มส่วนแสดง driver_note (คอมเมนต์ของคนขับ) */}
+                      {h.driver_note && (
+                        <p className="text-xs text-purple-700 mt-2 italic border-l-4 border-purple-400 pl-3">
+                          คนขับบันทึก: {h.driver_note}
+                        </p>
+                      )}
+
                       {/* สถานะการส่ง - แสดงแบบสั้นทั้งในแท็บส่งแล้วและ QR */}
                       {h.delivery_status === "delivered" && (
                         <div className="mt-3">
@@ -1632,6 +1775,18 @@ export default function NavigationPage() {
                         title="ลบออกจากการนำทาง"
                       >
                         <Trash2 className="w-5 h-5" />
+                      </button>
+
+                      {/* ปุ่มคอมเมนต์ */}
+                      <button
+                        type="button"
+                        onClick={() => openCommentModal(h)}
+                        onMouseDown={(e) => e.preventDefault()}
+                        className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition active:scale-95"
+                        title="บันทึกคอมเมนต์ / ฝากข้อความ"
+                      >
+                        <MessageSquare className="w-5 h-5" />{" "}
+                        {/* ไอคอนจาก lucide-react */}
                       </button>
 
                       {/* ปุ่มรายงาน */}
@@ -2146,6 +2301,7 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
+
       {/* Modal ตั้งจุดเริ่มต้นทาง */}
       {showStartModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -2484,11 +2640,77 @@ export default function NavigationPage() {
         </div>
       )}
 
-      {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ */}
+      {/* Modal บันทึกคอมเมนต์ */}
+      {showCommentModal && houseToComment && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold text-purple-600 mb-4">
+              บันทึกคอมเมนต์ / ฝากข้อความ
+            </h2>
+
+            {/* ข้อมูลบ้าน */}
+            <div className="bg-gray-50 p-4 rounded-xl mb-5">
+              <p className="font-bold">{houseToComment.full_name}</p>
+              <p className="text-sm text-gray-600">{houseToComment.phone}</p>
+              <p className="text-xs text-gray-500 line-clamp-2">
+                {houseToComment.address}
+              </p>
+            </div>
+
+            {/* ช่องกรอกคอมเมนต์ */}
+            <textarea
+              placeholder="เช่น: เจ้านี้ให้ส่งของไปที่หน้าบ้าน / ฝากเงินกับแม่บ้าน / ต้องโทรก่อนถึง..."
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              rows={5}
+              autoFocus
+              className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 outline-none resize-none text-sm"
+            />
+
+            {/* Preview */}
+            <div className="mt-4 p-3 bg-purple-50 rounded-xl">
+              <p className="text-sm text-purple-800 font-medium">
+                คอมเมนต์ที่จะบันทึก:
+                <span className="block font-bold mt-1">
+                  {commentText.trim() || "ยังไม่ได้กรอก..."}
+                </span>
+              </p>
+            </div>
+
+            {/* ปุ่ม */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowCommentModal(false);
+                  setCommentText("");
+                }}
+                className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmComment}
+                disabled={isSubmitting}
+                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกคอมเมนต์"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ (ไม่มีปุ่มใช้ยอดนี้) */}
       {showCalculatorModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          {/* กล่องเครื่องคิดเลขขนาดกะทัดรัด อยู่กึ่งกลาง ไม่เลื่อนได้ */}
-          <div className="bg-white rounded-2xl shadow-2xl w-80 max-w-full overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md sm:max-w-lg overflow-hidden">
             {/* Header */}
             <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 text-center">
               <h3 className="text-lg font-bold">เครื่องคิดเลขเงินทอน</h3>
@@ -2507,33 +2729,36 @@ export default function NavigationPage() {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       }) + " บาท"
-                    : "กรุณากรอกยอด";
+                    : "—";
                 })()}
               </p>
             </div>
 
-            {/* ช่องแสดงเงินที่จ่าย + ผลลัพธ์เงินทอน */}
+            {/* ช่องแสดงเงินที่จ่าย + ผลลัพธ์เงินทอน (แสดงตลอด) */}
             <div className="p-5 bg-gray-100">
-              <div className="bg-white rounded-xl px-4 py-5 text-center shadow-inner mb-3">
-                <p className="text-3xl font-bold text-gray-800">
-                  {calculatorInput || "0"} บาท
+              {/* เงินที่จ่าย */}
+              <div className="bg-white rounded-xl px-4 py-6 text-center shadow-inner mb-4">
+                <p className="text-4xl font-bold text-gray-800">
+                  {calculatorInput || "0"}
                 </p>
+                <p className="text-sm text-gray-500 mt-1">บาทที่ได้รับ</p>
               </div>
 
-              {calculatorResult && (
-                <div
-                  className={`py-3 px-4 rounded-xl text-center text-xl font-bold mb-4 transition-all ${
-                    calculatorResult.includes("เงินทอน")
-                      ? "bg-green-100 text-green-700 border-2 border-green-300"
-                      : "bg-red-100 text-red-700 border-2 border-red-300"
-                  }`}
-                >
-                  {calculatorResult}
-                </div>
-              )}
+              {/* ผลลัพธ์เงินทอน/ขาด - แสดงตลอด */}
+              <div
+                className={`py-4 px-5 rounded-xl text-center text-xl font-bold transition-all ${
+                  calculatorResult?.includes("เงินทอน")
+                    ? "bg-green-100 text-green-800 border-2 border-green-300"
+                    : calculatorResult?.includes("ขาด")
+                      ? "bg-red-100 text-red-800 border-2 border-red-300"
+                      : "bg-gray-100 text-gray-600 border border-gray-300"
+                }`}
+              >
+                {calculatorResult || "รอกรอกจำนวนเงินที่จ่าย"}
+              </div>
             </div>
 
-            {/* แป้นตัวเลข - ปุ่มใหญ่ ใช้งานง่าย */}
+            {/* แป้นตัวเลข */}
             <div className="grid grid-cols-4 gap-2 p-4 bg-gray-50">
               {["1", "2", "3", "C"].map((key) => (
                 <button
@@ -2550,11 +2775,12 @@ export default function NavigationPage() {
                       });
                     }
                   }}
-                  className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
+                  className="h-16 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
                 >
                   {key}
                 </button>
               ))}
+
               {["4", "5", "6", "00"].map((key) => (
                 <button
                   key={key}
@@ -2565,17 +2791,18 @@ export default function NavigationPage() {
                       return newVal;
                     });
                   }}
-                  className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
+                  className="h-16 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
                 >
                   {key}
                 </button>
               ))}
+
               {["7", "8", "9", ""].map((key, index) => (
                 <button
                   key={index}
                   onClick={() => {
                     if (index === 3) {
-                      // ปุ่ม Backspace (ตำแหน่งสุดท้าย)
+                      // Backspace
                       setCalculatorInput((prev) => {
                         const newVal = prev.slice(0, -1);
                         updateChangeResult(newVal);
@@ -2589,7 +2816,7 @@ export default function NavigationPage() {
                       });
                     }
                   }}
-                  className={`h-14 text-2xl font-bold rounded-xl shadow-md active:scale-95 transition-transform ${
+                  className={`h-16 text-2xl font-bold rounded-xl shadow-md active:scale-95 transition-transform ${
                     index === 3
                       ? "bg-red-500 text-white hover:bg-red-600"
                       : "bg-white hover:bg-gray-100"
@@ -2598,6 +2825,7 @@ export default function NavigationPage() {
                   {index === 3 ? "←" : key}
                 </button>
               ))}
+
               <button
                 onClick={() => {
                   setCalculatorInput((prev) => {
@@ -2606,44 +2834,17 @@ export default function NavigationPage() {
                     return newVal;
                   });
                 }}
-                className="h-14 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
+                className="h-16 text-2xl font-bold bg-white rounded-xl shadow-md hover:bg-gray-100 active:scale-95 transition-transform"
               >
                 0
               </button>
-
-              {/* ปุ่มใช้ยอดนี้ - เต็มแถว */}
-              <button
-                onClick={() => {
-                  const paid = parseFloat(calculatorInput || "0");
-                  const due = deliverNote.includes("เงินสด")
-                    ? parseFloat(localCash || "0")
-                    : parseFloat(localTransfer || "0");
-
-                  if (!isNaN(paid) && due > 0) {
-                    const paidStr = paid.toFixed(2);
-                    if (deliverNote.includes("เงินสด")) {
-                      setLocalCash(paidStr);
-                    } else {
-                      setLocalTransfer(paidStr);
-                    }
-                    setShowCalculatorModal(false);
-                    toast.success(
-                      `ตั้งเงินที่จ่ายเป็น ${paid.toLocaleString("th-TH")} บาท`,
-                    );
-                  }
-                }}
-                disabled={!calculatorInput || parseFloat(calculatorInput) <= 0}
-                className="h-14 col-span-4 mt-3 text-xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl shadow-lg disabled:opacity-50 active:scale-95 transition-transform"
-              >
-                ใช้ยอดนี้
-              </button>
             </div>
 
-            {/* ปุ่มปิด */}
-            <div className="px-4 pb-4">
+            {/* ปุ่มปิด - เต็มความกว้าง */}
+            <div className="px-4 pb-5">
               <button
                 onClick={() => setShowCalculatorModal(false)}
-                className="w-full py-3 bg-gray-200 rounded-xl font-medium hover:bg-gray-300 active:scale-95 transition"
+                className="w-full py-4 bg-gray-200 rounded-xl font-medium hover:bg-gray-300 active:scale-95 transition text-lg"
               >
                 ปิด
               </button>
