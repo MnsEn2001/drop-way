@@ -1028,7 +1028,7 @@ export default function NavigationPage() {
     }
 
     const maxPoints = 20; // Google Maps จำกัดจำนวน waypoints
-    let housesToUse = validHouses.slice(0, maxPoints);
+    const housesToUse = validHouses.slice(0, maxPoints);
 
     // Offset พิกัดที่ซ้ำกัน
     const offsetCoords = offsetDuplicateCoordinates(housesToUse);
