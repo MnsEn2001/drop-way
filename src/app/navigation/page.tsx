@@ -1706,17 +1706,32 @@ export default function NavigationPage() {
                           </span>
                         </p>
                       )}
+                      {/* หมายเหตุทั่วไปของบ้าน */}
                       {h.note && (
-                        <p className="text-xs text-amber-700 mt-3 italic">
-                          หมายเหตุ: {h.note}
-                        </p>
+                        <div className="mt-3 text-xs">
+                          <div className="flex">
+                            <span className="font-semibold text-amber-800 shrink-0">
+                              หมายเหตุ:{" "}
+                            </span>
+                            <div className="text-amber-700 italic whitespace-pre-line">
+                              {h.note}
+                            </div>
+                          </div>
+                        </div>
                       )}
 
-                      {/* เพิ่มส่วนแสดง driver_note (คอมเมนต์ของคนขับ) */}
+                      {/* คนขับบันทึก (driver_note) */}
                       {h.driver_note && (
-                        <p className="text-xs text-purple-700 mt-2 italic border-l-4 border-purple-400 pl-3">
-                          คนขับบันทึก: {h.driver_note}
-                        </p>
+                        <div className="mt-2 text-xs">
+                          <div className="flex">
+                            <span className="font-semibold text-purple-800 shrink-0">
+                              คนขับบันทึก:{" "}
+                            </span>
+                            <div className="text-purple-700 italic whitespace-pre-line">
+                              {h.driver_note}
+                            </div>
+                          </div>
+                        </div>
                       )}
 
                       {/* สถานะการส่ง - แสดงแบบสั้นทั้งในแท็บส่งแล้วและ QR */}
@@ -1741,11 +1756,11 @@ export default function NavigationPage() {
                         </div>
                       )}
 
-                      {/* สถานะรายงาน - ใช้แท็กสีเล็กเหมือนกัน */}
-                      {h.delivery_status === "reported" && (
-                        <div className="mt-3">
+                      {/* สถานะรายงาน - แสดงแบบข้อความเต็ม ไม่มีไอคอน + รองรับหลายบรรทัด */}
+                      {h.delivery_status === "reported" && h.report_reason && (
+                        <div className="mt-3 text-xs">
                           <div
-                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm ${
+                            className={`flex items-start gap-1.5 px-3 py-1.5 rounded-full font-bold text-white shadow-sm ${
                               h.report_reason?.includes("โทรไม่รับ")
                                 ? "bg-pink-600"
                                 : h.report_reason?.includes("เลื่อน")
@@ -1755,9 +1770,11 @@ export default function NavigationPage() {
                                     : "bg-gray-600"
                             }`}
                           >
-                            <AlertCircle className="w-4 h-4" />
-                            <span className="line-clamp-1">
-                              รายงาน: {h.report_reason || "ไม่มีเหตุผล"}
+                            <span className="font-semibold shrink-0 whitespace-nowrap">
+                              รายงาน:{" "}
+                            </span>
+                            <span className="whitespace-pre-line">
+                              {h.report_reason}
                             </span>
                           </div>
                         </div>

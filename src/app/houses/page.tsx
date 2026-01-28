@@ -1079,9 +1079,16 @@ export default function HousesPage() {
                     <span className="line-clamp-3">{h.address}</span>
                   </div>
                   {h.note && (
-                    <p className="text-xs text-amber-700 mt-3 italic">
-                      หมายเหตุ: {h.note}
-                    </p>
+                    <div className="mt-3 text-xs">
+                      <div className="flex">
+                        <span className="font-semibold text-amber-800 shrink-0">
+                          หมายเหตุ:{" "}
+                        </span>
+                        <div className="text-amber-700 italic whitespace-pre-line">
+                          {h.note}
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
 
