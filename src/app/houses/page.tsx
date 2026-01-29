@@ -20,7 +20,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  Scan,
 } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";

@@ -189,7 +189,7 @@ export default function NavigationPage() {
   const [isFabOpen, setIsFabOpen] = useState(false);
   // View Mode: today | delivered | reported
   const [viewMode, setViewMode] = useState<
-    "today" | "delivered" | "reported" | "qr_pending"
+    "today" | "delivered" | "reported" | "qr_pending" | "calculator"
   >("today");
 
   // Modal ส่งงาน
@@ -372,7 +372,7 @@ export default function NavigationPage() {
 
   // Ref เพื่อเก็บค่าตัวกรองก่อนหน้า — ใช้ป้องกันการรีเซ็ตหน้าโดยไม่จำเป็น
   const prevFiltersRef = useRef<{
-    viewMode: "today" | "delivered" | "reported" | "qr_pending";
+    viewMode: "today" | "delivered" | "reported" | "qr_pending" | "calculator";
     searchTerm: string;
     showNoCoords: boolean;
     showWithCoords: boolean;
@@ -387,7 +387,7 @@ export default function NavigationPage() {
     searchInPhone: boolean;
     searchInNote: boolean;
   }>({
-    viewMode: "today" as const, // ใช้ as const เพื่อให้ TypeScript รู้ว่าเป็น literal
+    viewMode: "today" as const,
     searchTerm: "",
     showNoCoords: false,
     showWithCoords: false,
@@ -402,6 +402,7 @@ export default function NavigationPage() {
     searchInPhone: false,
     searchInNote: true,
   });
+
   // โหลดค่าจุดคงที่จาก localStorage
   useEffect(() => {
     const saved = localStorage.getItem("navigationStartPosition");
@@ -685,13 +686,17 @@ export default function NavigationPage() {
     const displayedCount = filteredList.length;
     const totalInList = list.length;
 
+    if (viewMode === "calculator") {
+      return "คำนวณเป้าหมายวันนี้";
+    }
     // กำหนดชื่อโหมดหลัก
-    const modeNames: Record<typeof viewMode, string> = {
+    const modeNames: Record<Exclude<typeof viewMode, "calculator">, string> = {
       today: "วันนี้ (ที่ต้องส่ง)",
       delivered: "ส่งแล้ว",
       qr_pending: "ยอด QR (รอปิด)",
       reported: "รายงาน",
     };
+
     const modeText = modeNames[viewMode];
 
     // ตรวจสอบว่ามีการกรองหรือไม่
