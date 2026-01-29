@@ -1625,15 +1625,14 @@ export default function NavigationPage() {
                   pattern="[0-9]*"
                   value={targetCodPercent === 0 ? "" : targetCodPercent}
                   onChange={(e) => {
-                    let val = e.target.value.replace(/[^0-9.]/g, ""); // ลบตัวที่ไม่ใช่เลขและจุด
-                    val = val.replace(/(\..*)\./g, "$1"); // อนุญาตจุดเดียว
+                    let val = e.target.value.replace(/[^0-9.]/g, "");
+                    val = val.replace(/(\..*)\./g, "$1");
                     const parts = val.split(".");
                     if (parts[1] && parts[1].length > 2) {
-                      val = parts[0] + "." + parts[1].slice(0, 2); // จำกัด 2 ทศนิยม
+                      val = parts[0] + "." + parts[1].slice(0, 2);
                     }
-                    setTodayCodAmount(
-                      val === "" || val === "." ? 0 : Number(val),
-                    );
+                    const num = val === "" || val === "." ? 0 : Number(val);
+                    setTargetCodPercent(num); // ← แก้ตรงนี้! เปลี่ยนจาก setTodayCodAmount เป็น setTargetCodPercent
                   }}
                   className="w-16 px-2 py-1.5 text-lg font-bold text-center border border-amber-300 rounded-md focus:border-amber-500 focus:ring-1 focus:ring-amber-400 outline-none"
                   placeholder="0"
