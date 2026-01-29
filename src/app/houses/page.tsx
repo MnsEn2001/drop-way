@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { House } from "@/types/house";
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { createWorker } from "tesseract.js";
 import {
   Home,
   MapPin,
@@ -29,12 +28,6 @@ import { toast } from "react-hot-toast";
 const ITEMS_PER_PAGE = 20;
 
 export default function HousesPage() {
-  const [ocrTexts, setOcrTexts] = useState<string[]>([]);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [showScanner, setShowScanner] = useState(false);
-  const scannerRef = useRef<HTMLDivElement>(null);
-  const [selectedText, setSelectedText] = useState<string | null>(null);
-
   const [houses, setHouses] = useState<House[]>([]);
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,13 +64,6 @@ export default function HousesPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [coordsInput, setCoordsInput] = useState<string>("");
-  const [cameraKey, setCameraKey] = useState(0);
-  const closeScanner = () => {
-    setShowScanner(false);
-    setOcrTexts([]);
-    setCapturedImage(null);
-    setSelectedText(null); // 👈 เพิ่มตรงนี้
-  };
 
   const [hasShownVillageSuggestions, setHasShownVillageSuggestions] =
     useState(false);
@@ -137,118 +123,6 @@ export default function HousesPage() {
     เชียงทอง: { district: "วังเจ้า", province: "ตาก" },
     ประดาง: { district: "วังเจ้า", province: "ตาก" },
   };
-
-  useEffect(() => {
-    let video: HTMLVideoElement | null = null;
-    let stream: MediaStream | null = null;
-
-    const startCamera = async () => {
-      if (!showScanner || !scannerRef.current) return;
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" },
-        });
-        video = document.createElement("video");
-        video.srcObject = stream;
-        video.play();
-        scannerRef.current.innerHTML = "";
-        scannerRef.current.appendChild(video);
-
-        // ปุ่มถ่ายภาพ
-        const captureBtn = document.createElement("button");
-        captureBtn.innerText = "ถ่ายภาพ";
-        captureBtn.className =
-          "mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg";
-        captureBtn.onclick = async () => {
-          if (!video) return;
-          const canvas = document.createElement("canvas");
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext("2d");
-          if (ctx) {
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imgUrl = canvas.toDataURL("image/png");
-            setCapturedImage(imgUrl);
-            if (stream) {
-              stream.getTracks().forEach((track) => track.stop());
-            }
-            if (video.parentNode) video.parentNode.removeChild(video);
-            captureBtn.remove();
-          }
-        };
-        scannerRef.current.appendChild(captureBtn);
-      } catch (err) {
-        console.error("Camera error:", err);
-        toast.error("ไม่สามารถเปิดกล้องได้");
-        setShowScanner(false);
-      }
-    };
-
-    if (showScanner) {
-      startCamera();
-    }
-
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
-      }
-    };
-  }, [showScanner, cameraKey]);
-
-  useEffect(() => {
-    if (!capturedImage) return;
-
-    const recognizeText = async () => {
-      try {
-        const worker = await createWorker("tha+eng");
-
-        // สร้าง canvas และ preprocess
-        const img = new Image();
-        img.src = capturedImage;
-        await new Promise((resolve) => (img.onload = resolve));
-
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Cannot get canvas context");
-
-        ctx.drawImage(img, 0, 0);
-
-        // Grayscale + Binarize
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        for (let i = 0; i < data.length; i += 4) {
-          const gray =
-            data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          const value = gray > 140 ? 255 : 0;
-          data[i] = data[i + 1] = data[i + 2] = value;
-        }
-        ctx.putImageData(imageData, 0, 0);
-
-        // ⭐ ส่ง canvas โดยตรงให้ worker แทน data URL
-        const {
-          data: { text },
-        } = await worker.recognize(canvas);
-
-        await worker.terminate();
-
-        const lines = text
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => line.length >= 3 && /[\u0E00-\u0E7F]/.test(line));
-
-        setOcrTexts(lines.length > 0 ? lines : ["ไม่พบข้อความที่ชัดเจน"]);
-      } catch (err) {
-        console.error("OCR Error:", err);
-        toast.error("สแกนไม่สำเร็จ");
-        setOcrTexts(["เกิดข้อผิดพลาด"]);
-      }
-    };
-
-    recognizeText();
-  }, [capturedImage]);
 
   // เพิ่ม useEffect นี้ (ข้างๆ useEffect อื่นๆ)
   useEffect(() => {
@@ -965,21 +839,13 @@ export default function HousesPage() {
                 clearSearch();
                 searchInputRef.current?.focus();
               }}
-              className="absolute right-16 top-1/2 -translate-y-1/2 p-8 text-gray-500 hover:text-gray-700 z-10"
+              className="absolute right-6 top-1/2 -translate-y-1/2 p-8 text-gray-500 hover:text-gray-700 z-10"
               type="button"
             >
               <XIcon className="w-5 h-5" />
             </button>
           )}
-          {/* 👇 ปุ่มสแกนใหม่ */}
-          <button
-            onClick={() => setShowScanner(true)}
-            className="absolute right-8 top-1/2 -translate-y-1/2 p-5 text-green-500 hover:text-blue-600 z-10"
-            type="button"
-            title="สแกนข้อความจากภาพ"
-          >
-            <Scan className="w-5 h-5" />
-          </button>
+
           <button
             onClick={() => setShowFilterModal(true)}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
@@ -1317,162 +1183,6 @@ export default function HousesPage() {
                 ใช้ตัวกรอง
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scanner Modal - เวอร์ชันปรับปรุง */}
-      {showScanner && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">
-                {!capturedImage ? "สแกนข้อความจากภาพ" : "ผลการสแกน"}
-              </h3>
-              <button
-                onClick={closeScanner}
-                className="p-2 text-gray-500 hover:text-gray-700"
-              >
-                <XIcon className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* กล้อง + กรอบสแกน */}
-            {!capturedImage && !ocrTexts.length && (
-              <div className="relative">
-                <div
-                  ref={scannerRef}
-                  className="w-full h-96 bg-black rounded-xl overflow-hidden relative"
-                />
-                {/* กรอบสแกนกลางจอ */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-80 h-48 border-4 border-white border-dashed rounded-2xl opacity-80" />
-                  <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-4 py-2 rounded-full">
-                    วางข้อความในกรอบนี้
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 text-center mt-4">
-                  💡 ถือกล้องให้ตรง แสงสว่างสม่ำเสมอ หลีกเลี่ยงเงาและการสะท้อน
-                </p>
-              </div>
-            )}
-
-            {/* ปุ่มถ่ายภาพ (แสดงเฉพาะตอนกล้องเปิด) */}
-            {!capturedImage && !ocrTexts.length && (
-              <button
-                type="button"
-                onClick={async () => {
-                  const video = scannerRef.current?.querySelector("video");
-                  if (!video) return;
-
-                  const canvas = document.createElement("canvas");
-                  const ctx = canvas.getContext("2d");
-                  if (!ctx) return;
-
-                  // Crop เฉพาะบริเวณกรอบกลางจอ (80% ของความกว้าง/สูง)
-                  const cropWidth = video.videoWidth * 0.7;
-                  const cropHeight = video.videoHeight * 0.5;
-                  const cropX = (video.videoWidth - cropWidth) / 2;
-                  const cropY = (video.videoHeight - cropHeight) / 2;
-
-                  canvas.width = cropWidth;
-                  canvas.height = cropHeight;
-
-                  ctx.drawImage(
-                    video,
-                    cropX,
-                    cropY,
-                    cropWidth,
-                    cropHeight,
-                    0,
-                    0,
-                    cropWidth,
-                    cropHeight,
-                  );
-
-                  const imgUrl = canvas.toDataURL("image/png");
-                  setCapturedImage(imgUrl);
-
-                  // หยุดกล้อง
-                  const stream = video.srcObject as MediaStream;
-                  stream.getTracks().forEach((track) => track.stop());
-                  video.remove();
-                }}
-                className="mt-6 w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-lg font-bold rounded-xl shadow-lg active:scale-95 transition"
-              >
-                📸 ถ่ายภาพ
-              </button>
-            )}
-
-            {/* แสดงภาพที่ถ่ายแล้ว */}
-            {capturedImage && !ocrTexts.length && (
-              <div className="my-4">
-                <img
-                  src={capturedImage}
-                  alt="Captured"
-                  className="w-full rounded-xl shadow-md"
-                />
-                <p className="text-center text-sm text-gray-500 mt-2">
-                  กำลังประมวลผลข้อความ...
-                </p>
-              </div>
-            )}
-
-            {/* แสดงผล OCR */}
-            {ocrTexts.length > 0 && (
-              <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-700">
-                  แตะข้อความที่ต้องการเพื่อใช้ค้นหา:
-                </p>
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {ocrTexts.map((text, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setSelectedText(text)}
-                      className={`w-full text-left p-4 rounded-xl text-base transition-all ${
-                        selectedText === text
-                          ? "bg-indigo-600 text-white shadow-md"
-                          : "bg-gray-100 hover:bg-gray-200"
-                      }`}
-                    >
-                      {text}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex gap-3 mt-4">
-                  <button
-                    onClick={() => {
-                      setOcrTexts([]);
-                      setCapturedImage(null);
-                      setSelectedText(null);
-                      setCameraKey((prev) => prev + 1); // บังคับรีสตาร์ทกล้อง
-                    }}
-                    className="flex-1 py-3 bg-gray-200 rounded-xl font-medium hover:bg-gray-300"
-                  >
-                    ถ่ายใหม่
-                  </button>
-                  <button
-                    disabled={!selectedText}
-                    onClick={() => {
-                      if (selectedText) {
-                        setSearchTerm(selectedText);
-                        closeScanner();
-                        toast.success("นำข้อความไปค้นหาแล้ว!");
-                      }
-                    }}
-                    className={`flex-1 py-3 rounded-xl font-bold transition-all ${
-                      selectedText
-                        ? "bg-green-600 text-white shadow-md hover:bg-green-700"
-                        : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                    }`}
-                  >
-                    ใช้ข้อความนี้ค้นหา
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
