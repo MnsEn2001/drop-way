@@ -1706,11 +1706,11 @@ export default function NavigationPage() {
 
           {/* เป้า - กระชับมาก + แสดงทศนิยมครบ */}
           <div className="space-y-4">
-            {/* เป้า COD */}
+            {/* เป้า COD - ทำเหมือนเป้าส่งชิ้น */}
             <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-amber-800">
-                  เป้า COD
+                  เป้า COD วันนี้
                 </span>
                 <div className="flex items-center gap-1.5">
                   <input
@@ -1718,8 +1718,8 @@ export default function NavigationPage() {
                     inputMode="numeric"
                     value={targetCodPercent || ""}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, ""); // ใช้ const เลย ไม่ต้อง assign ใหม่
-                      const num = val ? Math.min(100, Number(val)) : 0;
+                      const raw = e.target.value.replace(/[^0-9]/g, "");
+                      const num = raw ? Math.min(100, Number(raw)) : 0;
                       setTargetCodPercent(num);
                     }}
                     className="w-14 px-2 py-1.5 text-base font-bold text-center border border-amber-400 rounded-md focus:border-amber-600 focus:ring-1 outline-none bg-white"
@@ -1728,32 +1728,42 @@ export default function NavigationPage() {
                   <span className="text-base font-bold text-amber-700">%</span>
                 </div>
               </div>
+
               {(() => {
                 const total = todayCodAmount * (targetCodPercent / 100);
-                const cash = total * 0.3;
+                const cash = total; // เงินสด = ยอดเป้าทั้งหมด (ตาม % ที่กรอก)
+                const remaining = todayCodAmount - total; // ส่วนที่เหลือ (ยังไม่ถึงเป้า)
+
                 return (
                   <div className="grid grid-cols-2 gap-3 text-center text-sm">
+                    {/* ฝั่งสำเร็จ (เงินสด) */}
                     <div className="bg-white p-2 rounded-lg border border-amber-100">
-                      <p className="text-xs text-gray-600">ทั้งหมด</p>
+                      <p className="text-xs text-gray-600">ปิด QR</p>
                       <p className="font-bold text-amber-700">
-                        {total.toLocaleString("th-TH", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        ฿
-                      </p>
-                    </div>
-                    <div className="bg-white p-2 rounded-lg border border-amber-100 relative">
-                      <p className="text-xs text-gray-600">เงินสด</p>
-                      <p className="font-bold text-amber-800">
                         {cash.toLocaleString("th-TH", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}{" "}
                         ฿
                       </p>
-                      <div className="absolute -top-1 -right-1 bg-amber-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                        ≈{total > 0 ? Math.round((cash / total) * 100) : 0}%
+                    </div>
+
+                    {/* ฝั่งยังไม่ถึง (โอน/อื่น ๆ หรือขาด) */}
+                    <div className="bg-white p-2 rounded-lg border border-amber-100 relative">
+                      <p className="text-xs text-gray-600">ปิด เงินสด</p>
+                      <p className="font-bold text-red-600">
+                        {remaining.toLocaleString("th-TH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        ฿
+                      </p>
+                      <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                        ≈
+                        {todayCodAmount > 0
+                          ? Math.round((remaining / todayCodAmount) * 100)
+                          : 0}
+                        %
                       </div>
                     </div>
                   </div>
@@ -1793,7 +1803,7 @@ export default function NavigationPage() {
                 return (
                   <div className="grid grid-cols-2 gap-3 text-center text-sm">
                     <div className="bg-white p-2 rounded-lg border border-emerald-100">
-                      <p className="text-xs text-gray-600">ส่งได้</p>
+                      <p className="text-xs text-gray-600">ต้องส่งได้</p>
                       <p className="text-xl font-extrabold text-emerald-700">
                         {success}
                       </p>
