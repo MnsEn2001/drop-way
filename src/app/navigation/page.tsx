@@ -687,19 +687,69 @@ export default function NavigationPage() {
     const totalInList = list.length;
 
     if (viewMode === "calculator") {
-      return "คำนวณเป้าหมายวันนี้";
+      // คำนวณยอดจากรายการ "วันนี้" (เหมือนที่เคยคำนวณ todayCodAmount)
+      let totalAmount = 0;
+      let cashAmount = 0;
+      let transferAmount = 0;
+
+      // ใช้ todayItems เหมือนใน useEffect ที่คำนวณ todayCodAmount
+      const todayItems = list.filter((h) => {
+        if (h.delivered_at) {
+          const deliveredDate = new Date(h.delivered_at);
+          const today = new Date();
+          return deliveredDate.toDateString() === today.toDateString();
+        }
+        return !h.delivery_status || h.delivery_status === "pending";
+      });
+
+      todayItems.forEach((h) => {
+        if (h.delivery_status === "delivered" && h.delivery_note) {
+          const note = h.delivery_note;
+
+          // ดึงยอดรวมทั้งหมด (เหมือนเดิม)
+          const amount = extractAmountFromNote(note);
+          totalAmount += amount;
+
+          // แยกเงินสด
+          const cashMatch = note.match(
+            /(เงินสด|จ่ายรวมเงินสด)จำนวน\s*([\d,]+\.?\d*)\s*บาท/,
+          );
+          if (cashMatch) {
+            cashAmount += parseFloat(cashMatch[2].replace(/,/g, ""));
+          }
+
+          // แยกโอนเข้าบัญชีฉัน
+          const transferMatch = note.match(
+            /โอนเข้าบัญชีฉัน.*?([\d,]+\.?\d*)\s*บาท/,
+          );
+          if (transferMatch) {
+            transferAmount += parseFloat(transferMatch[1].replace(/,/g, ""));
+          }
+        }
+      });
+
+      // แสดงผลแบบที่ต้องการ
+      return `รวม: ${totalAmount.toLocaleString("th-TH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} | เงินสด: ${cashAmount.toLocaleString("th-TH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} | เงินโอน: ${transferAmount.toLocaleString("th-TH", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} |`;
     }
-    // กำหนดชื่อโหมดหลัก
+
+    // ส่วนอื่น ๆ เหมือนเดิม (today, delivered, qr_pending, reported)
     const modeNames: Record<Exclude<typeof viewMode, "calculator">, string> = {
       today: "วันนี้ (ที่ต้องส่ง)",
       delivered: "ส่งแล้ว",
-      qr_pending: "ยอด QR (รอปิด)",
+      qr_pending: "QR",
       reported: "รายงาน",
     };
-
     const modeText = modeNames[viewMode];
 
-    // ตรวจสอบว่ามีการกรองหรือไม่
     const hasFilter =
       searchTerm.trim() ||
       showNoCoords ||
@@ -711,7 +761,6 @@ export default function NavigationPage() {
       districtFilter ||
       provinceFilter;
 
-    // คำนวณยอดรวม (เฉพาะโหมดที่เกี่ยวข้อง)
     let totalAmount = 0;
     if (viewMode === "delivered" || viewMode === "qr_pending") {
       totalAmount = filteredList.reduce(
@@ -727,27 +776,20 @@ export default function NavigationPage() {
           })} บาท`
         : "";
 
-    // สร้างข้อความหลัก
-    let mainText = `${modeText} • พบ ${displayedCount} บ้าน`;
+    let mainText = `${modeText} • พบ ${displayedCount} บ้าน |`;
+    if (amountText) mainText += amountText;
 
-    // เพิ่มส่วนยอดเงิน (ถ้ามี)
-    if (amountText) {
-      mainText += amountText;
-    }
-
-    // เพิ่มสถานะกรอง
     if (hasFilter) {
-      mainText += ` (กรองแล้ว จากทั้งหมด ${totalInList} บ้าน)`;
+      mainText += ` | กรอง ${totalInList} บ้าน |`;
     } else if (totalInList !== displayedCount) {
-      mainText += ` (จากทั้งหมด ${totalInList} บ้าน)`;
+      mainText += ` | ${totalInList} บ้าน |`;
     }
 
-    // กรณีพิเศษ: วันนี้ + มีตำแหน่ง → เปลี่ยนข้อความให้ชัดเจนขึ้น
     const position = isRealTimeMode ? currentPosition : startPosition;
     if (viewMode === "today" && position) {
       mainText = `ที่ต้องส่งวันนี้ • พบ ${displayedCount} บ้าน`;
       if (!hasFilter && totalInList !== displayedCount) {
-        mainText += ` (จากทั้งหมด ${totalInList} บ้าน)`;
+        mainText += ` | ${totalInList} บ้าน |`;
       }
     }
 
@@ -1611,150 +1653,172 @@ export default function NavigationPage() {
       </div>
 
       {viewMode === "calculator" ? (
-        <div className="bg-white rounded-xl shadow p-5 max-w-md mx-auto border border-amber-100">
-          <h2 className="text-lg font-bold text-amber-800 mb-4 text-center flex items-center justify-center gap-2">
+        <div className="bg-white rounded-xl shadow p-4 max-w-md mx-auto border border-amber-100">
+          <h2 className="text-base font-bold text-amber-800 mb-4 text-center flex items-center justify-center gap-2">
             <Calculator className="w-5 h-5 text-amber-600" />
             เป้าหมายวันนี้
           </h2>
 
-          {/* เปอร์เซ็นต์ */}
-          <div className="grid grid-cols-2 gap-4 mb-5">
-            <div>
-              <label className="block text-xs font-medium text-amber-800 mb-1">
-                เป้า COD วันนี้
-              </label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={targetCodPercent === 0 ? "" : targetCodPercent}
-                  onChange={(e) => {
-                    let val = e.target.value.replace(/[^0-9.]/g, "");
-                    val = val.replace(/(\..*)\./g, "$1");
-                    const parts = val.split(".");
-                    if (parts[1] && parts[1].length > 2) {
-                      val = parts[0] + "." + parts[1].slice(0, 2);
-                    }
-                    const num = val === "" || val === "." ? 0 : Number(val);
-                    setTargetCodPercent(num); // ← แก้ตรงนี้! เปลี่ยนจาก setTodayCodAmount เป็น setTargetCodPercent
-                  }}
-                  className="w-16 px-2 py-1.5 text-lg font-bold text-center border border-amber-300 rounded-md focus:border-amber-500 focus:ring-1 focus:ring-amber-400 outline-none"
-                  placeholder="0"
-                />
-                <span className="text-lg font-bold text-amber-700">%</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-emerald-800 mb-1">
-                เป้าส่งรายชิ้น
-              </label>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={targetPiecePercent === 0 ? "" : targetPiecePercent}
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/[^0-9]/g, "");
-                    const num = raw === "" ? 0 : Math.min(100, Number(raw));
-                    setTargetPiecePercent(num);
-                  }}
-                  className="w-16 px-2 py-1.5 text-lg font-bold text-center border border-emerald-300 rounded-md focus:border-emerald-500 focus:ring-1 focus:ring-emerald-400 outline-none"
-                  placeholder="0"
-                />
-                <span className="text-lg font-bold text-emerald-700">%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* ข้อมูลจริง */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-5 border border-gray-200 space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                รายชิ้น วันนี้
+          {/* ข้อมูลจริง - ด้านบน กระชับ */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-5 border border-gray-200 space-y-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">
+                รายชิ้นวันนี้
               </label>
               <input
                 type="text"
                 inputMode="numeric"
-                pattern="[0-9]*"
-                value={todayTotalPieces === 0 ? "" : todayTotalPieces}
+                value={todayTotalPieces || ""}
                 onChange={(e) => {
                   const raw = e.target.value.replace(/[^0-9]/g, "");
-                  setTodayTotalPieces(raw === "" ? 0 : Number(raw));
+                  setTodayTotalPieces(raw ? Number(raw) : 0);
                 }}
-                className="w-full px-3 py-1.5 text-base font-bold text-center border border-indigo-300 rounded-md focus:border-indigo-500 focus:ring-1 focus:ring-indigo-400 outline-none"
+                className="w-full px-3 py-2 text-lg font-bold text-center border border-indigo-300 rounded-lg focus:border-indigo-500 focus:ring-1 outline-none"
                 placeholder="0"
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-gray-700">
                 ยอด COD วันนี้
               </label>
               <input
                 type="text"
-                inputMode="decimal" // ดีกับคีย์บอร์ดมือถือ
-                value={codInput} // ใช้ string แทน number
+                inputMode="decimal"
+                value={codInput}
                 onChange={(e) => {
-                  let val = e.target.value.replace(/[^0-9.]/g, ""); // อนุญาตแค่เลข + จุด
-                  val = val.replace(/(\..*)\./g, "$1"); // จุดเดียวเท่านั้น
+                  const cleaned = e.target.value
+                    .replace(/[^0-9.]/g, "")
+                    .replace(/(\..*)\./g, "$1");
 
-                  const parts = val.split(".");
-                  if (parts[1] && parts[1].length > 2) {
-                    val = parts[0] + "." + parts[1].slice(0, 2); // จำกัด 2 ทศนิยม
-                  }
+                  const limited =
+                    cleaned.split(".")[1]?.length > 2
+                      ? cleaned.slice(0, cleaned.lastIndexOf(".") + 3)
+                      : cleaned;
 
-                  setCodInput(val); // อัพเดท string ทันที → จุดไม่หาย
-
-                  // แปลงเป็น number สำหรับใช้คำนวณ (ถ้าว่างหรือแค่จุด = 0)
-                  const numericValue =
-                    val === "" || val === "." ? 0 : Number(val);
-                  setTodayCodAmount(numericValue);
+                  setCodInput(limited);
+                  setTodayCodAmount(limited ? Number(limited) : 0);
                 }}
-                className="w-full px-3 py-1.5 text-base font-bold text-center border border-green-300 rounded-md focus:border-green-500 focus:ring-1 focus:ring-green-400 outline-none"
-                placeholder="0"
+                className="w-full px-3 py-2 text-lg font-bold text-center border border-green-300 rounded-lg focus:border-green-500 focus:ring-1 outline-none"
+                placeholder="0.00"
               />
             </div>
           </div>
 
-          {/* ผลลัพธ์ */}
-          <div className="space-y-3">
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
-              <p className="text-xs text-amber-800">ควรปิด COD ของวันนี้</p>
-              <p className="text-2xl font-bold text-amber-700">
-                {(todayCodAmount * (targetCodPercent / 100)).toLocaleString(
-                  "th-TH",
-                  {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  },
-                )}{" "}
-                ฿
-              </p>
+          {/* เป้า - กระชับมาก + แสดงทศนิยมครบ */}
+          <div className="space-y-4">
+            {/* เป้า COD */}
+            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-amber-800">
+                  เป้า COD
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={targetCodPercent || ""}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, ""); // ใช้ const เลย ไม่ต้อง assign ใหม่
+                      const num = val ? Math.min(100, Number(val)) : 0;
+                      setTargetCodPercent(num);
+                    }}
+                    className="w-14 px-2 py-1.5 text-base font-bold text-center border border-amber-400 rounded-md focus:border-amber-600 focus:ring-1 outline-none bg-white"
+                    placeholder="80"
+                  />
+                  <span className="text-base font-bold text-amber-700">%</span>
+                </div>
+              </div>
+              {(() => {
+                const total = todayCodAmount * (targetCodPercent / 100);
+                const cash = total * 0.3;
+                return (
+                  <div className="grid grid-cols-2 gap-3 text-center text-sm">
+                    <div className="bg-white p-2 rounded-lg border border-amber-100">
+                      <p className="text-xs text-gray-600">ทั้งหมด</p>
+                      <p className="font-bold text-amber-700">
+                        {total.toLocaleString("th-TH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        ฿
+                      </p>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-amber-100 relative">
+                      <p className="text-xs text-gray-600">เงินสด</p>
+                      <p className="font-bold text-amber-800">
+                        {cash.toLocaleString("th-TH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        ฿
+                      </p>
+                      <div className="absolute -top-1 -right-1 bg-amber-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                        ≈{total > 0 ? Math.round((cash / total) * 100) : 0}%
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
-            <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-center">
-              <p className="text-xs text-emerald-800">ควรส่งสำเร็จ</p>
-              <p className="text-2xl font-bold text-emerald-700">
-                {Math.ceil(todayTotalPieces * (targetPiecePercent / 100))} ชิ้น
-              </p>
+            {/* เป้าส่งชิ้น */}
+            <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-emerald-800">
+                  เป้าส่งสำเร็จ
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={targetPiecePercent || ""}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, "");
+                      const num = raw ? Math.min(100, Number(raw)) : 0;
+                      setTargetPiecePercent(num);
+                    }}
+                    className="w-14 px-2 py-1.5 text-base font-bold text-center border border-emerald-400 rounded-md focus:border-emerald-600 focus:ring-1 outline-none bg-white"
+                    placeholder="95"
+                  />
+                  <span className="text-base font-bold text-emerald-700">
+                    %
+                  </span>
+                </div>
+              </div>
+              {(() => {
+                const success = Math.ceil(
+                  todayTotalPieces * (targetPiecePercent / 100),
+                );
+                const fail = todayTotalPieces - success;
+                return (
+                  <div className="grid grid-cols-2 gap-3 text-center text-sm">
+                    <div className="bg-white p-2 rounded-lg border border-emerald-100">
+                      <p className="text-xs text-gray-600">ส่งได้</p>
+                      <p className="text-xl font-extrabold text-emerald-700">
+                        {success}
+                      </p>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-emerald-100 relative">
+                      <p className="text-xs text-gray-600">ส่งไม่ได้</p>
+                      <p className="text-xl font-extrabold text-red-600">
+                        {fail}
+                      </p>
+                      <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">
+                        ≈
+                        {todayTotalPieces > 0
+                          ? Math.round((fail / todayTotalPieces) * 100)
+                          : 0}
+                        %
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
           <p className="mt-4 text-xs text-gray-500 text-center italic">
-            แก้ไขได้ • ค่าเริ่มต้นจากระบบ
-          </p>
-        </div>
-      ) : currentHouses.length === 0 ? (
-        <div className="text-center py-20">
-          <div className="inline-flex items-center justify-center w-24 h-24 bg-gray-100 rounded-full mb-6">
-            <MapPin className="w-12 h-12 text-gray-400" />
-          </div>
-          <p className="text-xl text-gray-500">ไม่พบบ้านที่ตรงกับเงื่อนไข</p>
-          <p className="text-gray-400 mt-2">
-            ลองเพิ่มบ้านจากคลังบ้าน หรือปรับตัวกรอง
+            แก้ไขได้ตามต้องการ
           </p>
         </div>
       ) : (
