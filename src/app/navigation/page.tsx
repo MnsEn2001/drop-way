@@ -101,7 +101,7 @@ export default function NavigationPage() {
 
   // เพิ่ม state เหล่านี้
   const [targetCodPercent, setTargetCodPercent] = useState<number>(80); // % COD ที่ต้องการ
-  const [targetPiecePercent, setTargetPiecePercent] = useState<number>(70); // % ชิ้นที่ต้องการส่ง
+  const [targetPiecePercent, setTargetPiecePercent] = useState<number>(95); // % ชิ้นที่ต้องการส่ง
 
   // ข้อมูลจริงของวันนี้ (จะดึงอัตโนมัติจาก list)
   const [todayTotalPieces, setTodayTotalPieces] = useState(0); // จำนวนชิ้นทั้งหมดวันนี้
