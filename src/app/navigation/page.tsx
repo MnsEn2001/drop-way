@@ -94,6 +94,8 @@ export default function NavigationPage() {
   const [searchInAddress, setSearchInAddress] = useState(true);
   const [searchInPhone, setSearchInPhone] = useState(false);
   const [searchInNote, setSearchInNote] = useState(true); // เปิดหมายเหตุเป็น default
+  const [searchInDriverNote, setSearchInDriverNote] = useState(true); // default เปิด
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [showPageInput, setShowPageInput] = useState(false);
@@ -528,6 +530,7 @@ export default function NavigationPage() {
       const lower = searchTerm.toLowerCase();
       filtered = filtered.filter((h) => {
         let matches = false;
+
         if (searchInName && h.full_name?.toLowerCase().includes(lower)) {
           matches = true;
         }
@@ -535,15 +538,26 @@ export default function NavigationPage() {
           matches = true;
         }
         if (searchInPhone && h.phone?.includes(searchTerm)) {
+          // ยังคงใช้ searchTerm ไม่ lower เพราะเบอร์
           matches = true;
         }
         if (searchInNote && h.note?.toLowerCase().includes(lower)) {
           matches = true;
         }
-        // ⭐ เพิ่มค้นใน delivery_note (หมายเหตุการชำระเงิน)
+        // ────────────── เพิ่มตรงนี้ ──────────────
+        if (
+          searchInDriverNote &&
+          h.driver_note?.toLowerCase().includes(lower)
+        ) {
+          matches = true;
+        }
+        // ────────────────────────────────────────
+
+        // ค้น delivery_note อยู่แล้ว (hard-code)
         if (h.delivery_note?.toLowerCase().includes(lower)) {
           matches = true;
         }
+
         return matches;
       });
     }
@@ -629,7 +643,8 @@ export default function NavigationPage() {
     searchInName,
     searchInAddress,
     searchInPhone,
-    searchInNote, // เพิ่ม dependency
+    searchInNote,
+    searchInDriverNote, // ← เพิ่มบรรทัดนี้
   ]);
   const clearSearch = () => setSearchTerm("");
   const clearFilters = () => {
@@ -639,6 +654,7 @@ export default function NavigationPage() {
     setSubdistrictFilter("");
     setDistrictFilter("");
     setProvinceFilter("");
+    setSearchInDriverNote(true);
   };
 
   const openCommentModal = (house: NavigationHouse) => {
@@ -1844,30 +1860,27 @@ export default function NavigationPage() {
                     className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
                   >
                     {/* ปุ่มนำทาง + ปุ่มแก้ไขสถานะ - มุมขวาบน */}
-                    <div className="absolute top-3 right-3 z-10 flex gap-2 flex-col">
-                      {/* ปุ่มนำทาง (ถ้ามีพิกัด) */}
+
+                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
+                      {/* ปุ่มนำทาง - จิ๋วสุด */}
                       {h.lat && h.lng && (
                         <button
                           type="button"
                           onClick={() => openNavigation(h.lat!, h.lng!)}
                           onMouseDown={(e) => e.preventDefault()}
-                          className="px-3 py-2 bg-emerald-600 text-white rounded-lg shadow-md hover:shadow-lg hover:bg-emerald-700 transition-all active:scale-95 flex items-center gap-1.5 font-medium text-sm"
-                          title="นำทางไปยังบ้านนี้"
+                          className="p-2 bg-transparent border border-emerald-600 text-emerald-700 rounded hover:bg-emerald-50 hover:border-emerald-800 transition-all active:scale-95"
+                          title="นำทาง"
                         >
                           <Navigation className="w-4 h-4" />
-                          นำทาง
                         </button>
                       )}
 
-                      {/* ปุ่มแก้ไขสถานะ - แสดงเฉพาะเมื่อส่งแล้วหรือรายงานแล้ว */}
+                      {/* ปุ่มแก้ไขส่งแล้ว - จิ๋วสุด */}
                       {h.delivery_status === "delivered" && (
                         <button
                           onClick={() => {
                             setHouseToDeliver(h);
-
                             const note = h.delivery_note || "";
-
-                            // ดึงประเภทการชำระเงินเดิมจาก note
                             if (note.includes("จ่ายรวมเงินสด")) {
                               setDeliverNote("จ่ายรวมเงินสด");
                             } else if (note.includes("เงินสด")) {
@@ -1885,17 +1898,12 @@ export default function NavigationPage() {
                               setDeliverNote("อื่นๆ");
                               setDeliverNoteCustom(note.trim());
                             }
-
-                            // ไม่ต้อง setCashAmount / setTransferAmount อีกต่อไป
-                            // เพราะ modal จะดึงค่าเงินเดิมจาก delivery_note เอง ผ่าน useEffect
-
                             setShowDeliverModal(true);
                           }}
-                          className="px-3 py-2 bg-orange-600 text-white rounded-lg shadow-md hover:bg-orange-700 transition-all active:scale-95 flex items-center gap-1 font-medium text-xs"
-                          title="แก้ไขการส่งงาน"
+                          className="p-2 bg-transparent border border-orange-600 text-orange-700 rounded hover:bg-orange-50 hover:border-orange-800 transition-all active:scale-95"
+                          title="แก้ไขส่งแล้ว"
                         >
                           <Edit3 className="w-4 h-4" />
-                          แก้ส่งแล้ว
                         </button>
                       )}
 
@@ -2050,7 +2058,6 @@ export default function NavigationPage() {
                         </div>
                       )}
                     </div>
-
                     {/* ปุ่มด้านล่าง */}
                     <div className="px-5 pb-5 flex flex-wrap justify-center items-center gap-3">
                       {/* ปุ่มลบออกจากการนำทาง */}
@@ -2311,6 +2318,7 @@ export default function NavigationPage() {
           </button>
         </div>
       )}
+
       {/* Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
@@ -2357,6 +2365,15 @@ export default function NavigationPage() {
                     className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
                   />
                   <span className="text-sm font-medium">หมายเหตุ</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={searchInDriverNote}
+                    onChange={(e) => setSearchInDriverNote(e.target.checked)}
+                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                  />
+                  <span className="text-sm font-medium">คนขับบันทึก</span>
                 </label>
               </div>
             </div>

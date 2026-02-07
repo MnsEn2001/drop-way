@@ -890,27 +890,26 @@ export default function HousesPage() {
                 className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
               >
                 {/* มุมขวาบน: ปุ่ม + (ป้องกันคีย์บอร์ดปิด) */}
-                <div className="absolute top-3 right-3 z-10">
+                <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
                   <button
                     onClick={() => addToNav(h.id)}
                     onMouseDown={(e) => e.preventDefault()}
                     disabled={addingIds.includes(h.id)}
-                    className={`px-4 py-3 text-white rounded-lg shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2 font-medium text-sm min-w-28 ${
+                    className={`p-2 bg-transparent border rounded hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
                       h.lat && h.lng
-                        ? "bg-green-600 hover:bg-green-700"
-                        : "bg-orange-500 hover:bg-orange-600"
+                        ? "border-green-600 text-green-700 hover:border-green-800 hover:bg-green-50"
+                        : "border-orange-600 text-orange-700 hover:border-orange-800 hover:bg-orange-50"
                     }`}
+                    title={
+                      addingIds.includes(h.id)
+                        ? "กำลังเพิ่ม..."
+                        : "เพิ่มเข้าสู่การนำทาง"
+                    }
                   >
                     {addingIds.includes(h.id) ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        กำลังเพิ่ม...
-                      </>
+                      <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      <>
-                        <Plus className="w-5 h-5" />
-                        เพิ่ม
-                      </>
+                      <Plus className="w-4 h-4" />
                     )}
                   </button>
                 </div>
