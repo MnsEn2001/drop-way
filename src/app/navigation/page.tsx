@@ -1860,9 +1860,8 @@ export default function NavigationPage() {
                     className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
                   >
                     {/* ปุ่มนำทาง + ปุ่มแก้ไขสถานะ - มุมขวาบน */}
-
-                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-1.5">
-                      {/* ปุ่มนำทาง - จิ๋วสุด */}
+                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
+                      {/* ปุ่มนำทาง */}
                       {h.lat && h.lng && (
                         <button
                           type="button"
@@ -1875,7 +1874,7 @@ export default function NavigationPage() {
                         </button>
                       )}
 
-                      {/* ปุ่มแก้ไขส่งแล้ว - จิ๋วสุด */}
+                      {/* ปุ่มแก้ไขส่งแล้ว */}
                       {h.delivery_status === "delivered" && (
                         <button
                           onClick={() => {
@@ -1907,6 +1906,7 @@ export default function NavigationPage() {
                         </button>
                       )}
 
+                      {/* ปุ่มแก้ไขรายงาน */}
                       {h.delivery_status === "reported" && (
                         <button
                           onClick={() => {
@@ -1923,22 +1923,20 @@ export default function NavigationPage() {
                             }
                             setShowReportModal(true);
                           }}
-                          className="px-3 py-2 bg-orange-600 text-white rounded-lg shadow-md hover:bg-orange-700 transition-all active:scale-95 flex items-center gap-1 font-medium text-xs"
+                          className="p-2 bg-transparent border border-orange-600 text-orange-700 rounded hover:bg-orange-50 hover:border-orange-800 transition-all active:scale-95"
                           title="แก้ไขรายงาน"
                         >
                           <Edit3 className="w-4 h-4" />
-                          แก้รายงาน
                         </button>
                       )}
 
-                      {/* ถ้าไม่มีพิกัดเลย */}
+                      {/* ถ้าไม่มีพิกัดเลย - ปรับให้เป็นกรอบเหมือนกันเป๊ะ */}
                       {!h.lat && !h.lng && (
                         <div
-                          className="px-3 py-2 bg-orange-500 text-white rounded-lg shadow-md flex items-center gap-1.5 font-medium text-sm opacity-90"
+                          className="p-2 bg-transparent border border-orange-600 text-orange-700 rounded flex items-center justify-center hover:bg-orange-50 hover:border-orange-800 transition-all"
                           title="บ้านนี้ยังไม่มีพิกัด"
                         >
                           <MapPin className="w-4 h-4" />
-                          ไม่มีพิกัด
                         </div>
                       )}
                     </div>
