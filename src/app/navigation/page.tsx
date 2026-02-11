@@ -286,28 +286,38 @@ export default function NavigationPage() {
   useEffect(() => {
     if (list.length === 0) return;
 
-    // นับเฉพาะรายการ "วันนี้" (pending + delivered ในวันนี้)
-    const todayItems = list.filter((h) => {
-      // ถ้ามี delivered_at → ตรวจสอบว่าเป็นวันนี้หรือไม่
-      if (h.delivered_at) {
-        const deliveredDate = new Date(h.delivered_at);
-        const today = new Date();
-        return deliveredDate.toDateString() === today.toDateString();
+    // รายการที่ยังไม่ปิดยอด / ยังเกี่ยวข้องกับเราในวันนี้
+    const relevantItems = list.filter((h) => {
+      // ยัง pending หรือ reported → นับเป็นของวันนี้แน่นอน
+      if (
+        !h.delivery_status ||
+        h.delivery_status === "pending" ||
+        h.delivery_status === "reported"
+      ) {
+        return true;
       }
-      // ถ้ายัง pending ถือว่าเป็นของวันนี้
-      return !h.delivery_status || h.delivery_status === "pending";
+
+      // ส่งแล้ว แต่ยัง "รอปิดยอด QR" → ยังนับเป็นยอดที่ต้องจัดการ
+      if (
+        h.delivery_status === "delivered" &&
+        h.delivery_note?.includes("รอปิดยอด QR")
+      ) {
+        return true;
+      }
+
+      // ส่งแล้วและปิดยอดแล้ว (ไม่มี "รอปิดยอด QR") → ไม่นับ
+      return false;
     });
 
-    setTodayTotalPieces(todayItems.length);
+    setTodayTotalPieces(relevantItems.length);
 
-    // คำนวณยอด COD ทั้งหมด (เฉพาะที่ delivered แล้ว + มีเงินสด/โอนบัญชีฉัน)
     let codSum = 0;
-    todayItems.forEach((h) => {
+    relevantItems.forEach((h) => {
       if (h.delivery_status === "delivered" && h.delivery_note) {
-        // ดึงยอดจาก delivery_note (ใช้ฟังก์ชัน extractAmountFromNote ที่มีอยู่แล้ว)
         codSum += extractAmountFromNote(h.delivery_note);
       }
     });
+
     setTodayCodAmount(codSum);
   }, [list]);
 
