@@ -1950,7 +1950,65 @@ export default function NavigationPage() {
                         </div>
                       )}
                     </div>
-                    <div className="p-5 flex-1 flex flex-col">
+
+                    {/* === แสดงวันที่-เวลา มุมซ้ายบน (ไม่มีกรอบ) === */}
+                    {(h.delivery_status === "delivered" ||
+                      h.delivery_status === "reported") && (
+                      <div
+                        className="absolute top-2 left-3 z-10 text-xs font-mono text-gray-500"
+                        title={
+                          h.delivery_status === "delivered"
+                            ? h.delivered_at
+                              ? new Date(h.delivered_at).toLocaleString(
+                                  "th-TH",
+                                  {
+                                    dateStyle: "medium",
+                                    timeStyle: "medium",
+                                  },
+                                )
+                              : ""
+                            : h.reported_at
+                              ? new Date(h.reported_at).toLocaleString(
+                                  "th-TH",
+                                  {
+                                    dateStyle: "medium",
+                                    timeStyle: "medium",
+                                  },
+                                )
+                              : ""
+                        }
+                      >
+                        {(() => {
+                          const isoString =
+                            h.delivery_status === "delivered"
+                              ? h.delivered_at
+                              : h.reported_at;
+                          if (!isoString) return null;
+                          const date = new Date(isoString);
+                          if (isNaN(date.getTime())) return "—";
+                          const d = String(date.getDate()).padStart(2, "0");
+                          const m = String(date.getMonth() + 1).padStart(
+                            2,
+                            "0",
+                          );
+                          const y = date.getFullYear() + 543;
+                          const hh = String(date.getHours()).padStart(2, "0");
+                          const mm = String(date.getMinutes()).padStart(2, "0");
+                          const ss = String(date.getSeconds()).padStart(2, "0");
+                          return `${d}/${m}/${y} || ${hh}:${mm}:${ss} น.`;
+                        })()}
+                      </div>
+                    )}
+
+                    {/* ปรับ padding-top ตามว่ามีวันที่ไหม */}
+                    <div
+                      className={`p-5 flex-1 flex flex-col relative ${
+                        h.delivery_status === "delivered" ||
+                        h.delivery_status === "reported"
+                          ? "pt-10" // มีวันที่ → เว้นด้านบนเยอะหน่อย
+                          : "pt-5" // ไม่มีวันที่ (แท็บวันนี้) → เว้นน้อย หรือเปลี่ยนเป็น pt-5 / pt-6
+                      }`}
+                    >
                       {/* ลำดับที่ + ชื่อ */}
                       <div className="flex items-baseline gap-2">
                         <span className="text-lg font-extrabold text-indigo-600">
@@ -1983,6 +2041,7 @@ export default function NavigationPage() {
                         <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
                         <span className="line-clamp-3">{h.address}</span>
                       </div>
+
                       {/* ระยะทางโดยประมาณ */}
                       {h.distance !== undefined && h.distance < Infinity && (
                         <p className="text-xs text-gray-500 mt-3">
@@ -1992,6 +2051,7 @@ export default function NavigationPage() {
                           </span>
                         </p>
                       )}
+
                       {/* หมายเหตุทั่วไปของบ้าน */}
                       {h.note && (
                         <div className="mt-3 text-xs">
