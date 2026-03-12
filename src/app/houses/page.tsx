@@ -619,21 +619,18 @@ export default function HousesPage() {
     // เลือกข้อมูลตาม selectedDistrict
     let currentSubdistricts = allSubdistricts;
     let currentVillageBySub = allVillageBySubdistrict;
-    let currentSubdistrictInfo = Object.values(locationData).reduce(
-      (acc, d) => ({ ...acc, ...d.subdistrictInfo }),
-      {} as Record<string, { province: string }>,
-    );
 
     if (selectedDistrict !== "ทั้งหมด") {
       const data = locationData[selectedDistrict];
       if (data) {
         currentSubdistricts = data.subdistricts;
         currentVillageBySub = data.villageBySubdistrict;
-        currentSubdistrictInfo = data.subdistrictInfo;
+        // ลบ currentSubdistrictInfo ออก เพราะไม่ได้ใช้ที่นี่
       }
     }
+    // ไม่ต้อง else เพราะถ้า "ทั้งหมด" ก็ใช้ allSubdistricts และ allVillageBySubdistrict อยู่แล้ว
 
-    // 1. ยังไม่มี ม. หรือ ต. → แนะนำ ม.1-25 (เหมือนเดิม แต่ใช้ villages เดิม)
+    // 1. ยังไม่มี ม. หรือ ต. → แนะนำ ม.1-25
     if (
       /\s$/.test(input) &&
       !trimmed.includes("ม.") &&
@@ -652,7 +649,7 @@ export default function HousesPage() {
     // 2. มี ม.เลข แล้วกด space → แสดงหมู่บ้านตามอำเภอ
     if (trimmed.match(/ม\.\d+$/) && /\s$/.test(input)) {
       if (hasShownVillageSuggestions) {
-        // ครั้งต่อไป แสดง ต.
+        // ครั้งต่อไป แสดงแค่ ต.ชื่อตำบล
         setAddressSuggestions(
           currentSubdistricts.map((sd) => ({
             label: `ต.${sd}`,
@@ -666,21 +663,18 @@ export default function HousesPage() {
       const allVillages = Array.from(
         new Set(Object.values(currentVillageBySub).flat()),
       ).filter((v) => v !== "...");
-
       const suggestions = ["...", ...allVillages];
-
       setAddressSuggestions(
         suggestions.map((v) => ({
           label: v === "..." ? "➜ ข้ามการระบุหมู่บ้าน" : `บ.${v}`,
           value: v === "..." ? "" : `บ.${v} `,
         })),
       );
-
       setHasShownVillageSuggestions(true);
       return;
     }
 
-    // 3. มี "บ." แล้วกด space → แสดง ต. (ตามอำเภอ)
+    // 3. มี "บ." แล้วกด space → แสดง ต.ชื่อตำบล
     if (trimmed.match(/บ\.[^ ]+$/) && /\s$/.test(input)) {
       setAddressSuggestions(
         currentSubdistricts.map((sd) => ({
@@ -691,7 +685,7 @@ export default function HousesPage() {
       return;
     }
 
-    // 4. พิมพ์ "ต." แล้วกำลังพิมพ์ตำบล
+    // 4. พิมพ์ "ต." แล้วกำลังพิมพ์ตำบล → แสดง ต.ชื่อตำบล
     const tambonMatch = trimmed.match(/ต\.([^ ]*)$/);
     if (tambonMatch) {
       const partial = tambonMatch[1];
@@ -717,21 +711,24 @@ export default function HousesPage() {
     const tambonMatch = suggestion.value.match(/ต\.(.+)/);
     if (tambonMatch) {
       const tambon = tambonMatch[1];
-      // หา province จากข้อมูลที่เลือก
+
+      // หา province จากข้อมูล
       let province = "ตาก"; // default
       if (selectedDistrict !== "ทั้งหมด") {
         const info = locationData[selectedDistrict]?.subdistrictInfo[tambon];
         if (info) province = info.province;
       } else {
-        // ถ้าเลือกทั้งหมด หา province จาก subdistrictInfo รวม
+        // ถ้า "ทั้งหมด" หาจากรวมทุกอำเภอ
         const info = Object.values(locationData).find(
           (d) => d.subdistrictInfo[tambon],
         )?.subdistrictInfo[tambon];
         if (info) province = info.province;
       }
 
+      // กำหนดอำเภอ (ถ้าเลือกทั้งหมด อาจ default เป็นอำเภอที่พบบ่อย หรือปล่อยให้ผู้ใช้กรอกเอง)
       const district =
-        selectedDistrict === "ทั้งหมด" ? "วังเจ้า" : selectedDistrict; // หรือปรับตามต้องการ
+        selectedDistrict === "ทั้งหมด" ? "แม่สอด" : selectedDistrict; // หรือปรับตามต้องการ
+
       newAddress = newAddress.trim() + ` อ.${district} จ.${province}`;
     }
 
