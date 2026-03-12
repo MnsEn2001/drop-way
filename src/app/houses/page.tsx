@@ -20,6 +20,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Phone,
 } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";
@@ -77,51 +78,134 @@ export default function HousesPage() {
 
   // ข้อมูลคงที่ (ใส่ข้างนอก component หรือข้างในก็ได้ แนะนำข้างใน)
   const villages = Array.from({ length: 25 }, (_, i) => (i + 1).toString()); // "1" ถึง "25"
+  const [selectedDistrict, setSelectedDistrict] = useState("แม่สอด");
+  // ข้อมูลคงที่ - ปรับโครงสร้างให้รองรับหลายอำเภอ
+  const districts = ["ทั้งหมด", "วังเจ้า", "แม่สอด"];
 
-  const villageBySubdistrict: Record<string, string[]> = {
-    นาโบสถ์: [
-      "...",
-      "วังทอง",
-      "วังตำลึง",
-      "ลาดยาว",
-      "นาโบสถ์",
-      "ตะเคียนด้วน",
-      "วังน้ำเย็น",
-      "นาแพะ",
-      "ท่าทองแดง",
-      "เพชรชมภู",
-      "ใหม่พรสวรรค์",
-    ],
-    เชียงทอง: [
-      "...",
-      "วังเจ้า",
-      "เด่นวัว",
-      "เด่นคา",
-      "หนองปลาไหล",
-      "ครองราชย์",
-      "เด่นวัวน้ำทิพย์",
-      "ชุมนุมกลาง",
-      "สบยม",
-      "ดงซ่อม",
-      "ใหม่เสรีธรรม",
-      "ใหม่ชัยมงคล",
-      "สบยมใต้",
-      "ผาผึ้ง",
-      "ศรีคีรีรักษ์",
-    ],
-    ประดาง: ["...", "ทุ่งกง", "คลองเชียงทอง", "ประดาง", "โตงเตง", "ท่าตะคร้อ"],
-  };
-
-  const subdistricts = ["นาโบสถ์", "เชียงทอง", "ประดาง"];
-
-  const subdistrictInfo: Record<
+  // ข้อมูลตำบลและหมู่บ้านแยกตามอำเภอ
+  const locationData: Record<
     string,
-    { district: string; province: string }
+    {
+      subdistricts: string[];
+      villageBySubdistrict: Record<string, string[]>;
+      subdistrictInfo: Record<string, { province: string }>;
+    }
   > = {
-    นาโบสถ์: { district: "วังเจ้า", province: "ตาก" },
-    เชียงทอง: { district: "วังเจ้า", province: "ตาก" },
-    ประดาง: { district: "วังเจ้า", province: "ตาก" },
+    วังเจ้า: {
+      subdistricts: ["นาโบสถ์", "เชียงทอง", "ประดาง"],
+      villageBySubdistrict: {
+        นาโบสถ์: [
+          "...",
+          "วังทอง",
+          "วังตำลึง",
+          "ลาดยาว",
+          "นาโบสถ์",
+          "ตะเคียนด้วน",
+          "วังน้ำเย็น",
+          "นาแพะ",
+          "ท่าทองแดง",
+          "เพชรชมภู",
+          "ใหม่พรสวรรค์",
+        ],
+        เชียงทอง: [
+          "...",
+          "วังเจ้า",
+          "เด่นวัว",
+          "เด่นคา",
+          "หนองปลาไหล",
+          "ครองราชย์",
+          "เด่นวัวน้ำทิพย์",
+          "ชุมนุมกลาง",
+          "สบยม",
+          "ดงซ่อม",
+          "ใหม่เสรีธรรม",
+          "ใหม่ชัยมงคล",
+          "สบยมใต้",
+          "ผาผึ้ง",
+          "ศรีคีรีรักษ์",
+        ],
+        ประดาง: [
+          "...",
+          "ทุ่งกง",
+          "คลองเชียงทอง",
+          "ประดาง",
+          "โตงเตง",
+          "ท่าตะคร้อ",
+        ],
+      },
+      subdistrictInfo: {
+        นาโบสถ์: { province: "ตาก" },
+        เชียงทอง: { province: "ตาก" },
+        ประดาง: { province: "ตาก" },
+      },
+    },
+
+    แม่สอด: {
+      subdistricts: [
+        "แม่ตาว",
+        "แม่ปะ",
+        "แม่กุ",
+        "แม่สอด",
+        "แม่กาษา",
+        "ท่าสายลวด",
+        "พระธาตุผาแดง",
+        "พะวอ",
+        "มหาวัน",
+        "ด่านแม่ละเมา",
+      ],
+      villageBySubdistrict: {
+        แม่ตาว: [
+          "...",
+          "แม่ตาวแพะ",
+          "แม่ตาวเหนือ",
+          "แม่ตาวกลาง",
+          "แม่ตาวใต้",
+          "แม่ตาวสันแป่",
+          "แม่ตาวสันโรงเรียน",
+          "ดอนไชย",
+        ],
+        แม่สอด: [
+          "...",
+          "ในเมือง",
+          "ท่าอาจ",
+          "บางกาด",
+          "ช่องแคบ" /* เพิ่มตามจริง */,
+        ],
+        แม่กุ: ["...", "หนองหลวง", "ห้วยน้ำเย็น" /* ตัวอย่าง */],
+        แม่กาษา: ["...", "โป่งแพร", "ห้วยน้ำขาว" /* ตัวอย่าง */],
+
+        ท่าสายลวด: ["...", "ท่าสายลวด", "บางมะดัน"],
+        พระธาตุผาแดง: ["...", "เจดีย์พระธาตุ", "ผาแดง"],
+        พะวอ: ["...", "พะวอ", "ห้วยไม้แดง"],
+        มหาวัน: ["...", "ห้วยไม้แป้น", "มหาวัน"],
+        ด่านแม่ละเมา: ["...", "ด่านแม่ละเมา", "เชตะวันคีรี"],
+        แม่ปะ: ["...", "แม่ปะ", "ท่าอิฐ"],
+        // สามารถเพิ่มหมู่บ้านจริง ๆ เพิ่มเติมได้ตามข้อมูลจาก อบต./ทต.
+      },
+      subdistrictInfo: {
+        แม่สอด: { province: "ตาก" },
+        แม่กุ: { province: "ตาก" },
+        แม่กาษา: { province: "ตาก" },
+        แม่ตาว: { province: "ตาก" },
+        ท่าสายลวด: { province: "ตาก" },
+        พระธาตุผาแดง: { province: "ตาก" },
+        พะวอ: { province: "ตาก" },
+        มหาวัน: { province: "ตาก" },
+        ด่านแม่ละเมา: { province: "ตาก" },
+        แม่ปะ: { province: "ตาก" },
+      },
+    },
   };
+
+  // ค่า default ถ้าเลือก "ทั้งหมด" → รวมทุกอำเภอ
+  const allSubdistricts = Array.from(
+    new Set(Object.values(locationData).flatMap((d) => d.subdistricts)),
+  ).sort();
+
+  const allVillageBySubdistrict = Object.values(locationData).reduce(
+    (acc, d) => ({ ...acc, ...d.villageBySubdistrict }),
+    {} as Record<string, string[]>,
+  );
 
   // เพิ่ม useEffect นี้ (ข้างๆ useEffect อื่นๆ)
   useEffect(() => {
@@ -202,6 +286,13 @@ export default function HousesPage() {
         h.address?.toLowerCase().includes(provinceFilter.toLowerCase()),
       );
 
+    if (selectedDistrict !== "ทั้งหมด") {
+      const districtName = selectedDistrict; // เช่น "แม่สอด" หรือ "วังเจ้า"
+      filtered = filtered.filter((h) =>
+        h.address?.toLowerCase().includes(`อ.${districtName.toLowerCase()}`),
+      );
+    }
+
     setFilteredHouses(filtered);
     setCurrentPage(1);
   }, [
@@ -218,7 +309,8 @@ export default function HousesPage() {
     searchInName,
     searchInAddress,
     searchInPhone,
-    searchInNote, // เพิ่ม dependency ตัวใหม่
+    searchInNote,
+    selectedDistrict,
   ]);
 
   const clearSearch = () => setSearchTerm("");
@@ -272,6 +364,12 @@ export default function HousesPage() {
     const totalAll = totalInDB ?? houses.length;
     const total = filteredHouses.length;
 
+    let prefix = "";
+
+    if (selectedDistrict !== "ทั้งหมด") {
+      prefix = `อ.${selectedDistrict} `;
+    }
+
     if (
       total === totalAll &&
       !searchTerm &&
@@ -287,8 +385,8 @@ export default function HousesPage() {
       return `บ้านทั้งหมด ${totalAll.toLocaleString()} หลัง`;
     }
 
-    if (searchTerm) {
-      return `พบ ${total.toLocaleString()} บ้าน จากทั้งหมด ${totalAll.toLocaleString()} หลัง`;
+    if (searchTerm || prefix) {
+      return `พบ ${total.toLocaleString()} บ้าน ${prefix}จากทั้งหมด ${totalAll.toLocaleString()} หลัง`;
     }
 
     if (showWithCoords && !showNoCoords) {
@@ -518,7 +616,24 @@ export default function HousesPage() {
   const generateAddressSuggestions = (input: string) => {
     const trimmed = input.trimEnd();
 
-    // 1. ยังไม่มี ม. หรือ ต. → แนะนำ ม.1-25
+    // เลือกข้อมูลตาม selectedDistrict
+    let currentSubdistricts = allSubdistricts;
+    let currentVillageBySub = allVillageBySubdistrict;
+    let currentSubdistrictInfo = Object.values(locationData).reduce(
+      (acc, d) => ({ ...acc, ...d.subdistrictInfo }),
+      {} as Record<string, { province: string }>,
+    );
+
+    if (selectedDistrict !== "ทั้งหมด") {
+      const data = locationData[selectedDistrict];
+      if (data) {
+        currentSubdistricts = data.subdistricts;
+        currentVillageBySub = data.villageBySubdistrict;
+        currentSubdistrictInfo = data.subdistrictInfo;
+      }
+    }
+
+    // 1. ยังไม่มี ม. หรือ ต. → แนะนำ ม.1-25 (เหมือนเดิม แต่ใช้ villages เดิม)
     if (
       /\s$/.test(input) &&
       !trimmed.includes("ม.") &&
@@ -530,17 +645,16 @@ export default function HousesPage() {
           value: `ม.${v} `,
         })),
       );
-      // รีเซ็ต flag เมื่อเริ่มใหม่
       setHasShownVillageSuggestions(false);
       return;
     }
 
-    // 2. มี ม.เลข แล้วกด space
+    // 2. มี ม.เลข แล้วกด space → แสดงหมู่บ้านตามอำเภอ
     if (trimmed.match(/ม\.\d+$/) && /\s$/.test(input)) {
-      // ถ้าเคยแสดงรายการหมู่บ้านแล้ว → ไปแสดง ต. ทันที (รวมถึงกรณีข้าม)
       if (hasShownVillageSuggestions) {
+        // ครั้งต่อไป แสดง ต.
         setAddressSuggestions(
-          subdistricts.map((sd) => ({
+          currentSubdistricts.map((sd) => ({
             label: `ต.${sd}`,
             value: `ต.${sd}`,
           })),
@@ -548,11 +662,12 @@ export default function HousesPage() {
         return;
       }
 
-      // ครั้งแรกที่เห็น ม. + space → แสดงรายการหมู่บ้าน + ข้าม
+      // ครั้งแรก → แสดงรายการหมู่บ้าน + ข้าม
       const allVillages = Array.from(
-        new Set(Object.values(villageBySubdistrict).flat()),
-      );
-      const suggestions = ["...", ...allVillages.filter((v) => v !== "...")];
+        new Set(Object.values(currentVillageBySub).flat()),
+      ).filter((v) => v !== "...");
+
+      const suggestions = ["...", ...allVillages];
 
       setAddressSuggestions(
         suggestions.map((v) => ({
@@ -561,15 +676,14 @@ export default function HousesPage() {
         })),
       );
 
-      // ตั้ง flag ว่าแสดงแล้ว
       setHasShownVillageSuggestions(true);
       return;
     }
 
-    // 3. มี "บ." แล้วกด space → แสดง ต.
+    // 3. มี "บ." แล้วกด space → แสดง ต. (ตามอำเภอ)
     if (trimmed.match(/บ\.[^ ]+$/) && /\s$/.test(input)) {
       setAddressSuggestions(
-        subdistricts.map((sd) => ({
+        currentSubdistricts.map((sd) => ({
           label: `ต.${sd}`,
           value: `ต.${sd}`,
         })),
@@ -581,7 +695,7 @@ export default function HousesPage() {
     const tambonMatch = trimmed.match(/ต\.([^ ]*)$/);
     if (tambonMatch) {
       const partial = tambonMatch[1];
-      const matches = subdistricts.filter((sd) => sd.includes(partial));
+      const matches = currentSubdistricts.filter((sd) => sd.includes(partial));
       setAddressSuggestions(
         matches.map((sd) => ({
           label: `ต.${sd}`,
@@ -603,11 +717,22 @@ export default function HousesPage() {
     const tambonMatch = suggestion.value.match(/ต\.(.+)/);
     if (tambonMatch) {
       const tambon = tambonMatch[1];
-      const info = subdistrictInfo[tambon];
-      if (info) {
-        newAddress =
-          newAddress.trim() + ` อ.${info.district} จ.${info.province}`;
+      // หา province จากข้อมูลที่เลือก
+      let province = "ตาก"; // default
+      if (selectedDistrict !== "ทั้งหมด") {
+        const info = locationData[selectedDistrict]?.subdistrictInfo[tambon];
+        if (info) province = info.province;
+      } else {
+        // ถ้าเลือกทั้งหมด หา province จาก subdistrictInfo รวม
+        const info = Object.values(locationData).find(
+          (d) => d.subdistrictInfo[tambon],
+        )?.subdistrictInfo[tambon];
+        if (info) province = info.province;
       }
+
+      const district =
+        selectedDistrict === "ทั้งหมด" ? "วังเจ้า" : selectedDistrict; // หรือปรับตามต้องการ
+      newAddress = newAddress.trim() + ` อ.${district} จ.${province}`;
     }
 
     setAddressInput(newAddress);
@@ -615,7 +740,6 @@ export default function HousesPage() {
     setAddressSuggestions([]);
     setHighlightedSuggestionIndex(-1);
 
-    // ทำให้ dropdown ถัดไปโผล่ทันที
     setTimeout(() => {
       generateAddressSuggestions(newAddress + " ");
     }, 0);
@@ -854,8 +978,9 @@ export default function HousesPage() {
         </div>
       </div>
 
-      {/* ตัวกรองพิกัด */}
+      {/* ตัวกรองพิกัด + เลือกอำเภอ */}
       <div className="flex flex-wrap items-center gap-6 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-200">
+        {/* Checkbox เดิม */}
         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
           <input
             type="checkbox"
@@ -874,8 +999,30 @@ export default function HousesPage() {
           />
           <span>เพิ่มพิกัดแล้ว</span>
         </label>
-      </div>
 
+        {/* Dropdown เลือกอำเภอ */}
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">
+            แสดงพื้นที่:
+          </label>
+          <select
+            value={selectedDistrict}
+            onChange={(e) => {
+              setSelectedDistrict(e.target.value);
+              // รีเซ็ต flag และ suggestions เมื่อเปลี่ยนอำเภอ
+              setHasShownVillageSuggestions(false);
+              setAddressSuggestions([]);
+            }}
+            className="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none bg-white"
+          >
+            {districts.map((dist) => (
+              <option key={dist} value={dist}>
+                {dist === "ทั้งหมด" ? "ทุกอำเภอ" : `อ.${dist}`}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
       {/* รายการบ้าน */}
       {currentHouses.length === 0 ? (
         <div className="text-center py-20">
@@ -921,21 +1068,34 @@ export default function HousesPage() {
                   </h3>
                   {h.phone && (
                     <div className="flex items-center gap-2 mt-2 group">
-                      <p className="text-sm text-gray-600 select-none">
+                      <p className="text-sm text-gray-600 select-none font-medium">
                         {h.phone}
                       </p>
+
+                      {/* ปุ่ม Copy */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           navigator.clipboard.writeText(h.phone!);
                           toast.success("คัดลอกเบอร์เรียบร้อยแล้ว!");
                         }}
-                        className="opacity-40 group-hover:opacity-100 transition-opacity duration-200"
+                        className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-gray-100"
                         title="คัดลอกเบอร์โทร"
                         aria-label="คัดลอกเบอร์โทร"
                       >
                         <Copy className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" />
                       </button>
+
+                      {/* ปุ่ม โทร ออกทันที */}
+                      <a
+                        href={`tel:${h.phone.replace(/[^0-9+]/g, "")}`} // ล้างอักขระพิเศษออกให้โทรได้จริง
+                        onClick={(e) => e.stopPropagation()} // ป้องกัน bubble ไป card
+                        className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-green-50"
+                        title={`โทรหา ${h.full_name || "ลูกค้า"}`}
+                        aria-label="โทรออกทันที"
+                      >
+                        <Phone className="w-4 h-4 text-green-600 hover:text-green-700 transition-colors" />
+                      </a>
                     </div>
                   )}
                   <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">

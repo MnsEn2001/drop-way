@@ -27,6 +27,7 @@ import {
   Copy,
   Calculator,
   MessageSquare,
+  Phone,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 const ITEMS_PER_PAGE = 20;
@@ -2023,18 +2024,31 @@ export default function NavigationPage() {
                           <p className="text-sm text-gray-600 select-none">
                             {h.phone}
                           </p>
+
+                          {/* ปุ่ม Copy */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               navigator.clipboard.writeText(h.phone!);
                               toast.success("คัดลอกเบอร์เรียบร้อยแล้ว!");
                             }}
-                            className="opacity-40 group-hover:opacity-100 transition-opacity duration-200"
+                            className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-gray-100"
                             title="คัดลอกเบอร์โทร"
                             aria-label="คัดลอกเบอร์โทร"
                           >
                             <Copy className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" />
                           </button>
+
+                          {/* ปุ่ม โทร ออกทันที */}
+                          <a
+                            href={`tel:${h.phone}`}
+                            onClick={(e) => e.stopPropagation()} // ป้องกัน bubble ไป card
+                            className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-green-50"
+                            title="โทรหาลูกค้า"
+                            aria-label="โทรหาลูกค้า"
+                          >
+                            <Phone className="w-4 h-4 text-green-600 hover:text-green-700 transition-colors" />
+                          </a>
                         </div>
                       )}
                       <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">
