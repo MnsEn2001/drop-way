@@ -999,9 +999,6 @@ export default function HousesPage() {
 
         {/* Dropdown เลือกอำเภอ */}
         <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700">
-            แสดงพื้นที่:
-          </label>
           <select
             value={selectedDistrict}
             onChange={(e) => {
