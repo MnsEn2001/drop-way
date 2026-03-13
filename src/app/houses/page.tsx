@@ -985,7 +985,7 @@ export default function HousesPage() {
             onChange={(e) => setShowNoCoords(e.target.checked)}
             className="w-4 h-4 text-orange-600 rounded"
           />
-          <span>ยังไม่เพิ่มพิกัด</span>
+          <span>ไม่มีพิกัด</span>
         </label>
         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
           <input
@@ -994,7 +994,7 @@ export default function HousesPage() {
             onChange={(e) => setShowWithCoords(e.target.checked)}
             className="w-4 h-4 text-green-600 rounded"
           />
-          <span>เพิ่มพิกัดแล้ว</span>
+          <span>มีพิกัด</span>
         </label>
 
         {/* Dropdown เลือกอำเภอ */}
