@@ -31,6 +31,7 @@ export default function HousesPage() {
   const [houses, setHouses] = useState<House[]>([]);
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [totalInDB, setTotalInDB] = useState<number | null>(null);
   const [addingIds, setAddingIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -61,6 +62,7 @@ export default function HousesPage() {
   const [formData, setFormData] = useState<Partial<House>>({});
   const [isDetecting, setIsDetecting] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [isSavingHouse, setIsSavingHouse] = useState(false);
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [coordsInput, setCoordsInput] = useState<string>("");
@@ -355,9 +357,48 @@ export default function HousesPage() {
       setHouses(allHouses);
       setTotalInDB(allHouses.length);
       setLoading(false);
+      setLoadingError(null);
     };
     fetchHouses();
   }, []);
+
+  // หากโหลดครั้งแรกแล้วล้มเหลว ให้แสดงปุ่มลองใหม่ ไม่ใช่แค่หน้าว่าง
+  const retryInitialLoad = () => {
+    setLoading(true);
+    setLoadingError(null);
+    const fetchHouses = async () => {
+      let allHouses: House[] = [];
+      let start = 0;
+      const pageSize = 1000;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("houses")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .range(start, start + pageSize - 1);
+
+        if (error) {
+          console.error("Error:", error);
+          toast.error("โหลดข้อมูลไม่สำเร็จ");
+          break;
+        }
+
+        if (!data || data.length === 0) break;
+
+        allHouses = [...allHouses, ...data];
+        start += pageSize;
+
+        if (data.length < pageSize) break;
+      }
+
+      setHouses(allHouses);
+      setTotalInDB(allHouses.length);
+      setLoading(false);
+      setLoadingError(null);
+    };
+    fetchHouses();
+  };
 
   // แก้ฟังก์ชัน getCountText() ให้แสดงจำนวนจริงทั้งหมด
   const getCountText = () => {
@@ -810,35 +851,45 @@ export default function HousesPage() {
   };
 
   const saveHouse = async () => {
-    // ปรับ lat/lng ให้เป็น null ถ้าไม่มีค่า (ป้องกัน undefined)
+    // ป้องกันกดซ้ำและปิด modal ขณะกำลังบันทึก
+    if (isSavingHouse) return;
+    if (isAdding && (!formData.full_name || !formData.phone || !formData.address)) {
+      toast.error("กรุณากรอกชื่อ เบอร์โทร และที่อยู่ให้ครบ");
+      return;
+    }
+
     const finalData = {
       ...formData,
-      lat: formData.lat ?? null, // ถ้า undefined → กลายเป็น null
+      lat: formData.lat ?? null,
       lng: formData.lng ?? null,
     };
 
-    if (isAdding) {
-      const { error } = await supabase.from("houses").insert(finalData);
-      if (error) {
-        toast.error("เพิ่มบ้านไม่สำเร็จ: " + error.message);
-      } else {
+    setIsSavingHouse(true);
+    try {
+      if (isAdding) {
+        const { error } = await supabase.from("houses").insert(finalData);
+        if (error) {
+          toast.error("เพิ่มบ้านไม่สำเร็จ: " + error.message);
+          return;
+        }
         toast.success("เพิ่มบ้านสำเร็จ!");
-        await reloadHouses();
-        closeModal();
-      }
-    } else {
-      if (!editingHouse) return;
-      const { error } = await supabase
-        .from("houses")
-        .update(finalData)
-        .eq("id", editingHouse.id);
-      if (error) {
-        toast.error("เกิดข้อผิดพลาด: " + error.message);
       } else {
+        if (!editingHouse) return;
+        const { error } = await supabase
+          .from("houses")
+          .update(finalData)
+          .eq("id", editingHouse.id);
+        if (error) {
+          toast.error("เกิดข้อผิดพลาด: " + error.message);
+          return;
+        }
         toast.success("บันทึกสำเร็จ");
-        await reloadHouses();
-        closeModal();
       }
+
+      await reloadHouses();
+      closeModal();
+    } finally {
+      setIsSavingHouse(false);
     }
   };
 
@@ -877,7 +928,7 @@ export default function HousesPage() {
       .from("houses")
       .delete()
       .eq("id", houseId)
-      .select(); // สำคัญ: ต้องมี .select() เพื่อเช็คว่าลบจริงไหม
+      .select();
 
     if (error) {
       toast.error("ลบไม่สำเร็จ: " + error.message);
@@ -892,6 +943,11 @@ export default function HousesPage() {
 
     toast.success("ลบบ้านเรียบร้อย");
     setHouses((prev) => prev.filter((h) => h.id !== houseId));
+    // หากกำลังแสดงหน้าที่ว่างเปล่าหลังจากลบ ให้ย้อนกลับหน้าก่อน
+    const totalPagesAfter = Math.ceil(filteredHouses.filter((h) => h.id !== houseId).length / ITEMS_PER_PAGE);
+    if (currentPage > Math.max(1, totalPagesAfter)) {
+      setCurrentPage(Math.max(1, totalPagesAfter));
+    }
   };
 
   const openNavigation = (lat: number, lng: number) => {
@@ -1019,9 +1075,33 @@ export default function HousesPage() {
       </div>
       {/* รายการบ้าน */}
       {currentHouses.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-xl text-gray-500">ไม่พบบ้านที่ตรงกับเงื่อนไข</p>
-        </div>
+        loading ? (
+          <div className="text-center py-20">
+            <p className="text-lg text-gray-500">กำลังโหลดคลังบ้าน...</p>
+          </div>
+        ) : loadingError ? (
+          <div className="text-center py-20">
+            <p className="text-base text-red-700 font-medium">
+              โหลดคลังบ้านไม่สำเร็จ
+            </p>
+            <p className="mt-1 text-sm text-gray-600">
+              กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง
+            </p>
+            <button
+              type="button"
+              onClick={retryInitialLoad}
+              className="mt-4 px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-800"
+            >
+              ลองใหม่
+            </button>
+          </div>
+        ) : (
+          <div className="text-center py-20">
+            <p className="text-base text-gray-600">
+              ไม่พบบ้านที่ตรงกับเงื่อนไขการค้นหา
+            </p>
+          </div>
+        )
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -1477,7 +1557,8 @@ export default function HousesPage() {
                   type="button"
                   onClick={closeModal}
                   onMouseDown={(e) => e.preventDefault()}
-                  className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300 active:scale-95"
+                  disabled={isSavingHouse}
+                  className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
                   ยกเลิก
                 </button>
@@ -1486,9 +1567,14 @@ export default function HousesPage() {
                   type="button"
                   onClick={saveHouse}
                   onMouseDown={(e) => e.preventDefault()}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold active:scale-95"
+                  disabled={isSavingHouse}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
                 >
-                  {isAdding ? "เพิ่มบ้าน" : "บันทึก"}
+                  {isSavingHouse
+                    ? "กำลังบันทึก..."
+                    : isAdding
+                      ? "เพิ่มบ้าน"
+                      : "บันทึก"}
                 </button>
               </div>
             </div>
