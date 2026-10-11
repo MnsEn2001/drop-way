@@ -1,35 +1,40 @@
 # .ai/reports/README.md
 
-This folder is for concise verification reports that an agent can leave for later review.
+โฟลเดอร์นี้เก็บรายงานการตรวจสอบที่ AI agent ทำไว้ในเซสชัน แทนการสรุปแค่ในแชท
 
-## What belongs in a report
-- What was checked
-- The exact commands run
-- The actual output or result
-- Any assumptions made
-- Any unresolved issues
-- Relevant commit SHAs, file paths, or URLs
-- Whether the result was verified or only partially checked
+## จุดประสงค์
 
-## What does not belong here
-- Fake results
-- Claims that checks passed when they were not run
-- Long unrelated commentary
-- Duplicate copies of the documentation itself
+- ให้ตรวจสอบผลลัพธ์ Git / lint / build / deploy / ความปลอดภัยได้จากไฟล์จริง
+- ไม่ให้อ้างผลตรวจโดยไม่มี artifact รองรับ
+- ให้เซสชันถัดไปเห็น context ว่าอะไรเช็คแล้ว อะไรยังไม่เช็ค
 
-## File naming
-Use clear names so reports are easy to find later, for example:
-- `.ai/reports/2026-10-11-type-check-report.md`
-- `.ai/reports/2026-10-11-sync-verification.md`
+## รูปแบบไฟล์
 
-## Report template
-1. Purpose
-2. Commands run
-3. Results
-4. Evidence reviewed
-5. Unresolved issues
-6. Resulting SHAs or refs, if any
-7. Conclusion
+- `.ai/reports/YYYY-MM-DD-ชื่อย่อ-งาน.md`
+- หรือ `.ai/reports/YYYY-MM-DD-ชื่อย่อ-งาน-{n}.md` ถ้ามีรายงานมากกว่าหนึ่งใบในวันเดียวกัน
 
-## Current state
-No verification reports exist yet.
+## เนื้อหาที่ควรอยู่ใน report
+
+- วัตถุประสงค์ของการตรวจสอบ
+- คำสั่งที่รันจริง
+- ผลลัพธ์จริงจาก command นั้น ๆ
+- ส่วนที่ผ่าน / ล้มเหลว / ไม่ได้รัน
+- ข้อจำกัด เช่น ไม่มี session ทดสอบ, ไม่สามารถทดสอบบน browser จริง, ไม่สามารถเข้าถึงสภาพแวดล้อม production
+- สิ่งที่ต้องทำต่อหากมี
+
+## สิ่งที่ไม่ควรใส่
+
+- ผลลัพธ์ปลอม
+- ค่า secrets หรือ token จริง
+- แค่สรุปโดยไม่มีคำสั่ง+ผลที่ตรวจสอบได้
+
+## การเชื่อมโยง
+
+- ถ้าเซสชันจบแล้วมีรายงานสำคัญ ให้อ้างอิงใน `.ai/AI_HANDOFF.md`
+- ถ้างานใหญ่ทำให้สถานะ repo เปลี่ยน ให้อัปเดต `.ai/CURRENT_STATE.md` และ `.ai/CHANGELOG.md`
+- รายงานแต่ละไฟล์ควรบอกว่าเช็คอะไรและเช็คยังไง "คนอ่านรายงานデ interferometer ควรเห็นภาพชัดว่าผ่าน/ยังไม่ผ่าน"
+
+## ปัจจุบัน
+
+- ใช้ไฟล์รายงานในโฟลเดอร์นี้สำหรับทุกครั้งของการตรวจสอบสำคัญ
+- report อาจมาแทนที่การบอกในรูปแบบ "สรุปปากเปล่า" ในแชท ถ้างานนั้นสำคัญพอ

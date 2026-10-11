@@ -1,59 +1,66 @@
 # .ai/AI_RULES.md
 
-This file defines mandatory operating rules for every AI agent working in this repository.
+เหล่านี้คือกฎที่ AI agent ต้องปฏิบัติตามใน sessions นี้
 
 ## 1. Repository verification first
-- Confirm the authoritative remote URL and default branch before starting work.
-- In this repository, verify that `origin` points to `https://github.com/MnsEn2001/drop-way.git` and the default branch is `main`.
-- Record the latest verified `origin/main` commit SHA and the local `HEAD` SHA at the start of each session.
-- If the repo, branch, or synchronization status cannot be verified, stop and report the blocker.
+- ก่อนจะอ่านเขียนหรือรันอะไรต้องเช็คก่อนว่า repo จริงๆ คืออะไร
+- AI ต้องตรวจสอบ remote, branch, HEAD, origin/main, ก่อนจะทำอะไร
+- AI ต้องแจ้งชื่อ branch และ remote ทุกครั้งหลังจากทำสำเร็จ
 
 ## 2. Inspect before modifying
-- Read the relevant source files, types, routes, middleware, Supabase clients, queries, and configs before planning any change.
-- Do not infer that a feature exists because a dependency is installed. Use the actual code as evidence.
-- Do not introduce new files, routes, API shapes, database tables/columns, environment variables, or workflows unless the actual project already implies or contains them.
+- AI ต้องอ่านไฟล์ที่เกี่ยวข้องก่อนจะแก้แม้แต่บรรทัดเดียว
+- AI ต้องอธิบายว่าแก้เพราะอะไร ก่อนจะเขียนโค้ด
+- AI ต้องระวังอย่าแก้ไฟล์ที่ไม่เกี่ยวข้อง
 
 ## 3. Preserve the real project
-- Preserve existing user changes, architecture, naming conventions, and project structure.
-- Prefer small, targeted, reversible changes.
-- Do not create duplicate systems when an existing implementation should be extended or fixed.
-- Do not silently change dependencies, package managers, application structure, build configuration, or deployment configuration.
+- อย่าเขียนอะไรที่ขัดกับจุดประสงค์โปรเจกต์เดิม
+- อย่าเพิ่ม dependency โดยไม่จำเป็น หรือเปลี่ยนโครงสร้างใหญ่โดยไม่ได้รับอนุญาต
+- ถ้าเป็นเรื่องสำคัญ ต้องอธิบายทางเลือกและผลก่อนตัดสินใจ
 
 ## 4. Authentication, authorization, and data security
-- Preserve authentication, session handling, authorization, and ownership checks.
-- In this project, Supabase Auth is used with cookie-based session checks in `middleware.ts`, and Supabase clients use environment variables `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- Do not weaken Row Level Security, service-role clients, or other security controls just to make a feature work.
-- If RLS, policies, or ownership behavior is unclear, investigate and report before changing anything.
+- ต้องระวังเรื่อง auth, session, RLS, permissions ทุกครั้ง
+- อย่าเขียนโค้ดที่ bypass security โดยเด็ดขาด
+- หากไม่เข้าใจการปกป้องข้อมูลในระบบ ต้องรายงานก่อนจะดำเนินการต่อ
 
 ## 5. Secrets and user data
-- Never include values for secrets, access tokens, passwords, service-role keys, private user data, or production credentials in documentation or code.
-- Environment variable names may be documented when useful. Values must not be exposed.
-- Do not log, print, or transmit real user data unless the task explicitly and safely requires it.
+- ห้ามจัดเก็บหรือแสดงค่า secret, token, password
+- อย่าเขียนค่าจริงลงในโค้ดหรือไฟล์ติดตั้ง
+- หากต้องการค่าจาก env ต้องใช้ชื่อตัวแปร ไม่ใช่ค่าจริง
 
 ## 6. No invented behavior
-- Do not invent APIs, database tables, columns, RPC functions, routes, environment variables, or features.
-- Do not claim a feature is implemented unless it is implemented in the codebase.
-- Do not claim a test passed unless it was actually run and passed in this environment.
+- อย่าอ้างว่าทำเสร็จ ถ้ายังไม่ได้ตรวจสอบ
+- อย่ารายงานผลที่ไม่ได้เกิดจากคำสั่งจริง
+- ถ้าทำไม่ได้ ต้องบอกว่า ทำไม้ไม่ได้ และข้อจำกัด
 
 ## 7. Verification and honesty
-- Run the available relevant checks and accurately report their results.
-- Distinguish clearly between:
-  - verified and implemented
-  - partially implemented
-  - planned but not implemented
-  - unknown or not yet verified
-- If requirements or security behavior are unclear, investigate and report before making risky changes.
+- ต้องแยกข้อเท็จจริงที่ตรวจสอบได้ กับ สมมติ หรือแค่คาดการณ์
+- ต้องบอกส่วนที่ยังตรวจสอบไม่ได้ชัดเจน
+- ถ้ารันคำสั่งล้มเหลว ต้องรายงานผลล้มเหลว ไม่ใช่ปัดทิ้ง
 
 ## 8. Documentation discipline
-- When work materially changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
-- When a session begins or ends with useful context for the next agent, update `.ai/AI_HANDOFF.md` as appropriate.
-- Keep documented stack, routes, scripts, and integrations aligned with the actual code.
+- เมื่องานเปลี่ยนสถานะโปรเจกต์สำคัญ ให้อัปเดต `.ai/CURRENT_STATE.md` และ `.ai/CHANGELOG.md`
+- เมื่อเริ่มหรือจบ session ที่มี context สำคัญ ให้อัปเดต `.ai/AI_HANDOFF.md`
+- อย่าเขียนเอกสารที่ไม่จริง หรือสร้างประวัติที่ไม่เกิดขึ้นจริง
 
 ## 9. Git discipline and mandatory push
-- Use the repository's real remote and branch.
-- This repository operates with a standing authorization: after finishing the requested work, commit the scoped changes and push them to `main` on `origin` using the documented push procedure in `.ai/AI_HANDOFF.md` ("Push procedure") and `.ai/WORKFLOW.md` ("Git workflow"). Do not wait for a separate push request.
-- Never force-push, rewrite history, or reset branches.
-- Stage only files that belong to the current task. Do not commit unrelated changes, secrets, environment files, or lockfiles that the repository does not already track.
-- Immediately before committing, re-verify the latest `origin/main` SHA and ensure no remote commits or user changes will be overwritten.
-- After pushing, verify the remote SHA matches local `HEAD` (`git ls-remote --heads origin main`) and report the pushed commit SHA and the verification result.
-- If pushing is impossible (no credential, blocked remote, conflicting history), stop, report the blocker clearly, and leave the commits locally. Do not silently skip the push.
+- ใช้ remote และ branch จริงของ repo
+- โปรเจกต์นี้ทำงานด้วย standing authorization: หลังทำงานที่ได้รับมอบหมายเสร็จ ให้ stage เฉพาะไฟล์ที่เกี่ยวข้อง แล้ว commit และ push ไป `main` บน `origin` ตามขั้นตอน push ที่ระบุใน `.ai/AI_HANDOFF.md` และ `.ai/WORKFLOW.md` (หัวข้อ "Push procedure" และ "Git workflow") — ไม่ต้องรอ pull request แยก
+- ห้าม force-push, rewrite history, หรือ reset branch
+- Stage เฉพาะไฟล์ที่อยู่ในขอบเขตงานปัจจุบัน ไม่ stage ไฟล์ที่ไม่เกี่ยวข้อง, secrets, env file, หรือ lockfile ที่ repo ไม่ได้ติดตามอยู่แล้ว
+- ก่อน commit ต้องเช็คสถานะ remote/latest `origin/main` SHA อีกครั้ง และต้องมั่นใจว่าไม่มี remote commit หรือการเปลี่ยนแปลงจากผู้ใช้ที่จะถูกทับ
+- หลัง push ต้องตรวจสอบว่า remote SHA ตรงกับ local `HEAD` (`git ls-remote --heads origin main`) และรายงาน SHA ของ commit ที่ push พร้อมผลการตรวจสอบ
+- หากดัน push ไม่ได้ (ไม่มี credential, remote blocked, history ขัดกัน) ให้หยุด แจ้ง blocker ชัดเจน และคง commit ไว้ที่เครื่อง ไม่ปล่อยให้ push ล้มเหลวเงียบๆ
+- ไม่ใช้คำสั่งทำลายเช่น reset/clean/history rewrite เว้นแต่ผู้ใช้ขอให้ทำโดยตรง
+
+## 10. Mandatory verification reports
+- ทุกครั้งที่ทำการตรวจสอบสำคัญ — โดยเฉพาะการเช็คสถานะ repo, lint, build, deploy, หรืองานที่กระทบความ safe/clean ของ repository — ต้องเขียนรายงานเป็นไฟล์ใน `.ai/reports/` ทุกครั้ง
+- ชื่อรายงานให้ใช้รูปแบบ `.ai/reports/YYYY-MM-DD-ชื่อย่อ-งาน.md` หรือคล้ายชัดเจน
+- รายงานต้องมีอย่างน้อย:
+  - วัตถุประสงค์ของการตรวจสอบ
+  - คำสั่งที่รันจริง (หรือสรุปคำสั่งสำคัญ)
+  - ผลลัพธ์จริงที่ได้จาก command นั้น ๆ
+  - ส่วนที่ตรวจสอบผ่าน/ผ่านบางส่วน/ล้มเหลว
+  - ส่วนที่ยังตรวจสอบไม่ได้ หรือมีข้อจำกัด
+  - สรุปผลและข้อควรระวังที่ควรรายงานต่อผู้พัฒนา
+- รายงานต้องเขียนจริงใน repo ไม่ใช่แค่บอกในแชท
+- อนาคตทุกครั้งที่เจตนาจะเสร็จงาน ควรใส่ลิงก์หรือระบุชื่อรายงานที่เกี่ยวข้องในสรุปปลายจังหวัด หากยังไม่มีการสร้างไฟล์รายงานดังกล่าวต้องสร้างตอนจบงานนั้น
