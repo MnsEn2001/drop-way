@@ -40,6 +40,22 @@ This document records meaningful project and documentation changes for the DropW
 - Verified with `next lint` and `next build` (both passed) and a managed
   preview render of `/login`.
 
+## 2026-10-11 (Part 1.1 UI hardening)
+- Commit `1ce2443` fixes Phase 1 regressions across `src/app/globals.css`,
+  `src/app/layout.tsx`, and `src/components/Navbar.tsx`:
+  - removed the invalid `/menu` navigation target (the menu tab opens the drawer)
+  - replaced invalid `pb calc(...)` utility strings with the shared
+    `--mobile-nav-height` token (`mobile-bottom-nav` / `mobile-nav-inner`)
+  - single mobile bottom bar for loading, signed-in, and signed-out states
+  - drawer escape/backdrop/close handling plus focus management and dialog
+    semantics; decorative icons marked `aria-hidden="true"`
+  - typed viewport gains `viewportFit: "cover"` for safe-area support
+  - removed unused `.chip`, `.share-sheet`, `.picker-sheet` CSS and a
+    duplicated focus selector
+- Verified with `next lint` and `next build` (both passed) and HTTP 200
+  rendering of `/login`, `/register`, `/houses`, `/navigation` in the
+  managed preview. Real-device zoom/gesture checks remain NOT VERIFIED.
+
 ## 2026-10-11 (mandatory push policy)
 - `.ai/AI_RULES.md` now requires committing and pushing finished work to
   `main` using the documented procedure (standing authorization).
