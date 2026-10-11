@@ -49,8 +49,11 @@ This file defines mandatory operating rules for every AI agent working in this r
 - When a session begins or ends with useful context for the next agent, update `.ai/AI_HANDOFF.md` as appropriate.
 - Keep documented stack, routes, scripts, and integrations aligned with the actual code.
 
-## 9. Git discipline
+## 9. Git discipline and mandatory push
 - Use the repository's real remote and branch.
-- Do not force-push, rewrite history, or reset branches unless the user explicitly asks.
-- Do not commit or push unless explicitly authorized.
-- If committing is authorized, re-verify the latest remote SHA immediately before publishing and ensure no remote commits or user changes will be overwritten.
+- This repository operates with a standing authorization: after finishing the requested work, commit the scoped changes and push them to `main` on `origin` using the documented push procedure in `.ai/AI_HANDOFF.md` ("Push procedure") and `.ai/WORKFLOW.md` ("Git workflow"). Do not wait for a separate push request.
+- Never force-push, rewrite history, or reset branches.
+- Stage only files that belong to the current task. Do not commit unrelated changes, secrets, environment files, or lockfiles that the repository does not already track.
+- Immediately before committing, re-verify the latest `origin/main` SHA and ensure no remote commits or user changes will be overwritten.
+- After pushing, verify the remote SHA matches local `HEAD` (`git ls-remote --heads origin main`) and report the pushed commit SHA and the verification result.
+- If pushing is impossible (no credential, blocked remote, conflicting history), stop, report the blocker clearly, and leave the commits locally. Do not silently skip the push.

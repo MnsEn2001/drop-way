@@ -77,9 +77,23 @@ If `bun` is not available in the current environment, use the project's configur
 - Work on the verified branch.
 - Keep changes small and reviewable.
 - Inspect `git status` and `git diff` before committing.
-- Do not force-push, rewrite history, or reset branches unless explicitly asked.
-- Do not commit or push unless the user explicitly authorizes it.
-- If you do commit, re-verify the latest remote SHA before publishing and ensure nothing will be overwritten.
+- Do not force-push, rewrite history, or reset branches.
+- After finishing a task, commit the scoped changes and push them to `main` on `origin`. This repository uses a standing push authorization; do not wait for a separate push request.
+- Re-verify the latest `origin/main` SHA immediately before publishing and ensure nothing will be overwritten.
+
+### Push procedure (verified in this environment)
+1. `git fetch origin main` then `git rev-parse origin/main` to verify remote state.
+2. `git status --short`; stage only the task's files with `git add <files>`.
+3. `git diff --cached --check` must pass before committing.
+4. Commit with a why-focused message and the Codebuff footer (`Co-Authored-By: Codebuff <noreply@codebuff.com>`).
+5. `git checkout main`, `git pull origin main`, then `git merge --ff-only <working-branch>` (or commit directly on `main`).
+6. `git push origin main`.
+7. Verify: `git ls-remote --heads origin main` must equal `git rev-parse HEAD`.
+
+### What must never be pushed
+- Local environment files such as `.env` (already excluded by `.gitignore`; never stage them anyway).
+- Secrets, tokens, credentials, or real user data.
+- Untracked artifacts the repository does not track, such as `package-lock.json` when the project has not adopted a lockfile.
 
 ## Supabase change workflow
 When changing data-dependent behavior:

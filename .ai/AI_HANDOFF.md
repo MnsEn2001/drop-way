@@ -32,6 +32,33 @@ A short, efficient starting guide for every new AI session in this repository.
 
 If a command is unavailable in the current environment, say so explicitly instead of pretending it ran.
 
+## Push procedure (use after every completed task)
+This repository expects the completed work to be committed and pushed to `main`.
+The verified procedure that has worked in this environment:
+
+1. Verify remote state first:
+   - `git fetch origin main`
+   - `git rev-parse origin/main`
+2. Check the working tree and stage only task files:
+   - `git status --short`
+   - `git add <only-the-files-of-this-task>`
+   - `git diff --cached --check` (must pass; fix whitespace errors before committing)
+3. Commit with a message describing why, ending with the Codebuff footer
+   (`Co-Authored-By: Codebuff <noreply@codebuff.com>`).
+4. Bring the work to `main` and fast-forward only:
+   - `git checkout main`
+   - `git pull origin main`
+   - `git merge --ff-only <working-branch>` (or commit directly on `main` if that is the working branch)
+5. Push and verify:
+   - `git push origin main`
+   - `git ls-remote --heads origin main` and compare with `git rev-parse HEAD` — the SHAs must match
+
+Notes learned in this environment:
+- Do not print or commit `.env` values; the repo `.gitignore` excludes local env files, and untracked env files must never be staged.
+- Do not commit `package-lock.json` unless the repository decides to track a lockfile; it is currently untracked and out of task scope.
+- If a staging command is rejected by the environment, run `git add` and `git commit` as separate commands.
+- Never force-push; if the remote has diverged, stop and report.
+
 ## Important local facts
 - Stack: Next.js 14 App Router, TypeScript, Tailwind CSS, Supabase Auth via `@supabase/ssr`, browser Supabase client.
 - Package manager in use: `npm`/`yarn`/`pnpm`/`bun` are all mentioned in `README.md`, but the authoritative scripts come from `package.json`.
@@ -66,6 +93,7 @@ If a command is unavailable in the current environment, say so explicitly instea
 - Include command results that were actually run.
 - If a check could not run, say so and explain why.
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
+- Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.

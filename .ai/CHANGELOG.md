@@ -26,6 +26,25 @@ This document records meaningful project and documentation changes for the DropW
 - Updated `.ai/CURRENT_STATE.md` to reflect the actual verified GitHub `main` SHA and prior commit status.
 - Confirmed that no application code, dependencies, lockfiles, authentication, database schemas, routes, or business logic were changed.
 
+## 2026-10-11 (Phase 1 UI foundation)
+- Implemented and pushed Part 1 of the UI improvement plan to `main`:
+  - Shared neutral/teal UI foundation in `src/app/globals.css`
+  - Mobile-first typography, focus states, safe-area spacing, and component
+    helpers (`.btn`, `.input`, `.card`, `.chip`, `.modal-sheet`)
+  - Responsive navigation improvements in `src/components/Navbar.tsx`
+    (larger touch targets, active-route state, accessible names, drawer
+    close via button/backdrop, dialog semantics)
+  - Typed Next.js `viewport` configuration in `src/app/layout.tsx` plus a
+    narrowly scoped `.zoom-pinch-ok` (`touch-action: manipulation`) guard
+- Added `.env` to `.gitignore` so local environment files cannot be committed.
+- Verified with `next lint` and `next build` (both passed) and a managed
+  preview render of `/login`.
+
+## 2026-10-11 (mandatory push policy)
+- `.ai/AI_RULES.md` now requires committing and pushing finished work to
+  `main` using the documented procedure (standing authorization).
+- Documented the verified push procedure in `.ai/AI_HANDOFF.md` and
+  `.ai/WORKFLOW.md`, including what must never be pushed.
+
 ## Notes on scope
-- No commit or push was made in this session unless the user explicitly authorizes it later.
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.
