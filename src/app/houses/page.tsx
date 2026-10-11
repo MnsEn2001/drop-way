@@ -934,7 +934,7 @@ export default function HousesPage() {
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl"
           >
             <Plus className="w-4 h-4" />
-            เพิ่มบ้าน
+            เพิ่ม
           </button>
         </div>
       </div>
