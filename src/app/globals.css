@@ -17,6 +17,9 @@
   --success: #0f766e;
   --warning: #b45309;
   --danger: #b91c1c;
+  --danger-hover: #991b1b;
+  --danger-subtle: #fdecec;
+  --muted-strong: #cbd5e1;
   --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
   --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
 }
@@ -62,7 +65,14 @@ body {
   }
 }
 
-/* Layout presets that are safe for mobile-first pages */
+/* Mobile tap-zoom guard: narrowly scoped to interactive controls only.
+   This avoids disabling scrolling or breaking forms, maps, and touch navigation. */
+.zoom-pinch-ok,
+.zoom-pinch-ok::before,
+.zoom-pinch-ok::after {
+  touch-action: manipulation;
+}
+
 .page-content {
   padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
 }
@@ -70,5 +80,123 @@ body {
 @media (min-width: 768px) {
   .page-content {
     padding-bottom: 0;
+  }
+}
+
+.share-sheet,
+.picker-sheet {
+  margin-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .share-sheet,
+  .picker-sheet {
+    margin-bottom: 0;
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--background);
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--foreground);
+    transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+    min-height: 44px;
+    min-width: 44px;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    background: var(--background-subtle);
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn:focus-visible,
+  .btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    background: var(--teal);
+    color: var(--teal-foreground);
+  }
+
+  .btn-primary:hover {
+    background: #0b7d72;
+  }
+
+  .btn-danger {
+    border-color: #fecaca;
+    color: var(--danger);
+    background: var(--background);
+  }
+
+  .btn-danger:hover {
+    background: var(--danger-subtle);
+    border-color: #fbc4c4;
+    color: var(--danger-hover);
+  }
+
+  .input {
+    display: block;
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid var(--border);
+    background: var(--background);
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    color: var(--foreground);
+    min-height: 48px;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+
+  .input::placeholder {
+    color: var(--foreground-muted);
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--teal);
+    box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.25);
+  }
+
+  .card {
+    background: var(--background);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .modal-sheet {
+    background: var(--background);
+    border-radius: 1rem 1rem 0 0;
+    box-shadow: var(--shadow-md);
+    max-height: 85vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: var(--background-subtle);
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--foreground-muted);
   }
 }
