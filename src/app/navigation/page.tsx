@@ -190,6 +190,10 @@ export default function NavigationPage() {
   };
   // FAB Menu
   const [isFabOpen, setIsFabOpen] = useState(false);
+  const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
+  const [isDeliverSubmitting, setIsDeliverSubmitting] = useState(false);
+  const [isReportSubmitting, setIsReportSubmitting] = useState(false);
+  const [navError, setNavError] = useState<string | null>(null);
   // View Mode: today | delivered | reported
   const [viewMode, setViewMode] = useState<
     "today" | "delivered" | "reported" | "qr_pending" | "calculator"
@@ -416,17 +420,42 @@ export default function NavigationPage() {
     searchInNote: true,
   });
 
-  // โหลดค่าจุดคงที่จาก localStorage
+  // โหลดค่าจุดคงที่จาก localStorage (ป้องกัน corrupt JSON ไม่ให้พังหน้า)
   useEffect(() => {
-    const saved = localStorage.getItem("navigationStartPosition");
-    const savedMode = localStorage.getItem("navigationRealTimeMode");
-    if (saved) {
-      const pos = JSON.parse(saved);
-      setStartPosition(pos);
-      setIsRealTimeMode(savedMode !== "false");
-    } else {
-      setIsRealTimeMode(true);
+    let startPos: { lat: number; lng: number } | null = null;
+    let realTimeMode = true;
+
+    try {
+      const saved = localStorage.getItem("navigationStartPosition");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (
+          parsed &&
+          typeof parsed.lat === "number" &&
+          typeof parsed.lng === "number" &&
+          isFinite(parsed.lat) &&
+          isFinite(parsed.lng)
+        ) {
+          startPos = parsed;
+        }
+      }
+    } catch {
+      // localStorage เสียหรือ JSON ไม่ถูกต้อง → ใช้ค่า default
     }
+
+    try {
+      const savedMode = localStorage.getItem("navigationRealTimeMode");
+      if (savedMode === "false") {
+        realTimeMode = false;
+      }
+    } catch {
+      // ไม่ทำอะไร
+    }
+
+    if (startPos) {
+      setStartPosition(startPos);
+    }
+    setIsRealTimeMode(realTimeMode);
   }, []);
 
   // เช็ก session
@@ -489,9 +518,16 @@ export default function NavigationPage() {
 
   // เริ่ม/หยุด watchPosition ตามโหมด
   useEffect(() => {
+    if (!navigator.geolocation) {
+      toast.error("เบราว์เซอร์ไม่รองรับการตรวจจับตำแหน่ง");
+      return;
+    }
+
     if (isRealTimeMode) {
-      if (watchIdRef.current !== null)
+      if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+
       watchIdRef.current = navigator.geolocation.watchPosition(
         (pos) => {
           const lat = pos.coords.latitude;
@@ -499,7 +535,23 @@ export default function NavigationPage() {
           setCurrentPosition({ lat, lng });
         },
         (err) => {
-          toast.error("ไม่สามารถติดตามตำแหน่งได้: " + err.message);
+          let message = "ไม่สามารถติดตามตำแหน่งได้";
+          if (err) {
+            switch (err.code) {
+              case err.PERMISSION_DENIED:
+                message = "ไม่ได้รับอนุญาตให้เข้าถึงตำแหน่ง โปรดเปิดใช้งานในตั้งค่าเบราว์เซอร์";
+                break;
+              case err.POSITION_UNAVAILABLE:
+                message = "ไม่สามารถรับตำแหน่งในปัจจุบันได้";
+                break;
+              case err.TIMEOUT:
+                message = "หมดเวลาดึงตำแหน่ง โปรดลองอีกครั้ง";
+                break;
+              default:
+                message = `ไม่สามารถติดตามตำแหน่งได้: ${err.message ?? "ข้อผิดพลาดไม่ทราบสาเหตุ"}`;
+            }
+          }
+          toast.error(message);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
       );
@@ -512,6 +564,7 @@ export default function NavigationPage() {
     return () => {
       if (watchIdRef.current !== null) {
         navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
       }
     };
   }, [isRealTimeMode]);
@@ -676,6 +729,8 @@ export default function NavigationPage() {
 
   const confirmComment = async () => {
     if (!houseToComment) return;
+    if (isCommentSubmitting) return;
+    setIsCommentSubmitting(true);
 
     const trimmed = commentText.trim();
     const { error } = await supabase
@@ -687,15 +742,19 @@ export default function NavigationPage() {
 
     if (error) {
       toast.error("บันทึกคอมเมนต์ไม่สำเร็จ: " + error.message);
-    } else {
-      toast.success("บันทึกคอมเมนต์เรียบร้อย");
-      // รีโหลดข้อมูล
-      await reloadNavigation();
-      setShowCommentModal(false);
-      setHouseToComment(null);
-      setCommentText("");
+      return;
     }
-  };
+
+    toast.success("บันทึกคอมเมนต์เรียบร้อย");
+    // รีโหลดข้อมูล
+    await reloadNavigation();
+    setShowCommentModal(false);
+    setHouseToComment(null);
+    setCommentText("");
+  } finally {
+    setIsCommentSubmitting(false);
+  }
+};
 
   // ⭐ แก้ไขฟังก์ชัน extractAmountFromNote รองรับ 1,250.50
   function extractAmountFromNote(note: string | null | undefined): number {
@@ -1337,9 +1396,24 @@ export default function NavigationPage() {
   const handleSetStartPosition = () => {
     if (detectedStartLat === null || detectedStartLng === null) return;
     const pos = { lat: detectedStartLat, lng: detectedStartLng };
+
+    let saved: string;
+    try {
+      saved = JSON.stringify(pos);
+    } catch {
+      toast.error("เกิดข้อผิดพลาดในการบันทึกตำแหน่ง");
+      return;
+    }
+
+    try {
+      localStorage.setItem("navigationStartPosition", saved);
+      localStorage.setItem("navigationRealTimeMode", "false");
+    } catch {
+      toast.error("ไม่สามารถบันทึกตำแหน่งได้");
+      return;
+    }
+
     setStartPosition(pos);
-    localStorage.setItem("navigationStartPosition", JSON.stringify(pos));
-    localStorage.setItem("navigationRealTimeMode", "false");
     setIsRealTimeMode(false);
     toast.success("ตั้งจุดเริ่มต้นคงที่เรียบร้อย");
     setShowStartModal(false);
@@ -1361,8 +1435,10 @@ export default function NavigationPage() {
     cash: string, // รับจาก localCash
     transfer: string, // รับจาก localTransfer
   ) => {
-    if (isSubmitting || !houseToDeliver) return;
-    setIsSubmitting(true);
+    if (!houseToDeliver) return;
+    if (isDeliverSubmitting) return;
+    setIsDeliverSubmitting(true);
+    setNavError(null);
 
     try {
       let note = deliverNote;
@@ -1404,25 +1480,34 @@ export default function NavigationPage() {
 
       if (error) {
         toast.error("บันทึกการส่งไม่สำเร็จ: " + error.message);
-      } else {
-        toast.success("✅ บันทึกการส่งงานเรียบร้อยแล้ว");
-        await reloadNavigation();
-        setShowDeliverModal(false);
+        setNavError("บันทึกการส่งไม่สำเร็จ");
+        return;
       }
+
+      toast.success("✅ บันทึกการส่งงานเรียบร้อยแล้ว");
+      setNavError(null);
+      await reloadNavigation();
+      setShowDeliverModal(false);
     } finally {
-      setIsSubmitting(false);
+      setIsDeliverSubmitting(false);
     }
   };
 
   // ⭐ แก้ confirmReport ทั้งหมด
   const confirmReport = async () => {
     if (!houseToReport) return;
+    if (isReportSubmitting) return;
+    setIsReportSubmitting(true);
+    setNavError(null);
+
     const finalReason =
       reportReason === "อื่นๆ" ? reportReasonCustom.trim() : reportReason;
     if (!finalReason) {
       toast.error("กรุณาเลือกหรือกรอกเหตุผล");
+      setIsReportSubmitting(false);
       return;
     }
+
     const { error } = await supabase
       .from("user_navigation_houses")
       .update({
@@ -1431,15 +1516,21 @@ export default function NavigationPage() {
         reported_at: new Date().toISOString(),
       })
       .eq("id", houseToReport.nav_id);
+
     if (error) {
       toast.error("บันทึกรายงานไม่สำเร็จ: " + error.message);
-    } else {
-      toast.success("⚠️ บันทึกรายงานเรียบร้อยแล้ว");
-      await reloadNavigation();
-      setShowReportModal(false);
-      setReportReason("โทรไม่รับ"); // รีเซ็ตค่าเริ่มต้น
-      setReportReasonCustom("");
+      setNavError("บันทึกรายงานไม่สำเร็จ");
+      setIsReportSubmitting(false);
+      return;
     }
+
+    toast.success("⚠️ บันทึกรายงานเรียบร้อยแล้ว");
+    setNavError(null);
+    await reloadNavigation();
+    setShowReportModal(false);
+    setReportReason("โทรไม่รับ"); // รีเซ็ตค่าเริ่มต้น
+    setReportReasonCustom("");
+    setIsReportSubmitting(false);
   };
   if (loading) {
     return (

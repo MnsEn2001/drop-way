@@ -853,8 +853,16 @@ export default function HousesPage() {
   const saveHouse = async () => {
     // ป้องกันกดซ้ำและปิด modal ขณะกำลังบันทึก
     if (isSavingHouse) return;
-    if (isAdding && (!formData.full_name || !formData.phone || !formData.address)) {
-      toast.error("กรุณากรอกชื่อ เบอร์โทร และที่อยู่ให้ครบ");
+    // อนุญาตให้สร้างด้วยข้อมูลบางส่วนได้ แต่ห้ามบันทึก record ว่างเปล่า
+    const hasAnyField =
+      !!formData.full_name ||
+      !!formData.phone ||
+      !!formData.address ||
+      !!formData.lat ||
+      !!formData.lng ||
+      !!formData.note;
+    if (isAdding && !hasAnyField) {
+      toast.error("กรุณากรอกข้อมูลอย่างน้อยหนึ่งช่องก่อนบันทึก");
       return;
     }
 
@@ -1426,6 +1434,9 @@ export default function HousesPage() {
             <h2 className="text-xl font-bold mb-5">
               {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
             </h2>
+            <p className="text-xs text-gray-500">
+              ậpข้อมูลเท่าที่มีได้ — ไม่จำเป็นต้องกรอกทุกช่อง
+            </p>
             <div className="space-y-4">
               <input
                 type="text"
