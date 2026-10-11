@@ -3,11 +3,72 @@
 @tailwind utilities;
 
 :root {
-    --background: #ffffff;
-    --foreground: #171717;
+  --background: #ffffff;
+  --background-subtle: #f6f8fa;
+  --foreground: #0f172a;
+  --foreground-muted: #475569;
+  --muted-line: #e2e8f0;
+  --border: #e6eef3;
+  --border-strong: #d4e2ec;
+  --focus-ring: #0d9488;
+  --teal: #0d9488;
+  --teal-foreground: #ffffff;
+  --teal-subtle: #eafaf5;
+  --success: #0f766e;
+  --warning: #b45309;
+  --danger: #b91c1c;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-    background: var(--background);
-    color: var(--foreground);
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--teal-subtle);
+  color: var(--foreground);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Layout presets that are safe for mobile-first pages */
+.page-content {
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  .page-content {
+    padding-bottom: 0;
+  }
 }

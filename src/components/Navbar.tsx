@@ -41,7 +41,11 @@ export default function Navbar() {
   }, []);
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Keep existing auth behavior; do not expose details here.
+    }
     setMobileMenuOpen(false);
     location.href = "/login";
   };
@@ -56,25 +60,25 @@ export default function Navbar() {
     return (
       <>
         {/* Desktop Loading */}
-        <nav className="hidden md:flex items-center justify-between p-4 border-b bg-white shadow-sm">
-          <span className="text-lg font-bold text-indigo-600">DropWay</span>
-          <div className="w-48" />
+        <nav className="hidden md:flex items-center justify-between border-b bg-white px-4 pb-3">
+          <span className="text-lg font-semibold text-teal-700">DropWay</span>
+          <div className="flex-1" />
         </nav>
 
         {/* Mobile Bottom Bar Loading */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-white pb calc(32px + env(safe-area-inset-bottom, 0px))">
           <div className="flex justify-around items-center py-3">
-            <div className="flex flex-col items-center gap-1 text-gray-400">
-              <HomeIcon className="w-6 h-6" />
-              <span className="text-xs">คลังหลัก</span>
+            <div className="flex flex-col items-center gap-1 text-muted">
+              <HomeIcon className="w-[22px] h-[22px]" />
+              <span className="text-[11px] font-medium tracking-tight">คลังหลัก</span>
             </div>
-            <div className="flex flex-col items-center gap-1 text-gray-400">
-              <Navigation className="w-6 h-6" />
-              <span className="text-xs">นำทาง</span>
+            <div className="flex flex-col items-center gap-1 text-muted">
+              <Navigation className="w-[22px] h-[22px]" />
+              <span className="text-[11px] font-medium tracking-tight">นำทาง</span>
             </div>
-            <div className="flex flex-col items-center gap-1 text-gray-400">
-              <Menu className="w-6 h-6" />
-              <span className="text-xs">เมนู</span>
+            <div className="flex flex-col items-center gap-1 text-muted">
+              <Menu className="w-[22px] h-[22px]" />
+              <span className="text-[11px] font-medium tracking-tight">เมนู</span>
             </div>
           </div>
         </nav>
@@ -85,89 +89,90 @@ export default function Navbar() {
   return (
     <>
       {/* Desktop Navbar */}
-      <nav className="hidden md:flex items-center justify-between p-4 border-b bg-white shadow-sm">
-        <div className="flex items-center gap-10">
+      <nav className="hidden md:flex items-center justify-between border-b bg-white px-4 py-3">
+        <div className="flex items-center gap-6 flex-wrap">
           {user ? (
             <>
               <Link
                 href="/houses"
-                className={`font-semibold text-lg transition-colors ${
+                className={`text-base font-semibold transition-colors ${
                   isActive("/houses")
-                    ? "text-indigo-600"
-                    : "text-gray-700 hover:text-indigo-600"
+                    ? "text-teal-700"
+                    : "text-muted hover:text-teal-700"
                 }`}
               >
                 คลังหลัก
               </Link>
               <Link
                 href="/navigation"
-                className={`font-medium text-lg transition-colors ${
+                className={`text-base font-medium transition-colors ${
                   isActive("/navigation")
-                    ? "text-indigo-600"
-                    : "text-gray-700 hover:text-indigo-600"
+                    ? "text-teal-700"
+                    : "text-muted hover:text-teal-700"
                 }`}
               >
                 การนำทาง
               </Link>
             </>
           ) : (
-            <span className="text-xl font-bold text-indigo-600">DropWay</span>
+            <span className="text-lg font-semibold text-teal-700">DropWay</span>
           )}
         </div>
 
         {user && (
           <button
             onClick={logout}
-            className="text-red-600 font-medium hover:text-red-700 transition flex items-center gap-2"
+            className="flex items-center gap-2 rounded-full border border-muted bg-white px-4 py-2 text-sm font-medium text-danger hover:bg-danger-subtle hover:border-danger hover:text-danger focus-visible:outline-2 focus-visible:outline-focus-ring"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="w-4 h-4" />
             ออกจากระบบ
           </button>
         )}
       </nav>
 
       {/* Mobile Bottom Tab Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg z-40">
-        <div className="flex justify-around items-center py-3">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-white pb calc(32px + env(safe-area-inset-bottom, 0px))">
+        <div className="flex justify-around items-center max-w-sm mx-auto">
           {user ? (
             <>
               <Link
                 href="/houses"
-                className={`flex flex-col items-center gap-1 transition-colors ${
+                className={`flex flex-col items-center gap-1 min-w-[12px] transition-colors ${
                   isActive("/houses")
-                    ? "text-indigo-600"
-                    : "text-gray-600 hover:text-indigo-500"
+                    ? "text-teal-700"
+                    : "text-muted hover:text-teal-700"
                 }`}
                 onClick={closeMenu}
               >
-                <Warehouse className="w-6 h-6" />
-                <span className="text-xs">คลังหลัก</span>
+                <Warehouse className="w-[22px] h-[22px]" />
+                <span className="text-[11px] font-medium tracking-tight">คลังหลัก</span>
               </Link>
 
               <Link
                 href="/navigation"
-                className={`flex flex-col items-center gap-1 transition-colors ${
+                className={`flex flex-col items-center gap-1 min-w-[12px] transition-colors ${
                   isActive("/navigation")
-                    ? "text-indigo-600"
-                    : "text-gray-600 hover:text-indigo-500"
+                    ? "text-teal-700"
+                    : "text-muted hover:text-teal-700"
                 }`}
                 onClick={closeMenu}
               >
-                <MapPinned className="w-6 h-6" />
-                <span className="text-xs">นำทาง</span>
+                <MapPinned className="w-[22px] h-[22px]" />
+                <span className="text-[11px] font-medium tracking-tight">นำทาง</span>
               </Link>
 
               <button
+                type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="flex flex-col items-center gap-1 text-gray-600 hover:text-indigo-500 transition"
+                className="flex flex-col items-center gap-1 min-w-[12px] text-muted hover:text-teal-700 focus-visible:outline-2 focus-visible:outline-focus-ring"
               >
-                <Menu className="w-6 h-6" />
-                <span className="text-xs">เมนู</span>
+                <Menu className="w-[22px] h-[22px]" />
+                <span className="text-[11px] font-medium tracking-tight">เมนู</span>
               </button>
             </>
           ) : (
-            <div className="w-full text-center py-2">
-              <span className="text-lg font-bold text-indigo-600">DropWay</span>
+            <div className="flex-1 flex justify-center py-2">
+              <span className="text-base font-semibold text-teal-700">DropWay</span>
             </div>
           )}
         </div>
@@ -176,73 +181,63 @@ export default function Navbar() {
       {/* Mobile Drawer Menu */}
       {user && mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-label="เมนู"
+          className="md:hidden fixed inset-0 z-50 bg-black/40"
           onClick={closeMenu}
         >
           <div
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl animate-slide-up"
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl bg-white shadow-lg"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center pt-4 pb-2">
-              <div className="w-12 h-1 bg-gray-300 rounded-full" />
+              <div className="w-10 h-1 rounded-full bg-muted" />
             </div>
 
-            <div className="px-6 py-8 space-y-7">
+            <div className="px-5 py-6 space-y-5">
               <Link
                 href="/houses"
-                className="flex items-center gap-4 text-xl font-medium text-gray-800 hover:text-indigo-600 transition"
+                className="flex items-center gap-4 text-base font-medium text-foreground hover:text-teal-700 focus-visible:outline-2 focus-visible:outline-focus-ring"
                 onClick={closeMenu}
               >
-                <Warehouse className="w-7 h-7 text-indigo-600" />
+                <Warehouse className="w-6 h-6 text-teal-700" />
                 คลังหลัก
               </Link>
 
               <Link
                 href="/navigation"
-                className="flex items-center gap-4 text-xl font-medium text-gray-800 hover:text-indigo-600 transition"
+                className="flex items-center gap-4 text-base font-medium text-foreground hover:text-teal-700 focus-visible:outline-2 focus-visible:outline-focus-ring"
                 onClick={closeMenu}
               >
-                <MapPinned className="w-7 h-7 text-indigo-600" />
+                <MapPinned className="w-6 h-6 text-teal-700" />
                 การนำทาง
               </Link>
 
-              <hr className="border-gray-200" />
+              <div className="border-t border-border" />
 
               <button
+                type="button"
                 onClick={logout}
-                className="flex items-center gap-4 w-full text-left text-xl font-medium text-red-600 hover:text-red-700 transition"
+                className="flex items-center gap-4 w-full text-left text-base font-medium text-danger hover:text-danger-hover focus-visible:outline-2 focus-visible:outline-focus-ring"
               >
-                <LogOut className="w-7 h-7" />
+                <LogOut className="w-6 h-6" />
                 ออกจากระบบ
               </button>
             </div>
 
-            <div className="flex justify-center pb-6">
+            <div className="flex justify-center pb-5">
               <button
+                type="button"
                 onClick={closeMenu}
-                className="p-3 bg-gray-100 rounded-full hover:bg-gray-200 transition"
+                className="p-2 rounded-full bg-muted hover:bg-muted-strong focus-visible:outline-2 focus-visible:outline-focus-ring"
               >
-                <X className="w-6 h-6 text-gray-700" />
+                <X className="w-5 h-5 text-foreground-muted" />
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Animation */}
-      <style jsx>{`
-        @keyframes slide-up {
-          from {
-            transform: translateY(100%);
-          }
-          to {
-            transform: translateY(0);
-          }
-        }
-        .animate-slide-up {
-          animation: slide-up 0.3s ease-out;
-        }
-      `}</style>
     </>
   );
 }

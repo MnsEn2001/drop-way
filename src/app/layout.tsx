@@ -21,45 +21,39 @@ export default function RootLayout({
     <html lang="th">
       <body className={inter.className}>
         <Navbar />
-        {children}
+        <main className="page-content">{children}</main>
         <Toaster
-          position="top-right" // แสดง Toast ที่มุมขวาบน
+          position="top-right"
           reverseOrder={false}
-          gutter={12}
+          gutter={10}
           containerStyle={{
-            top: 20, // เว้นจากขอบบน
-            right: 20, // เว้นจากขอบขวา
+            top: 12,
+            right: 12,
           }}
           toastOptions={{
             duration: 1000,
             style: {
-              background: "#363636",
+              background: "#0f172a",
               color: "#fff",
               fontSize: "14px",
-              padding: "14px 18px",
-              borderRadius: "12px",
-              maxWidth: "400px",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+              padding: "12px 14px",
+              borderRadius: "10px",
+              maxWidth: "92vw",
+              boxShadow: "0 4px 10px rgba(15, 23, 42, 0.18)",
             },
-
-            // Success - ไม่มี icon
             success: {
               style: {
-                background: "#10b981", // เขียว emerald
+                background: "#0f766e",
               },
             },
-
-            // Error - ไม่มี icon
             error: {
               style: {
-                background: "#ef4444", // แดง
+                background: "#b91c1c",
               },
             },
-
-            // Loading (ถ้าใช้ toast.loading)
             loading: {
               style: {
-                background: "#6366f1", // ม่วง indigo
+                background: "#0d9488",
               },
             },
           }}
