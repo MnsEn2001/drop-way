@@ -20,7 +20,12 @@ This document records meaningful project and documentation changes for the DropW
   - `.ai/reports/README.md`
 - Added a small `.ai/` reference section to the root `README.md`.
 
+## 2026-10-11 (this session)
+- Verified existing `.ai/` documentation against the repository and the current remote state.
+- Reused existing `.ai/` files where appropriate instead of recreating duplicates.
+- Updated `.ai/CURRENT_STATE.md` to reflect the actual verified GitHub `main` SHA and prior commit status.
+- Confirmed that no application code, dependencies, lockfiles, authentication, database schemas, routes, or business logic were changed.
+
 ## Notes on scope
-- No application code, dependencies, lockfiles, authentication, database schemas, routes, or business logic were changed in this session.
 - No commit or push was made in this session unless the user explicitly authorizes it later.
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.
