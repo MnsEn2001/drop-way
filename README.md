@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## AI agent documentation
+
+This repository includes a `.ai/` documentation system for AI-assisted work:
+
+- `.ai/AI_RULES.md` — mandatory rules for AI agents
+- `.ai/AI_HANDOFF.md` — session start guide
+- `.ai/PROJECT_CONTEXT.md` — verified project context
+- `.ai/ARCHITECTURE.md` — actual architecture and data flow
+- `.ai/WORKFLOW.md` — development workflow
+- `.ai/CURRENT_STATE.md` — current repo snapshot
+- `.ai/CHANGELOG.md` — meaningful changes
+- `.ai/tasks/` — task briefs
+- `.ai/decisions/` — architectural decision records
+- `.ai/reports/` — verification reports
