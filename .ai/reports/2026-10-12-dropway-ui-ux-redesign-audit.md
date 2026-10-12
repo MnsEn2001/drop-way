@@ -101,11 +101,54 @@ targets. No change was made to route ordering, distance math, financial parsing,
 - Zoom/gesture checklist on real hardware.
 - Because there are no automated tests, regression safety rests on the type check, lint, production build, and the diff review above.
 
+## Runtime verification through the managed preview (2026-10-12)
+| Request (no cookies) | Result | Meaning |
+| --- | --- | --- |
+| `GET /` | `307` → `Location: /houses` | redirect route works |
+| `GET /login` | `200` (fresh compile, no runtime error) | auth screen renders |
+| `GET /register` | `200` | auth screen renders |
+| `GET /houses` | `200` (renders loading skeletons) | catalog screen renders |
+| `GET /navigation` | `200` | navigation screen renders |
+| `GET /zzz-not-a-route` | `404` | used as the middleware probe below |
+
+The served HTML was checked for the new UI markers (`class="input"`,
+`page-content`, `skeleton`, Thai copy) and they are present. Deeper interaction
+checks (clicking, GPS, saving) were not possible without a browser session.
+
+## Separate security finding (pre-existing, NOT fixed in this task)
+`middleware.ts` is **not being executed** by Next.js in this repository:
+- It sits in the repo root while the app lives in `src/app`, so Next.js 14 does
+  not pick it up (it must be `src/middleware.ts` when a `src/` directory is used).
+- Evidence 1: a cookie-less request to an unmatched route returns `404`
+  (`GET /zzz-not-a-route`), but the middleware `matcher` covers that path and
+  would have answered `307` → `/login`.
+- Evidence 2: the production build route table contains no `Middleware` entry.
+- Evidence 3: `GET /houses` with no cookies returns `200` instead of a redirect.
+
+Consequence: there is **no server-side route protection**. `/houses` and
+`/navigation` are protected only by the in-page `supabase.auth.getUser()` checks,
+so actual data protection depends entirely on Supabase RLS — which this session
+could not verify (see BLOCKED).
+
+Additional risk if the file is simply moved to `src/middleware.ts`: it reads the
+legacy Supabase v1 cookies `sb-access-token` / `sb-refresh-token`, while
+`@supabase/ssr` 0.8.0 in this repo is created without `cookieOptions.name`, so it
+uses the supabase-js default storage key `sb-<project-ref>-auth-token`. Naively
+enabling the current file would very likely redirect signed-in users back to
+`/login` on every request.
+
+Recommendation: treat this as its own task — verify the real cookie name with a
+live session, rewrite the middleware against it (or use `createServerClient` from
+`@supabase/ssr`), then test signed-in and signed-out flows before shipping. It
+was deliberately **not** changed here, because it changes authorization behaviour
+and belongs outside a UI/UX redesign.
+
 ## Follow-ups worth queuing (not done here)
 1. Add a test setup (Playwright or Vitest) so auth, house CRUD, and navigation status changes can be regression-tested.
 2. Confirm RLS policies for `houses` and `user_navigation_houses` in the Supabase project.
-3. Decide whether `/` should stay a redirect or become a real public entry page.
-4. Manual mobile pass on real devices for the zoom guard and keyboard behaviour.
+3. Fix the middleware location + cookie name so server-side route protection actually runs (separate, security-owned task — see the finding above).
+4. Decide whether `/` should stay a redirect or become a real public entry page.
+5. Manual mobile pass on real devices for the zoom guard and keyboard behaviour.
 
 ## Git
 - Baseline verified SHA: `f3ab31d18c5b16ffb93e0af500046fcc18fa9758`

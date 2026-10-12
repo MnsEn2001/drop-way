@@ -80,6 +80,17 @@ This is a factual snapshot of the repository and the documentation effort that c
 - The navigation page is large and was only partially inspected for this documentation pass. Some behavior in it may be partially implemented or unfinished. That should be verified before assuming it is complete.
 
 ## Known risks and security questions
+- **`middleware.ts` is not active in this repository (verified 2026-10-12).**
+  The file is in the repo root while the app lives in `src/app`, so Next.js never
+  loads it: a cookie-less request to an unmatched path returns `404` instead of
+  the matcher's `307` → `/login`, `/houses` returns `200` without cookies, and the
+  production build route table lists no `Middleware` entry. Route protection is
+  therefore client-side only and real data protection depends on Supabase RLS.
+  The file also checks legacy `sb-access-token` / `sb-refresh-token` cookies while
+  `@supabase/ssr` 0.8.0 writes `sb-<project-ref>-auth-token`, so simply moving the
+  file would likely lock signed-in users out. Documented as its own task in
+  `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md`; **not changed** by the
+  redesign session because it alters authorization behaviour.
 - Data operations are performed from the browser Supabase client. Any stronger ownership or row-level restrictions must be confirmed in Supabase RLS or backend enforcement, not assumed from the UI.
 - The app does not currently show a dedicated API route tree in `src/app/api`. If server-side endpoints or actions exist elsewhere, they need separate verification.
 - No test coverage is currently verified. That limits confidence for regressions.
