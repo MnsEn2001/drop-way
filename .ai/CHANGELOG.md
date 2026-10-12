@@ -1,5 +1,42 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-12 — Modal เข้มงวด: backdrop/Escape ไม่ปิด + คีย์บอร์ดไม่ดัน modal
+
+### หัวข้อ
+- Modal ทั้งหน้าบ้านและหน้า navigation ปิดได้จากปุ่มใน dialog เท่านั้น
+- คีย์บอร์ดมือถือ (Android Chrome / visual viewport) ไม่ทำให้ modal กระโดด
+- ระบบ keyboard handling กลางระบบเดียว `useModalKeyboardBehavior()`
+
+### เปลี่ยนอะไร
+- `src/lib/viewport.ts`: เพิ่ม `useModalKeyboardBehavior()` — pin ตำแหน่ง
+  modal ตอนเปิด (`align-self: flex-start` + `margin-top`) และเลื่อนเฉพาะ
+  เนื้อหาใน `.modal-sheet` (`sheet.scrollTop` + margin 20px) ให้ field ที่ผู้ใช้
+  แตะอยู่เหนือคีย์บอร์ด ไม่มี `window.scrollTo`, ไม่มี `scrollIntoView`,
+  ไม่มี state ตอน visualViewport resize; ลบ `useVisualViewportHeightVar`
+  และ type `VisualViewportMetrics`
+- `src/app/navigation/page.tsx`: ลบ `currentDialogMetricsRef` + placeholder
+  `null as unknown as` + `currentSheetRef` ที่ไม่ได้ใช้, ใช้ hook กลาง, body
+  lock ผ่าน `body.nav-dialog-open`, ลบ overlay `onClick` 10 จุด, ลบ
+  Escape-close ของ page input, และให้ปุ่มยกเลิกของ page input/แก้ไขบ้าน/
+  รายงาน ผ่าน confirmation เมื่อ dirty
+- `src/app/houses/page.tsx`: ใช้ hook กลาง, เพิ่ม body lock, ลบ overlay
+  `onClick` 3 จุด, ลบ global Escape handler ที่ปิด modal
+- `src/app/globals.css`: `.nav-dialog-open body` → `body.nav-dialog-open`
+  (selector เดิมไม่มีวัน match), ลบเดด rule `.nav-dialog-open .page-shell
+  { position: fixed; overflow-y: auto }`; `.modal-foot` ยัง normal flow
+
+### ไม่ได้ทำอะไร
+- ไม่แตะ business logic (Supabase, GPS, routing, delivery, money, report rules)
+- ไม่เปลี่ยน `.modal-sheet` sizing, dialog semantics, FAB menu
+- ไม่ rollback ทั้งโปรเจกต์ และรักษา cbab19d (footer normal flow) ไว้
+
+### สถานะ
+- พุชไปแล้วที่ `90c1d1d08b793702890ec25bd16315d12858f6d0`
+- ผ่าน `npx tsc -b --noEmit`, `npm run lint`, `npm run build`,
+  `git diff --check`, `git diff --cached --check`
+- ยังไม่ได้ทดสอบ interaction บนอุปกรณ์จริง (Android Chrome) — NOT VERIFIED
+- Report: `.ai/reports/2026-10-12-dropway-modal-keyboard-stability.md`
+
 ## 2026-10-12
 
 ### หัวข้อ

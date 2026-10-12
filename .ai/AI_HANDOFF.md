@@ -135,6 +135,20 @@ Notes learned in this environment:
   Keyboard handling belongs to `--app-vvh` / `src/lib/viewport.ts`, never to
   the footer. See
   `.ai/reports/2026-10-12-dropway-modal-footer-normal-flow.md`.
+- Modal dismissal + keyboard rule (2026-10-12, do not regress): modals close
+  **only** through buttons inside the dialog — `.modal-overlay` divs must
+  never carry an `onClick` that closes them, and there is no
+  Escape-to-close anywhere. Dirty closes go through
+  `setShowRestrictedConfirmModal` / `setShowUnsavedChangesConfirmModal`.
+  All keyboard/viewport behavior lives in the single shared
+  `useModalKeyboardBehavior()` hook (`src/lib/viewport.ts`), which pins the
+  open sheet's top position and scrolls only `sheet.scrollTop`; do not add a
+  second keyboard system, `window.scrollTo`-based fixes, `scrollIntoView`,
+  autofocus, `as unknown as` placeholder refs, or `setState` on
+  visualViewport resize. Background lock is the `body.nav-dialog-open` class
+  (`overflow: hidden`); do not reintroduce `position: fixed` on
+  `.page-shell`. See
+  `.ai/reports/2026-10-12-dropway-modal-keyboard-stability.md`.
 
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.

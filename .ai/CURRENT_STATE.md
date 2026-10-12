@@ -20,7 +20,12 @@ This is a factual snapshot of the repository and the documentation effort that c
   verified: `4750a6b4c858a7e5e31805382a4f1f05368033c5` (docs rewrite `af55200`)
 - 2026-10-12 modal save/cancel footer restored to normal document flow pushed
   and verified: `cbab19d4c8181cec008f1a2e1723d212a7d24158`
-- Latest verified GitHub `main`: `cbab19d4c8181cec008f1a2e1723d212a7d24158`
+- Baseline for the modal keyboard session: `f0f9197377db69f8b8a824355263cf8b48e3edc9`
+  (docs commit after `cbab19d`)
+- 2026-10-12 modal keyboard stability (no backdrop/Escape dismissal, shared
+  `useModalKeyboardBehavior`, position pinning, real body lock) pushed and
+  verified: `90c1d1d08b793702890ec25bd16315d12858f6d0`
+- Latest verified GitHub `main`: `90c1d1d08b793702890ec25bd16315d12858f6d0`
 
 ## Latest verified full product audit
 - `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md` (full-system audit)
@@ -75,6 +80,45 @@ This is a factual snapshot of the repository and the documentation effort that c
   `useVisualViewportHeightVar()` still drives `--app-vvh` in both pages,
   focus restoration (`rememberDialogTrigger`) intact.
 - Report: `.ai/reports/2026-10-12-dropway-centered-modals-all-breakpoints.md`
+
+## Modal keyboard stability (2026-10-12)
+- Every modal on `/houses` and `/navigation` is a real modal now: the
+  `.modal-overlay` divs have **no `onClick`** (13 removed: houses 3,
+  navigation 10) and there is **no Escape-to-close** handler anywhere (the
+  houses global `keydown` and the navigation page-input Escape branch are
+  gone; Escape in `handleAddressKeyDown` only clears address suggestions).
+- Shared system: `useModalKeyboardBehavior()` in `src/lib/viewport.ts` is
+  called by both pages and delegates from `document`/`visualViewport`, so
+  every `.modal-sheet` gets identical behavior with zero per-modal wiring:
+  - open-time position lock: on `focusin` inside a sheet, its current top
+    offset is pinned with `align-self: flex-start` + `margin-top`, so the
+    keyboard resize can never recenter (jump) the dialog
+  - the focused input/textarea/select is kept visible by scrolling **only**
+    `sheet.scrollTop` with a 20px safe margin (uses
+    `visualViewport.offsetTop` + `height`, re-applied on `resize`/`scroll`);
+    no `window.scrollTo`, no `scrollIntoView`, no React state on viewport
+    resize, no autofocus and no `.focus()` calls
+- Navigation placeholder lifecycle (`currentDialogMetricsRef` set to
+  `null as unknown as VisualViewportMetrics`, `currentSheetRef`, the three
+  duplicated body-lock effects) was removed and replaced by one real effect.
+- Body lock works now: both pages toggle `body.nav-dialog-open` (`overflow:
+  hidden` in `globals.css`, selector fixed from the never-matching
+  `.nav-dialog-open body`). The dead `.nav-dialog-open .page-shell {
+  position: fixed; overflow-y: auto }` rule (it would have created a second
+  scroll container and reset page scroll) was deleted.
+- Unsaved confirmation kept and completed: navigation cancel buttons for page
+  input, edit house, and report now route dirty closes through
+  `setShowUnsavedChangesConfirmModal` / `setShowRestrictedConfirmModal` with
+  the exact same onConfirm resets the old overlay handlers had. "ไม่ปิด"
+  returns to the source modal with all typed data intact; only "ปิดทิ้ง"
+  discards.
+- `.modal-foot` stays in normal document flow (cbab19d preserved). Business
+  logic untouched: no Supabase/auth/RLS, GPS, routing, delivery, money, or
+  report-rule changes.
+- Report: `.ai/reports/2026-10-12-dropway-modal-keyboard-stability.md`
+- NOT VERIFIED: real-device Android Chrome keyboard behavior (this environment
+  has no signed-in browser session or device); evidence is source-level plus
+  compiled CSS, type check, lint, and build.
 
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
@@ -134,8 +178,8 @@ This is a factual snapshot of the repository and the documentation effort that c
 
 ## Local synchronization status
 - Local branch: `main`
-- Local `HEAD` SHA: `cbab19d4c8181cec008f1a2e1723d212a7d24158` (matches
-  `origin/main` after push; docs commit adds one more commit on top)
+- Local `HEAD` SHA: `90c1d1d08b793702890ec25bd16315d12858f6d0` (matches
+  `origin/main`; verified with `git ls-remote origin refs/heads/main`)
 - Working tree status: untracked workspace artifacts only; no modified tracked
   files after push
 - Difference from `origin/main`: none
@@ -221,13 +265,13 @@ This is a factual snapshot of the repository and the documentation effort that c
 - TypeScript-only `tsc -b --noEmit`: NOT RUN separately
 
 ## Current active task
-- Modal save/cancel footer restored to normal document flow, pushed as
-  `cbab19d4c8181cec008f1a2e1723d212a7d24158`
-- The shared unsaved/restricted confirmation dialog code is pushed as
-  `4750a6b4c858a7e5e31805382a4f1f05368033c5`
-- Follow-up: interactive (browser/device) verification of the modal footer,
-  keyboard behaviour, and the cancel → confirmation → discard flow remains
-  outstanding.
+- Modal keyboard stability (backdrop/Escape no longer close modals, shared
+  `useModalKeyboardBehavior`, position pinning, working body lock) pushed as
+  `90c1d1d08b793702890ec25bd16315d12858f6d0`
+- Follow-up: interactive (browser/device) verification of the keyboard flow —
+  open modal → tap each field → field scrolls above the keyboard, modal does
+  not jump, backdrop/Escape do nothing, cancel → confirmation keeps data —
+  remains outstanding on real Android Chrome.
 
 ## Next recommended task
 - Decide whether `setShowRestrictedConfirmModal` / `setShowUnsavedChangesConfirmModal` should become one real shared modal component, or whether the current hook-only approach is enough.
