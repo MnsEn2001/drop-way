@@ -1281,7 +1281,7 @@ export default function HousesPage() {
                       type="button"
                       onClick={() => openNavigation(h.lat!, h.lng!)}
                       onMouseDown={(e) => e.preventDefault()}
-                      className="btn btn-primary flex-1"
+                      className="btn btn-secondary ml-auto"
                     >
                       <Navigation className="h-4 w-4" aria-hidden="true" />
                       นำทาง

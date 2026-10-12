@@ -2128,7 +2128,7 @@ export default function NavigationPage() {
                         <span className="text-lg font-extrabold text-teal-700">
                           #{displayOrder}
                         </span>
-                        <h3 className="text-wrap-safe line-clamp-2 text-lg font-bold text-gray-900">
+                        <h3 className="text-wrap-safe line-clamp-2 text-lg font-bold text-orange-700">
                           {h.full_name || "ไม่มีชื่อ"}
                         </h3>
                         {!h.lat && !h.lng && (
@@ -2137,7 +2137,7 @@ export default function NavigationPage() {
                       </div>
                       {h.phone && (
                         <div className="flex items-center gap-2 mt-2 group">
-                          <p className="text-sm text-gray-600 select-none">
+                          <p className="text-sm text-blue-700 select-none">
                             {h.phone}
                           </p>
 
@@ -2159,7 +2159,7 @@ export default function NavigationPage() {
                           <a
                             href={`tel:${h.phone}`}
                             onClick={(e) => e.stopPropagation()} // ป้องกัน bubble ไป card
-                            className="flex h-9 w-9 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                            className="flex h-9 w-9 items-center justify-center rounded-lg text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
                             title="โทรหาลูกค้า"
                             aria-label="โทรหาลูกค้า"
                           >
@@ -2167,8 +2167,8 @@ export default function NavigationPage() {
                           </a>
                         </div>
                       )}
-                      <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">
-                        <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
+                      <div className="flex items-start gap-2 mt-3 text-teal-800 text-sm">
+                        <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-teal-600" />
                         <span className="text-wrap-safe line-clamp-3">
                           {h.address}
                         </span>
@@ -2188,10 +2188,10 @@ export default function NavigationPage() {
                       {h.note && (
                         <div className="mt-3 text-xs">
                           <div className="flex">
-                            <span className="shrink-0 font-semibold text-gray-700">
+                            <span className="shrink-0 font-semibold text-amber-700">
                               หมายเหตุ:{" "}
                             </span>
-                            <div className="text-wrap-safe whitespace-pre-line text-gray-700">
+                            <div className="text-wrap-safe whitespace-pre-line text-amber-900">
                               {h.note}
                             </div>
                           </div>
@@ -2202,10 +2202,10 @@ export default function NavigationPage() {
                       {h.driver_note && (
                         <div className="mt-2 text-xs">
                           <div className="flex">
-                            <span className="font-semibold text-teal-700 shrink-0">
+                            <span className="font-semibold text-purple-700 shrink-0">
                               คนขับบันทึก:{" "}
                             </span>
-                            <div className="text-wrap-safe whitespace-pre-line text-gray-700">
+                            <div className="text-wrap-safe whitespace-pre-line text-purple-900">
                               {h.driver_note}
                             </div>
                           </div>
