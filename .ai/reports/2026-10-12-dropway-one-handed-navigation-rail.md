@@ -135,12 +135,15 @@ replaced by a real `badge badge-amber` labelled "ไม่มีพิกัด"
 
 ## Git
 - Baseline: `bf4ef5c6c36e93127869f84bcf0e151ae1409503`
-- Commit: `3c240d0e77805c82c76e4808505e302cd361c371` (`bf4ef5c..3c240d0`)
-- Push: `git push origin main` succeeded; `git ls-remote --heads origin main` and
-  `gh api repos/MnsEn2001/drop-way/commits/main` both returned
-  `3c240d0e77805c82c76e4808505e302cd361c371`
+- Commits: `3c240d0e77805c82c76e4808505e302cd361c371` (`bf4ef5c..3c240d0`,
+  rail + hand mode + keyboard/dialog fixes) and
+  `b11c2a76b5ce82b473800372090ee7b82a085304` (`5e430f9..b11c2a7`, page-number
+  dialogs + dialog semantics)
+- Push: `git push origin main` succeeded for both; `git ls-remote --heads origin main`
+  and `gh api repos/MnsEn2001/drop-way/commits/main` returned
+  `b11c2a76b5ce82b473800372090ee7b82a085304` as the latest `main`
 - GitHub Actions runs: none found (no CI configured in the repository)
-- Production deployment: GitHub reports a Production deployment for `3c240d0`
-  created 2026-10-12T01:15:30Z with `state=success` / "Deployment has completed".
-  The deployed build was not exercised in a browser here.
+- Production deployments (GitHub): `3c240d0` created 2026-10-12T01:15:30Z and
+  `b11c2a7` created 2026-10-12T01:22:28Z, both `state=success` /
+  "Deployment has completed". The deployed build was not exercised in a browser here.
 - `package-lock.json` remains untracked and out of scope.

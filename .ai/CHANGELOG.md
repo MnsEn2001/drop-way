@@ -112,9 +112,11 @@ This document records meaningful project and documentation changes for the DropW
   managed preview, `.action-rail`/`.modal-foot` present in the compiled CSS and
   the rail markup present in the built client chunk.
 - Pushed to `main` as `3c240d0e77805c82c76e4808505e302cd361c371`
-  (`bf4ef5c..3c240d0`), confirmed with `git ls-remote --heads origin main` and
-  the GitHub API; GitHub reports a Production deployment for that SHA created
-  2026-10-12T01:15:30Z with `state=success`.
+  (`bf4ef5c..3c240d0`), plus the dialog follow-up
+  `b11c2a76b5ce82b473800372090ee7b82a085304` (`5e430f9..b11c2a7`); both confirmed
+  with `git ls-remote --heads origin main` and the GitHub API. GitHub reports
+  Production deployments for `3c240d0` (2026-10-12T01:15:30Z) and `b11c2a7`
+  (2026-10-12T01:22:28Z), both `state=success`.
 - Follow-up in the same session: the two "ไปที่หน้า" dialogs now also use
   `.modal-sheet` with a sticky `.modal-foot`, and every dialog in the navigation
   page (8) exposes `role="dialog"` + `aria-modal="true"`, matching the houses
