@@ -359,7 +359,10 @@ body {
 
   .modal-sheet {
     background: var(--background);
-    border-radius: 1rem 1rem 0 0;
+    /* Rounded on every corner at every breakpoint: modals are centered in
+       the overlay on mobile too, so the old bottom-sheet rounding
+       (1rem 1rem 0 0) and the bottom safe-area padding no longer apply. */
+    border-radius: 1rem;
     box-shadow: var(--shadow-md);
     /* 80vh is the fallback for browsers without dvh or the visual-viewport
        variable; the second declaration keeps the sheet inside the area that
@@ -369,7 +372,6 @@ body {
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* Sticky footer inside a scrollable sheet: the save/cancel buttons stay

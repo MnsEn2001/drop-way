@@ -1322,7 +1322,7 @@ export default function HousesPage() {
 
           {/* Input กรอกหน้าเมื่อกด ... */}
           {showPageInput && (
-            <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+            <div className="modal-overlay flex items-center justify-center p-4">
               <div
                 role="dialog"
                 aria-modal="true"
@@ -1373,7 +1373,7 @@ export default function HousesPage() {
       {/* แก้ Filter Modal: เพิ่มส่วนตัวเลือกการค้นหา */}
       {showFilterModal && (
         <div
-          className="modal-overlay flex items-end justify-center sm:items-center sm:p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           onClick={() => setShowFilterModal(false)}
         >
           <div
@@ -1381,7 +1381,7 @@ export default function HousesPage() {
             aria-modal="true"
             aria-labelledby="filter-modal-title"
             onClick={(e) => e.stopPropagation()}
-            className="modal-sheet w-full max-w-md p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+            className="modal-sheet w-full max-w-md p-5 sm:rounded-2xl sm:p-6"
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2 id="filter-modal-title" className="text-lg font-bold">
@@ -1518,7 +1518,7 @@ export default function HousesPage() {
 
       {/* Modal เพิ่ม / แก้ไขบ้าน */}      {(editingHouse || isAdding) && (
         <div
-          className="modal-overlay flex items-end justify-center sm:items-center sm:p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           onClick={() => {
             if (!isSavingHouse) closeModal();
           }}
@@ -1528,7 +1528,7 @@ export default function HousesPage() {
             aria-modal="true"
             aria-labelledby="house-form-title"
             onClick={(e) => e.stopPropagation()}
-            className="modal-sheet w-full max-w-md p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+            className="modal-sheet w-full max-w-md p-5 sm:rounded-2xl sm:p-6"
           >
             <h2 id="house-form-title" className="text-lg font-bold">
               {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
@@ -1739,7 +1739,7 @@ export default function HousesPage() {
       {/* Modal ยืนยันการลบบ้าน */}
       {houseToDelete && (
         <div
-          className="modal-overlay flex items-end justify-center sm:items-center sm:p-4"
+          className="modal-overlay flex items-center justify-center p-4"
           onClick={() => {
             if (!isDeletingHouse) setHouseToDelete(null);
           }}

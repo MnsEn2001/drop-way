@@ -2482,7 +2482,7 @@ export default function NavigationPage() {
           )}
           {/* Input ไปหน้าตรง */}
           {showPageInput && (
-            <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+            <div className="modal-overlay flex items-center justify-center p-4">
               <div
                 role="dialog"
                 aria-modal="true"
@@ -2606,12 +2606,12 @@ export default function NavigationPage() {
 
       {/* Filter Modal */}
       {showFilterModal && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="nav-filter-title"
-            className="modal-sheet w-full max-w-md p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+            className="modal-sheet w-full max-w-md p-5 sm:rounded-2xl sm:p-6"
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2 id="nav-filter-title" className="text-lg font-bold">
@@ -2758,10 +2758,10 @@ export default function NavigationPage() {
       )}
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div role="dialog"
           aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
             <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
             <div className="space-y-4">
               <input
@@ -2916,10 +2916,10 @@ export default function NavigationPage() {
 
       {/* Modal ตั้งจุดเริ่มต้นทาง */}
       {showStartModal && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div role="dialog"
           aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-3">
               <h2 className="text-lg font-bold text-gray-900">
                 ตั้งจุดเริ่มต้นทาง
@@ -3060,10 +3060,10 @@ export default function NavigationPage() {
 
       {/* Modal ยืนยันส่งแล้ว */}
       {showDeliverModal && houseToDeliver && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div role="dialog"
           aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
             <h2 className="mb-4 text-lg font-bold text-teal-700">ยืนยันส่งแล้ว</h2>
 
             <div className="bg-gray-50 p-4 rounded-xl mb-4">
@@ -3269,10 +3269,10 @@ export default function NavigationPage() {
 
       {/* Modal บันทึกคอมเมนต์ */}
       {showCommentModal && houseToComment && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div role="dialog"
           aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
             <h2 className="mb-4 text-lg font-bold text-gray-900">
               บันทึกคอมเมนต์ / ฝากข้อความ
             </h2>
@@ -3337,15 +3337,15 @@ export default function NavigationPage() {
 
       {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ (ไม่มีปุ่มใช้ยอดนี้) */}
       {showCalculatorModal && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-label="เครื่องคิดเลขเงินทอน"
-            className="modal-sheet w-full max-w-md overflow-hidden p-0 sm:max-w-lg"
+            className="modal-sheet w-full max-w-md p-0 sm:max-w-lg"
           >
             {/* Header */}
-            <div className="bg-teal-700 text-white p-4 text-center">
+            <div className="bg-teal-700 text-white p-4 text-center rounded-t-[1rem]">
               <h3 className="text-lg font-bold">เครื่องคิดเลขเงินทอน</h3>
             </div>
 
@@ -3488,7 +3488,7 @@ export default function NavigationPage() {
 
       {/* Modal รายงานปัญหา */}
       {showReportModal && houseToReport && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
