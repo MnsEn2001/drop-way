@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";
-import { useVisualViewportHeightVar } from "@/lib/viewport";
+import { useModalKeyboardBehavior } from "@/lib/viewport";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -36,8 +36,10 @@ export default function HousesPage() {
   const [houseToDelete, setHouseToDelete] = useState<House | null>(null);
   const [isDeletingHouse, setIsDeletingHouse] = useState(false);
 
-  // ให้ Dialog คำนวณความสูงจากพื้นที่ที่มองเห็นจริง (คีย์บอร์ดเปิดอยู่ก็ไม่ล้น)
-  useVisualViewportHeightVar();
+  // ระบบกลางเดียวสำหรับ dialog ทุกตัว (ใช้ร่วมกับหน้า navigation): ล็อก
+  // ตำแหน่ง dialog ตอนเปิด ไม่ให้คีย์บอร์ดทำให้ recenter/กระโดด และเลื่อน
+  // เฉพาะเนื้อหาใน .modal-sheet ให้ field ที่ผู้ใช้แตะอยู่เหนือคีย์บอร์ดเสมอ
+  useModalKeyboardBehavior();
   const [totalInDB, setTotalInDB] = useState<number | null>(null);
   const [addingIds, setAddingIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -791,32 +793,18 @@ export default function HousesPage() {
     setIsDetecting(false);
   }, []);
 
-  // ปุ่ม Escape = ปิดหน้าต่างที่เปิดอยู่ (ยกเว้นระหว่างบันทึก/ลบ)
+  // Modal ทุกตัวปิดได้จากปุ่มภายใน dialog เท่านั้น (ยกเลิก/ปิด/บันทึก/ยืนยัน)
+  // — ไม่มี Escape และไม่มี overlay/backdrop click ที่ทำให้ปิดได้
+  // Body lock: ระหว่างมี modal เปิดให้ล็อกการ scroll ของหน้าด้านหลัง
+  const anyModalOpen =
+    showFilterModal || isAdding || !!editingHouse || !!houseToDelete || showPageInput;
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (isSavingHouse || isDeletingHouse) return;
-
-      if (houseToDelete) {
-        setHouseToDelete(null);
-      } else if (editingHouse || isAdding) {
-        closeModal();
-      } else if (showFilterModal) {
-        setShowFilterModal(false);
-      }
+    if (!anyModalOpen) return;
+    document.body.classList.add("nav-dialog-open");
+    return () => {
+      document.body.classList.remove("nav-dialog-open");
     };
-
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [
-    closeModal,
-    editingHouse,
-    houseToDelete,
-    isAdding,
-    isDeletingHouse,
-    isSavingHouse,
-    showFilterModal,
-  ]);
+  }, [anyModalOpen]);
 
   const detectLocation = () => {
     if (!navigator.geolocation) {
@@ -1375,7 +1363,6 @@ export default function HousesPage() {
       {showFilterModal && (
         <div
           className="modal-overlay flex items-center justify-center p-4"
-          onClick={() => setShowFilterModal(false)}
         >
           <div
             role="dialog"
@@ -1520,9 +1507,6 @@ export default function HousesPage() {
       {/* Modal เพิ่ม / แก้ไขบ้าน */}      {(editingHouse || isAdding) && (
         <div
           className="modal-overlay flex items-center justify-center p-4"
-          onClick={() => {
-            if (!isSavingHouse) closeModal();
-          }}
         >
           <div
             role="dialog"
@@ -1741,9 +1725,6 @@ export default function HousesPage() {
       {houseToDelete && (
         <div
           className="modal-overlay flex items-center justify-center p-4"
-          onClick={() => {
-            if (!isDeletingHouse) setHouseToDelete(null);
-          }}
         >
           <div
             role="dialog"

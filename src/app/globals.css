@@ -376,20 +376,19 @@ body {
   }
 
   /* Stable dialog positioning: while a dialog is open, the page body should
-     not scroll beneath the modal and the visual viewport should not try to
-     recenter the page around the focused input, so the dialog keeps its
-     open-time position instead of jumping. */
-  .nav-dialog-open body {
-    overflow: hidden;
-  }
+     not scroll beneath the modal (background locked), and the dialog itself
+     must keep its open-time position instead of being re-centered every time
+     the on-screen keyboard resizes the viewport.
 
-  .nav-dialog-open .page-shell {
-    position: fixed;
-    left: 0;
-    right: 0;
-    top: 0;
-    bottom: 0;
-    overflow-y: auto;
+     The position lock is done in JS by `useModalKeyboardBehavior` in
+     `src/lib/viewport.ts`: it pins the open sheet's top offset so keyboard
+     resize never recenters it, and scrolls only the sheet's own content to
+     keep the focused field visible. Nothing here recenters the dialog, and
+     the page behind is locked with plain `overflow: hidden` (no fixed
+     positioning of `.page-shell`, which would create a second scroll
+     container and reset the page scroll position). */
+  body.nav-dialog-open {
+    overflow: hidden;
   }
 
   /* Save/cancel footer inside a scrollable sheet. It stays in the normal
