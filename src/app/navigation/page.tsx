@@ -71,7 +71,6 @@ export default function NavigationPage() {
   const [showNoCoords, setShowNoCoords] = useState(false);
   const [showWithCoords, setShowWithCoords] = useState(false);
   const [sortByRoad, setSortByRoad] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Modal คอมเมนต์
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -193,7 +192,6 @@ export default function NavigationPage() {
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [isDeliverSubmitting, setIsDeliverSubmitting] = useState(false);
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
-  const [navError, setNavError] = useState<string | null>(null);
   // View Mode: today | delivered | reported
   const [viewMode, setViewMode] = useState<
     "today" | "delivered" | "reported" | "qr_pending" | "calculator"
@@ -732,29 +730,30 @@ export default function NavigationPage() {
     if (isCommentSubmitting) return;
     setIsCommentSubmitting(true);
 
-    const trimmed = commentText.trim();
-    const { error } = await supabase
-      .from("user_navigation_houses")
-      .update({
-        driver_note: trimmed || null, // ถ้าว่างให้เป็น null
-      })
-      .eq("id", houseToComment.nav_id);
+    try {
+      const trimmed = commentText.trim();
+      const { error } = await supabase
+        .from("user_navigation_houses")
+        .update({
+          driver_note: trimmed || null, // ถ้าว่างให้เป็น null
+        })
+        .eq("id", houseToComment.nav_id);
 
-    if (error) {
-      toast.error("บันทึกคอมเมนต์ไม่สำเร็จ: " + error.message);
-      return;
+      if (error) {
+        toast.error("บันทึกคอมเมนต์ไม่สำเร็จ: " + error.message);
+        return;
+      }
+
+      toast.success("บันทึกคอมเมนต์เรียบร้อย");
+      // รีโหลดข้อมูล
+      await reloadNavigation();
+      setShowCommentModal(false);
+      setHouseToComment(null);
+      setCommentText("");
+    } finally {
+      setIsCommentSubmitting(false);
     }
-
-    toast.success("บันทึกคอมเมนต์เรียบร้อย");
-    // รีโหลดข้อมูล
-    await reloadNavigation();
-    setShowCommentModal(false);
-    setHouseToComment(null);
-    setCommentText("");
-  } finally {
-    setIsCommentSubmitting(false);
-  }
-};
+  };
 
   // ⭐ แก้ไขฟังก์ชัน extractAmountFromNote รองรับ 1,250.50
   function extractAmountFromNote(note: string | null | undefined): number {
@@ -1438,7 +1437,6 @@ export default function NavigationPage() {
     if (!houseToDeliver) return;
     if (isDeliverSubmitting) return;
     setIsDeliverSubmitting(true);
-    setNavError(null);
 
     try {
       let note = deliverNote;
@@ -1480,12 +1478,10 @@ export default function NavigationPage() {
 
       if (error) {
         toast.error("บันทึกการส่งไม่สำเร็จ: " + error.message);
-        setNavError("บันทึกการส่งไม่สำเร็จ");
         return;
       }
 
       toast.success("✅ บันทึกการส่งงานเรียบร้อยแล้ว");
-      setNavError(null);
       await reloadNavigation();
       setShowDeliverModal(false);
     } finally {
@@ -1498,7 +1494,6 @@ export default function NavigationPage() {
     if (!houseToReport) return;
     if (isReportSubmitting) return;
     setIsReportSubmitting(true);
-    setNavError(null);
 
     const finalReason =
       reportReason === "อื่นๆ" ? reportReasonCustom.trim() : reportReason;
@@ -1519,13 +1514,11 @@ export default function NavigationPage() {
 
     if (error) {
       toast.error("บันทึกรายงานไม่สำเร็จ: " + error.message);
-      setNavError("บันทึกรายงานไม่สำเร็จ");
       setIsReportSubmitting(false);
       return;
     }
 
     toast.success("⚠️ บันทึกรายงานเรียบร้อยแล้ว");
-    setNavError(null);
     await reloadNavigation();
     setShowReportModal(false);
     setReportReason("โทรไม่รับ"); // รีเซ็ตค่าเริ่มต้น
@@ -3093,7 +3086,6 @@ export default function NavigationPage() {
                 type="button"
                 onClick={() => confirmDeliver(localCash, localTransfer)}
                 disabled={
-                  isSubmitting ||
                   ((deliverNote === "จ่ายด้วยเงินสด" ||
                     deliverNote === "จ่ายรวมเงินสด") &&
                     !localCash.trim()) ||
@@ -3103,14 +3095,7 @@ export default function NavigationPage() {
                 }
                 className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  "ส่งแล้ว"
-                )}
+                ‘ส่งแล้ว’
               </button>
             </div>
           </div>
@@ -3167,10 +3152,10 @@ export default function NavigationPage() {
               </button>
               <button
                 onClick={confirmComment}
-                disabled={isSubmitting}
+                disabled={isCommentSubmitting}
                 className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {isSubmitting ? (
+                {isCommentSubmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
                     กำลังบันทึก...
