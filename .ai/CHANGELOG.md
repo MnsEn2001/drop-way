@@ -84,6 +84,10 @@ This document records meaningful project and documentation changes for the DropW
   route ordering and distance math, financial parsing, `delivery_status` values.
 - Verified: `git diff --check`, `npx tsc --noEmit`, `npm run lint`, `npm run build`
   all pass. No automated tests exist in the repository (NOT RUN).
+- Pushed to `main` as `89cd5011428fb4a95e22662ed2f295569e2d98a8`
+  (`f3ab31d..89cd501`), confirmed with `git ls-remote --heads origin main` and
+  the GitHub API. Production deployment for this SHA was not observed
+  (latest observed Production deployment was still on `f3ab31d`).
 
 ## Notes on scope
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.

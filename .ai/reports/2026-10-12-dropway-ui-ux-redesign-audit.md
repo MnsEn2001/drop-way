@@ -109,6 +109,12 @@ targets. No change was made to route ordering, distance math, financial parsing,
 
 ## Git
 - Baseline verified SHA: `f3ab31d18c5b16ffb93e0af500046fcc18fa9758`
-- This work was committed and pushed to `main`; the resulting SHA is recorded in
-  `.ai/CURRENT_STATE.md` (final SHA + remote verification in the session summary).
+- Redesign commit: `89cd5011428fb4a95e22662ed2f295569e2d98a8` (`f3ab31d..89cd501`)
+- Push: `git push origin main` succeeded; `git ls-remote --heads origin main` and
+  `gh api repos/MnsEn2001/drop-way/commits/main` both returned
+  `89cd5011428fb4a95e22662ed2f295569e2d98a8`
+- GitHub Actions runs: none found (no CI configured in the repository)
+- Production deployment: the latest observed successful Production deployment was
+  `f3ab31d` (2026-10-12T00:18:12Z). No deployment for `89cd501` was observed at
+  verification time — deployment of this commit is NOT VERIFIED.
 - `package-lock.json` remains untracked and out of scope.
