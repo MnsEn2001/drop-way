@@ -128,6 +128,13 @@ Notes learned in this environment:
   `overflow-y: auto`, and no modal may carry `overflow-hidden` unless its
   content is guaranteed to fit. See
   `.ai/reports/2026-10-12-dropway-centered-modals-all-breakpoints.md`.
+- Modal footer rule (2026-10-12): `.modal-foot` must stay in the normal
+  document flow (`margin-top`, `padding-top`, `border-top` only). Do **not**
+  add `position: sticky`, `bottom: 0`, `z-index`, or an opaque background —
+  save/cancel buttons must not float over form text or follow the viewport.
+  Keyboard handling belongs to `--app-vvh` / `src/lib/viewport.ts`, never to
+  the footer. See
+  `.ai/reports/2026-10-12-dropway-modal-footer-normal-flow.md`.
 
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.

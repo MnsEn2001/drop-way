@@ -16,7 +16,11 @@ This is a factual snapshot of the repository and the documentation effort that c
 - 2026-10-12 card button + data-color polish pushed and verified: `1fe54494a4031bab611767324e7f2d303162e401` (from `992e02dbb4f1dba6311f76060a4c65b822001c3b`)
 - 2026-10-12 modal centering pushed and verified: `ddd5a940a668af99f48db22d56fc150f006b90fb` (from `a43d0547537730c2b891811de38b756cdb461b8e`)
 - 2026-10-12 dialog-dismiss routing + shared restricted/unsaved hook pushed and verified: `8aa1f30982724a86a69c7a40ba78f8f55744ba4e` (from `71cec880ce822f29eaf14738e4934abf49ede0a2`)
-- Latest verified GitHub `main`: `8aa1f30982724a86a69c7a40ba78f8f55744ba4e`
+- 2026-10-12 shared unsaved/restricted confirmation dialog code pushed and
+  verified: `4750a6b4c858a7e5e31805382a4f1f05368033c5` (docs rewrite `af55200`)
+- 2026-10-12 modal save/cancel footer restored to normal document flow pushed
+  and verified: `cbab19d4c8181cec008f1a2e1723d212a7d24158`
+- Latest verified GitHub `main`: `cbab19d4c8181cec008f1a2e1723d212a7d24158`
 
 ## Latest verified full product audit
 - `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md` (full-system audit)
@@ -78,8 +82,10 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Hand mode: header switch "มือขวา" / "มือซ้าย", default right, persisted as
   `localStorage["navigationActionRailSide"]` with try/catch.
 - No `autoFocus` remains in `src/`; dialogs focus the trigger on close instead.
-- Dialog sizing: `.modal-sheet` (`min(85dvh, --app-vvh * 0.85)`) + sticky
-  `.modal-foot`; `--app-vvh` comes from `src/lib/viewport.ts`.
+- Dialog sizing: `.modal-sheet` (`min(85dvh, --app-vvh * 0.85)`) with
+  `overflow-y: auto`; `.modal-foot` is a normal in-flow block (no sticky, no
+  `bottom: 0`, no `z-index`, no background); `--app-vvh` comes from
+  `src/lib/viewport.ts`.
 - Business logic, Supabase calls, statuses, money parsing and distance math were
   deliberately left untouched.
 
@@ -100,6 +106,25 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Report: saved in this session as task `.ai/tasks/active/SHARED_CONFIRM_DIALOG_TASK.md`
   and committed under `8aa1f30982724a86a69c7a40ba78f8f55744ba4e`.
 
+## Modal footer in normal flow (2026-10-12)
+- `.modal-foot` in `src/app/globals.css` is an ordinary in-flow footer again:
+  `margin-top: 1rem`, `padding-top: 0.75rem`,
+  `border-top: 1px solid var(--border)` and nothing else. `position: sticky`,
+  `bottom: 0`, `z-index: 1`, the opaque background and the extra
+  `padding-bottom` were removed, so save/cancel buttons no longer float over
+  form text and no longer follow the viewport while scrolling.
+- This follows the pre-refactor behaviour of commit
+  `038a9f871bcdff6f6abc0f8265583e9171f4108c`, whose `globals.css` had no
+  `.modal-foot` rule at all. The project was not rolled back.
+- No JSX changed: all `.modal-foot` uses are plain `<div>` wrappers
+  (navigation 8, houses 3). Business logic, validation, save/cancel flow,
+  unsaved-change confirmation, Supabase calls, GPS, routing, delivery and money
+  math are untouched.
+- Modal scroll stays intact (`.modal-sheet` keeps `overflow-y: auto` and
+  `min(85dvh, --app-vvh * 0.85)`), centered overlay and 4-corner rounding stay
+  intact, and keyboard handling stays in `src/lib/viewport.ts`.
+- Report: `.ai/reports/2026-10-12-dropway-modal-footer-normal-flow.md`
+
 ## Last verified full product audit
 - `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md`
 - Result: PASS for `git diff --check`, `npx tsc --noEmit`, `npm run lint`,
@@ -109,8 +134,8 @@ This is a factual snapshot of the repository and the documentation effort that c
 
 ## Local synchronization status
 - Local branch: `main`
-- Local `HEAD` SHA: `8aa1f30982724a86a69c7a40ba78f8f55744ba4e` (matches
-  `origin/main` after push)
+- Local `HEAD` SHA: `cbab19d4c8181cec008f1a2e1723d212a7d24158` (matches
+  `origin/main` after push; docs commit adds one more commit on top)
 - Working tree status: untracked workspace artifacts only; no modified tracked
   files after push
 - Difference from `origin/main`: none
@@ -119,6 +144,7 @@ This is a factual snapshot of the repository and the documentation effort that c
 - UTC: 2026-10-12 (modal centering session)
 - Pushed again: 2026-10-12 (dialog-dismiss routing + shared restricted/unsaved
   hook)
+- Pushed again: 2026-10-12 (modal save/cancel footer back to normal flow)
 
 ## Verified working features
 - Repository identity and branch verification
@@ -195,8 +221,13 @@ This is a factual snapshot of the repository and the documentation effort that c
 - TypeScript-only `tsc -b --noEmit`: NOT RUN separately
 
 ## Current active task
-- Dialog-dismiss routing + shared restricted/unsaved confirmation hook, pushed as `8aa1f30982724a86a69c7a40ba78f8f55744ba4e`
-- Follow-up: no shared modal UI was built yet; that remains future work unless explicitly requested.
+- Modal save/cancel footer restored to normal document flow, pushed as
+  `cbab19d4c8181cec008f1a2e1723d212a7d24158`
+- The shared unsaved/restricted confirmation dialog code is pushed as
+  `4750a6b4c858a7e5e31805382a4f1f05368033c5`
+- Follow-up: interactive (browser/device) verification of the modal footer,
+  keyboard behaviour, and the cancel → confirmation → discard flow remains
+  outstanding.
 
 ## Next recommended task
 - Decide whether `setShowRestrictedConfirmModal` / `setShowUnsavedChangesConfirmModal` should become one real shared modal component, or whether the current hook-only approach is enough.
