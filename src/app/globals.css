@@ -372,6 +372,24 @@ body {
     overflow-y: auto;
     overflow-x: hidden;
     overscroll-behavior: contain;
+    overscroll-behavior-y: contain;
+  }
+
+  /* Stable dialog positioning: while a dialog is open, the page body should
+     not scroll beneath the modal and the visual viewport should not try to
+     recenter the page around the focused input, so the dialog keeps its
+     open-time position instead of jumping. */
+  .nav-dialog-open body {
+    overflow: hidden;
+  }
+
+  .nav-dialog-open .page-shell {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    overflow-y: auto;
   }
 
   /* Sticky footer inside a scrollable sheet: the save/cancel buttons stay

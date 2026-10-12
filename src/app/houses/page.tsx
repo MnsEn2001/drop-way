@@ -1035,12 +1035,13 @@ export default function HousesPage() {
           />
           {searchTerm && (
             <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={(e) => {
                 e.preventDefault();
                 clearSearch();
                 searchInputRef.current?.focus();
               }}
-              type="button"
               aria-label="ล้างคำค้นหา"
               className="zoom-pinch-ok absolute right-14 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >

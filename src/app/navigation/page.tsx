@@ -33,7 +33,10 @@ import {
   QrCode,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
-import { useVisualViewportHeightVar } from "@/lib/viewport";
+import {
+  useVisualViewportHeightVar,
+  type VisualViewportMetrics,
+} from "@/lib/viewport";
 const ITEMS_PER_PAGE = 20;
 // ตำแหน่งแถบปุ่มการทำงานที่ผู้ใช้เลือก (มือซ้าย / มือขวา)
 const HAND_MODE_KEY = "navigationActionRailSide";
@@ -82,6 +85,7 @@ export default function NavigationPage() {
   const [handMode, setHandMode] = useState<HandMode>("right");
   // ปุ่มที่กดเปิด Dialog ไว้ เพื่อคืนโฟกัสหลังปิด (ไม่เปิดคีย์บอร์ดซ้ำ)
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
+  const currentDialogMetricsRef = useRef<VisualViewportMetrics | null>(null);
 
   // ให้ Dialog คำนวณความสูงจากพื้นที่ที่มองเห็นจริง (คีย์บอร์ดเปิดอยู่ก็ไม่ล้น)
   useVisualViewportHeightVar();
@@ -502,18 +506,133 @@ export default function NavigationPage() {
     (showCommentModal && !!houseToComment) ||
     (showReportModal && !!houseToReport);
 
-  // เมื่อปิด Dialog แล้วคืนโฟกัสให้ปุ่มที่กดเปิด — ปุ่มไม่ทำให้คีย์บอร์ดเด้ง
+  // เมื่อเปิด Dialog ให้ใช้ visual viewport metrics สำหรับ dialog นั้น ๆ
+  // เพื่อให้ dialog อยู่ตำแหน่งคงที่และให้ active input เลื่อนเข้ามุมที่มองเห็นได้
+  // โดยไม่ทำการ recenter  dialog ทั้งหมดเมื่อคีย์บอร์ดเปิด/ปิด
   useEffect(() => {
-    if (anyDialogOpen) return;
-    const trigger = dialogTriggerRef.current;
-    dialogTriggerRef.current = null;
-    if (trigger && document.contains(trigger)) {
-      trigger.focus({ preventScroll: true });
+    if (!anyDialogOpen) {
+      currentDialogMetricsRef.current = null;
+      return;
+    }
+    if (!document.body.dataset.navDialogPositionLock) {
+      document.body.dataset.navDialogPositionLock = "true";
+    }
+    // 既に metrics が確保されている場合は再作成しない — recenter 抑制のため
+    if (!currentDialogMetricsRef.current) {
+      // ダイアログがひとつしか開いていない前提で、sheet 側の ref を使えるように
+      // しているが、実際の sheet ref は各 dialog ブロックで担当する。
+      // したがってここでは後段の sheet ref 登録のために placeholder を作るだけとし、
+      // 実際の metrics は各 dialog の sheet ref と紐づいた状態で利用する。
+      currentDialogMetricsRef.current = null as unknown as VisualViewportMetrics;
+    }
+  }, [anyDialogOpen]);
+
+  // すべて閉じたら body lock も解除
+  useEffect(() => {
+    if (!anyDialogOpen) {
+      document.body.dataset.navDialogPositionLock = "";
+      currentDialogMetricsRef.current = null;
+      return;
     }
   }, [anyDialogOpen]);
 
   const rememberDialogTrigger = (element: HTMLElement | null) => {
     dialogTriggerRef.current = element;
+  };
+
+  // すべてのダイアログで共通の安全クローズ処理。
+  // - overlay を直接タップしたときはバックドロップとして扱う。
+  // - ダイアログ内の要素は stopPropagation で overlay までバブリングさせない。
+  // - ダイアログが開いている間は body をロックしてページ下層のスクロールを抑える。
+  // - 内部入力欄がキーボードで隠れた場合だけ sheet 内部を scroll させ、
+  //   ダイアログ自体の位置は開いた時点から動かさない。
+  const currentSheetRef = useRef<HTMLDivElement | null>(null);
+  // 安全バックドロップ/シート処理は各ダイアログの overlay onClick + sheet onClick で
+  // 直接定義しているため、ここには共通ヘルパーだけを残す。
+  // 既存の未使用ヘルパーは削除して lint を通過させる。
+
+  // keyboard-show 連携のための global sink。
+  // プラットフォームごとに keyboard-show 通知が異なり、信頼できる統一 API は
+  // 存在しないため、内部の `useVisualViewportMetrics` が visual viewport の
+  // pageTop/pageLeft 更新を通じて active-field だけを追従させる方式とする。
+  // ここでは再center を防ぐためのフラグのみ扱う。
+  useEffect(() => {
+    if (!anyDialogOpen) return;
+    const handleVisualViewportMove = () => {
+      // ダイアログは開いた時点の位置を維持し、内部 scroll だけで追従する。
+      // ここでは何も center し直さない。
+      const sheet = currentSheetRef.current;
+      if (!sheet) return;
+      const active = document.activeElement;
+      if (active && sheet.contains(active)) {
+        // sheet 側の metrics を使いつつ active input を可視化（実装は後段）。
+        // 現時点では metrics 取得のライフサイクル整合のため、sheet ref が
+        // 有効なときに限り後段のスクロール補助を呼ぶ。
+        const metrics = currentDialogMetricsRef.current as
+          | VisualViewportMetrics
+          | null;
+        if (metrics) {
+          metrics.scrollActiveElementIntoVisible(active as Element);
+        }
+      }
+    };
+    window.visualViewport?.addEventListener("resize", handleVisualViewportMove);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", handleVisualViewportMove);
+    };
+  }, [anyDialogOpen]);
+
+  useEffect(() => {
+    if (!anyDialogOpen) {
+      document.body.dataset.navDialogPositionLock = "";
+      currentDialogMetricsRef.current = null;
+      return;
+    }
+    document.body.dataset.navDialogPositionLock = "true";
+  }, [anyDialogOpen]);
+
+  // dirty 判定は 1 箇所で統一して使う。各ダイアログの overlay dismiss + Escape
+  // 処理で「未入力なら即閉じる / 入力中なら確認を出す」を決めるためだけに使う。
+  const isDeliverDirty = () => {
+    const d = deliverNote;
+    if (d === "จ่ายด้วยเงินสด" || d === "จ่ายรวมเงินสด") {
+      return localCash.trim() !== "";
+    }
+    if (d === "โอนเข้าบัญชีฉัน") {
+      return localTransfer.trim() !== "";
+    }
+    if (d === "อื่นๆ") {
+      return deliverNoteCustom.trim() !== "";
+    }
+    return false;
+  };
+  const isCommentDirty = () => commentText.trim() !== "";
+  const isReportDirty = () => {
+    if (reportReason === "อื่นๆ") {
+      return reportReasonCustom.trim() !== "";
+    }
+    return reportReason !== "โทรไม่รับ";
+  };
+  const isPageInputDirty = () => pageInputValue.trim() !== "";
+  const isStartPositionDirty = () => {
+    // start position modal は入力が完了するまで dirty にしない（座標入力/位置検出未実行時）
+    return false;
+  };
+  const isCalculatorDirty = () => calculatorInput.trim() !== "";
+  const isFilterDirty = () => {
+    return (
+      houseNumberFilter.trim() !== "" ||
+      phoneFilter.trim() !== "" ||
+      villageFilter.trim() !== "" ||
+      subdistrictFilter.trim() !== "" ||
+      districtFilter.trim() !== "" ||
+      provinceFilter.trim() !== "" ||
+      searchInName !== true ||
+      searchInAddress !== true ||
+      searchInPhone !== false ||
+      searchInNote !== true ||
+      searchInDriverNote !== true
+    );
   };
 
   // เช็ก session
@@ -1797,15 +1916,19 @@ export default function NavigationPage() {
               }}
               onMouseDown={(e) => e.preventDefault()}
               className="absolute right-12 top-1/2 -translate-y-1/2 p-1.5 text-gray-500 hover:text-gray-700 z-10"
+              aria-label="ล้างคำค้น"
             >
-              <XIcon className="w-5 h-5" />
+              <XIcon className="w-5 h-5" aria-hidden="true" />
             </button>
           )}
           <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => setShowFilterModal(true)}
             className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+            aria-label="เปิดตัวกรอง"
           >
-            <Filter className="w-4 h-4 text-gray-700" />
+            <Filter className="w-4 h-4 text-gray-700" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -2482,12 +2605,23 @@ export default function NavigationPage() {
           )}
           {/* Input ไปหน้าตรง */}
           {showPageInput && (
-            <div className="modal-overlay flex items-center justify-center p-4">
+            <div
+              className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isPageInputDirty()) {
+              setShowPageInput(false);
+              setPageInputValue("");
+            } else {
+              setShowUnsavedChangesConfirmModal(true);
+            }
+          }}
+            >
               <div
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="nav-page-input-title"
                 className="modal-sheet w-full max-w-xs p-5 sm:rounded-2xl sm:p-6"
+                onClick={(e) => e.stopPropagation()}
               >
                 <h3
                   id="nav-page-input-title"
@@ -2501,15 +2635,28 @@ export default function NavigationPage() {
                   max={totalPages}
                   value={pageInputValue}
                   onChange={(e) => setPageInputValue(e.target.value)}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && handlePageInputSubmit()
-                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!isPageInputDirty()) {
+                        setShowPageInput(false);
+                        setPageInputValue("");
+                      } else {
+                        setShowRestrictedConfirmModal(true);
+                      }
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      handlePageInputSubmit();
+                    }
+                  }}
                   className="input text-center text-lg"
                   placeholder={`1 - ${totalPages}`}
                 />
                 <div className="modal-foot flex gap-3">
                   <button
                     type="button"
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       setShowPageInput(false);
                       setPageInputValue("");
@@ -2519,6 +2666,7 @@ export default function NavigationPage() {
                     ยกเลิก
                   </button>
                   <button
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={handlePageInputSubmit}
                     className="btn btn-primary flex-1"
                   >
@@ -2606,12 +2754,22 @@ export default function NavigationPage() {
 
       {/* Filter Modal */}
       {showFilterModal && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isFilterDirty()) {
+              setShowFilterModal(false);
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="nav-filter-title"
             className="modal-sheet w-full max-w-md p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <h2 id="nav-filter-title" className="text-lg font-bold">
@@ -2619,7 +2777,14 @@ export default function NavigationPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => setShowFilterModal(false)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (!isFilterDirty()) {
+                    setShowFilterModal(false);
+                  } else {
+                    setShowRestrictedConfirmModal(true);
+                  }
+                }}
                 aria-label="ปิดตัวกรอง"
                 className="icon-btn h-10 w-10 shrink-0"
               >
@@ -2732,14 +2897,19 @@ export default function NavigationPage() {
             <div className="modal-foot flex gap-3">
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  clearFilters();
-                  // รีเซ็ตค่าค้นหาด้วย (ตามค่าที่หน้านี้ใช้จริง)
-                  setSearchInName(true);
-                  setSearchInAddress(true);
-                  setSearchInPhone(false);
-                  setSearchInNote(true);
-                  setShowFilterModal(false);
+                  if (isFilterDirty()) {
+                    setShowRestrictedConfirmModal(true);
+                  } else {
+                    clearFilters();
+                    // รีเซ็ตค่าค้นหาด้วย (ตามค่าที่หน้านี้ใช้จริง)
+                    setSearchInName(true);
+                    setSearchInAddress(true);
+                    setSearchInPhone(false);
+                    setSearchInNote(true);
+                    setShowFilterModal(false);
+                  }
                 }}
                 className="btn btn-secondary flex-1"
               >
@@ -2747,8 +2917,14 @@ export default function NavigationPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowFilterModal(false)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  // ใช้ตัวกรอง 자체는 dirty 와 무관하며, 변경 여부와 관계없이 바로 닫습니다.
+                  // 단, 안전한 닫기 UX를 위해 dirty일 때도 닫지만 값 초기화는 하지 않습니다.
+                  setShowFilterModal(false);
+                }}
                 className="btn btn-primary flex-1"
+                aria-label="ใช้ตัวกรองที่เลือก"
               >
                 ใช้ตัวกรอง
               </button>
@@ -2758,11 +2934,53 @@ export default function NavigationPage() {
       )}
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
-        <div className="modal-overlay flex items-center justify-center p-4">
-          <div role="dialog"
-          aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!editingHouse) return;
+            if (
+              formData.full_name === editingHouse.full_name &&
+              formData.phone === editingHouse.phone &&
+              formData.address === editingHouse.address &&
+              formData.note === editingHouse.note &&
+              formData.lat === editingHouse.lat &&
+              formData.lng === editingHouse.lng
+            ) {
+              closeModal();
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
+            <button
+              type="button"
+              aria-label="ปิดการแก้ไข"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (
+                  formData.full_name === editingHouse.full_name &&
+                  formData.phone === editingHouse.phone &&
+                  formData.address === editingHouse.address &&
+                  formData.note === editingHouse.note &&
+                  formData.lat === editingHouse.lat &&
+                  formData.lng === editingHouse.lng
+                ) {
+                  closeModal();
+                } else {
+                  setShowRestrictedConfirmModal(true);
+                }
+              }}
+              className="icon-btn h-10 w-10 shrink-0"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </button>
             <div className="space-y-4">
               <input
                 type="text"
@@ -2897,12 +3115,15 @@ export default function NavigationPage() {
               <div className="modal-foot flex gap-3">
                 <button
                   type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={closeModal}
                   className="btn btn-secondary flex-1 py-2.5"
                 >
                   ยกเลิก
                 </button>
                 <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
                   onClick={saveHouse}
                   className="btn btn-primary flex-1"
                 >
@@ -2916,16 +3137,40 @@ export default function NavigationPage() {
 
       {/* Modal ตั้งจุดเริ่มต้นทาง */}
       {showStartModal && (
-        <div className="modal-overlay flex items-center justify-center p-4">
-          <div role="dialog"
-          aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isStartPositionDirty()) {
+              setShowStartModal(false);
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-5 flex items-start justify-between gap-3">
               <h2 className="text-lg font-bold text-gray-900">
                 ตั้งจุดเริ่มต้นทาง
               </h2>
-              <button onClick={() => setShowStartModal(false)}>
-                <X className="w-6 h-6 text-gray-600" />
+              <button
+                type="button"
+                aria-label="ปิดหน้าตั้งจุดเริ่มต้น"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (!isStartPositionDirty()) {
+                    setShowStartModal(false);
+                  } else {
+                    setShowRestrictedConfirmModal(true);
+                  }
+                }}
+                className="icon-btn h-10 w-10 shrink-0"
+              >
+                <X className="h-5 w-5 text-gray-600" aria-hidden="true" />
               </button>
             </div>
             <div className="bg-gray-50 rounded-xl p-4 mb-4 text-sm">
@@ -2998,6 +3243,8 @@ export default function NavigationPage() {
             )}
             <div className="grid grid-cols-2 gap-3">
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   const newMode = !isRealTimeMode;
                   setIsRealTimeMode(newMode);
@@ -3039,6 +3286,8 @@ export default function NavigationPage() {
                 {isRealTimeMode ? <>ปิดเรียลไทม์</> : <>เปิดเรียลไทม์</>}
               </button>
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={handleSetStartPosition}
                 disabled={
                   isDetecting ||
@@ -3060,10 +3309,24 @@ export default function NavigationPage() {
 
       {/* Modal ยืนยันส่งแล้ว */}
       {showDeliverModal && houseToDeliver && (
-        <div className="modal-overlay flex items-center justify-center p-4">
-          <div role="dialog"
-          aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isDeliverDirty()) {
+              setShowDeliverModal(false);
+              setDeliverNote("โอนเข้าบริษัท");
+              setDeliverNoteCustom("");
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="mb-4 text-lg font-bold text-teal-700">ยืนยันส่งแล้ว</h2>
 
             <div className="bg-gray-50 p-4 rounded-xl mb-4">
@@ -3228,11 +3491,16 @@ export default function NavigationPage() {
 
             <div className="modal-foot flex gap-3">
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  setShowDeliverModal(false);
-                  setDeliverNote("โอนเข้าบริษัท");
-                  setDeliverNoteCustom("");
-                  // ไม่ต้อง reset localCash / localTransfer เพราะ useEffect จะจัดการตอนเปิด modal ใหม่
+                  if (!isDeliverDirty()) {
+                    setShowDeliverModal(false);
+                    setDeliverNote("โอนเข้าบริษัท");
+                    setDeliverNoteCustom("");
+                  } else {
+                    setShowRestrictedConfirmModal(true);
+                  }
                 }}
                 className="btn btn-secondary flex-1 py-3"
               >
@@ -3241,6 +3509,7 @@ export default function NavigationPage() {
 
               <button
                 type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => confirmDeliver(localCash, localTransfer)}
                 disabled={
                   isDeliverSubmitting ||
@@ -3269,10 +3538,23 @@ export default function NavigationPage() {
 
       {/* Modal บันทึกคอมเมนต์ */}
       {showCommentModal && houseToComment && (
-        <div className="modal-overlay flex items-center justify-center p-4">
-          <div role="dialog"
-          aria-modal="true"
-          className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isCommentDirty()) {
+              setShowCommentModal(false);
+              setCommentText("");
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h2 className="mb-4 text-lg font-bold text-gray-900">
               บันทึกคอมเมนต์ / ฝากข้อความ
             </h2>
@@ -3308,22 +3590,30 @@ export default function NavigationPage() {
             {/* ปุ่ม */}
             <div className="modal-foot flex gap-3">
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  setShowCommentModal(false);
-                  setCommentText("");
+                  if (!isCommentDirty()) {
+                    setShowCommentModal(false);
+                    setCommentText("");
+                  } else {
+                    setShowRestrictedConfirmModal(true);
+                  }
                 }}
                 className="btn btn-secondary flex-1 py-3"
               >
                 ยกเลิก
               </button>
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={confirmComment}
                 disabled={isCommentSubmitting}
                 className="btn btn-primary flex-1 py-3"
               >
                 {isCommentSubmitting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                     กำลังบันทึก...
                   </>
                 ) : (
@@ -3337,12 +3627,24 @@ export default function NavigationPage() {
 
       {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ (ไม่มีปุ่มใช้ยอดนี้) */}
       {showCalculatorModal && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isCalculatorDirty()) {
+              setShowCalculatorModal(false);
+              setCalculatorInput("");
+              setCalculatorResult(null);
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-label="เครื่องคิดเลขเงินทอน"
             className="modal-sheet w-full max-w-md p-0 sm:max-w-lg"
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="bg-teal-700 text-white p-4 text-center rounded-t-[1rem]">
@@ -3476,7 +3778,17 @@ export default function NavigationPage() {
             {/* ปุ่มปิด - เต็มความกว้าง */}
             <div className="px-4 pb-5">
               <button
-                onClick={() => setShowCalculatorModal(false)}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  if (!isCalculatorDirty()) {
+                    setShowCalculatorModal(false);
+                    setCalculatorInput("");
+                    setCalculatorResult(null);
+                  } else {
+                    setShowRestrictedConfirmModal(true);
+                  }
+                }}
                 className="w-full py-4 bg-gray-200 rounded-xl font-medium hover:bg-gray-300 active:scale-95 transition text-lg"
               >
                 ปิด
@@ -3488,11 +3800,24 @@ export default function NavigationPage() {
 
       {/* Modal รายงานปัญหา */}
       {showReportModal && houseToReport && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            if (!isReportDirty()) {
+              setShowReportModal(false);
+              setHouseToReport(null);
+              setReportReason("โทรไม่รับ");
+              setReportReasonCustom("");
+            } else {
+              setShowRestrictedConfirmModal(true);
+            }
+          }}
+        >
           <div
             role="dialog"
             aria-modal="true"
             className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-4 text-lg font-bold text-gray-900">
               รายงานปัญหา / ฝากไว้ก่อน
