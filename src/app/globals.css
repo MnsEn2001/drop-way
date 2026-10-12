@@ -392,16 +392,15 @@ body {
     overflow-y: auto;
   }
 
-  /* Sticky footer inside a scrollable sheet: the save/cancel buttons stay
-     reachable without scrolling through the whole form. */
+  /* Save/cancel footer inside a scrollable sheet. It stays in the normal
+     document flow after the form content (no position: sticky, no bottom: 0,
+     no z-index, no covering background) so it never floats over the text and
+     never sticks to the viewport — users scroll down to reach the buttons.
+     Keyboard handling is separate and lives in `--app-vvh` / the viewport
+     hook, not here. */
   .modal-foot {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
     margin-top: 1rem;
     padding-top: 0.75rem;
-    padding-bottom: 0.5rem;
-    background: var(--background);
     border-top: 1px solid var(--border);
   }
 
