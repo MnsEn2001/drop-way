@@ -120,6 +120,14 @@ Notes learned in this environment:
 - Interaction/visual checks for these colors on real devices remain NOT
   VERIFIED (no browser or test account in this environment). See
   `.ai/reports/2026-10-12-dropway-card-button-and-data-color-polish.md`.
+- Modal rules (2026-10-12): every modal overlay uses
+  `modal-overlay flex items-center justify-center p-4` (centered on both axes
+  at every breakpoint — do not reintroduce `items-end` bottom-sheet
+  alignment or per-sheet `sm:max-h-[90vh]` overrides), `.modal-sheet` rounds
+  all four corners and sizes to `min(85dvh, --app-vvh * 0.85)` with
+  `overflow-y: auto`, and no modal may carry `overflow-hidden` unless its
+  content is guaranteed to fit. See
+  `.ai/reports/2026-10-12-dropway-centered-modals-all-breakpoints.md`.
 
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.

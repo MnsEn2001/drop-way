@@ -153,5 +153,40 @@ This document records meaningful project and documentation changes for the DropW
   `git rev-parse HEAD` and the GitHub API. Visual/device verification remains
   NOT VERIFIED (no browser or test session in this environment).
 
+## 2026-10-12 (modals centered on every breakpoint)
+- Fixed the bottom-anchored modal problem (report:
+  `.ai/reports/2026-10-12-dropway-centered-modals-all-breakpoints.md`):
+  - all 12 modals (8 in navigation: page-number, filter, edit house, start
+    point, deliver confirm, comment, calculator, report problem; 4 in houses:
+    page-number, filter, add/edit house, delete confirm) changed from
+    `modal-overlay flex items-end justify-center sm:items-center sm:p-4` to
+    `modal-overlay flex items-center justify-center p-4` — centered both
+    axes at every breakpoint with 16px clearance on all edges
+  - `.modal-sheet` base rounds all four corners at every breakpoint
+    (`border-radius: 1rem` instead of `1rem 1rem 0 0`) and dropped the
+    bottom-sheet `padding-bottom: env(safe-area-inset-bottom)`;
+    the viewport-aware
+    `max-height: min(85dvh, calc(var(--app-vvh, 100dvh) * 0.85))`,
+    `overflow-y: auto` and `overscroll-behavior: contain` are untouched and
+    now govern every screen (7 per-sheet `sm:max-h-[90vh]` overrides removed)
+  - calculator sheet: removed `overflow-hidden` so its keypad and close
+    button scroll instead of being clipped on short screens; the teal header
+    carries `rounded-t-[1rem]` itself
+  - keyboard behaviour unchanged: no `autoFocus` anywhere, the existing
+    `useVisualViewportHeightVar()`/`--app-vvh` mechanism still sizes sheets
+    to the visible viewport, and focus restoration is untouched; className
+    changes only, no Supabase/auth/status/money/GPS logic touched
+- Verified: `git diff --check`, `npx tsc --noEmit`, `npm run lint`, `npm run
+  build` (9/9 pages), `/login` `/register` `/houses` `/navigation` HTTP 200 in
+  the managed preview, compiled CSS carries the 4-corner radius +
+  viewport-aware max-height, and no old-pattern overlay remains in source or
+  SSR HTML. (As before, `next build` briefly 500'd `/login` `/register` via
+  dev-server cache corruption; `freebuff-preview restart` restored 200 —
+  environment, not code.)
+- Pushed to `main` as `ddd5a940a668af99f48db22d56fc150f006b90fb`
+  (`a43d054..ddd5a94`), confirmed with `git ls-remote --heads origin main`,
+  `git rev-parse HEAD` and the GitHub API. Real-device/keyboard verification
+  remains NOT VERIFIED (no browser or test session in this environment).
+
 ## Notes on scope
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.
