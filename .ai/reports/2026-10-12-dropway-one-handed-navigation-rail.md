@@ -67,6 +67,9 @@ replaced by a real `badge badge-amber` labelled "ไม่มีพิกัด"
   so the keyboard is never re-opened by the app.
 
 ### 4. Dialog sizing and reachability
+- The two "ไปที่หน้า" (page number) dialogs in navigation and houses were switched to
+  the same `.modal-sheet` + `.modal-foot` treatment, and every dialog in the navigation
+  page (8) now exposes `role="dialog"` + `aria-modal="true"` (houses: 4 of 4 dialogs).
 - Every dialog panel in both pages now uses `.modal-sheet`: bottom sheet on phones,
   centred card from `sm` up, `overscroll-behavior: contain`, safe-area padding, and
   `max-height: min(85dvh, calc(var(--app-vvh, 100dvh) * 0.85))` with an `80vh` fallback

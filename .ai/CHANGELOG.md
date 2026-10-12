@@ -115,6 +115,11 @@ This document records meaningful project and documentation changes for the DropW
   (`bf4ef5c..3c240d0`), confirmed with `git ls-remote --heads origin main` and
   the GitHub API; GitHub reports a Production deployment for that SHA created
   2026-10-12T01:15:30Z with `state=success`.
+- Follow-up in the same session: the two "ไปที่หน้า" dialogs now also use
+  `.modal-sheet` with a sticky `.modal-foot`, and every dialog in the navigation
+  page (8) exposes `role="dialog"` + `aria-modal="true"`, matching the houses
+  dialogs. Re-verified with `git diff --check`, `npx tsc --noEmit`,
+  `npm run lint` and `npm run build`.
 - Interaction checks on a real device/browser remain NOT VERIFIED (no browser or
   session in this environment).
 

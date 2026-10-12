@@ -1322,9 +1322,17 @@ export default function HousesPage() {
 
           {/* Input กรอกหน้าเมื่อกด ... */}
           {showPageInput && (
-            <div className="modal-overlay flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl p-6 shadow-xl max-w-xs w-full">
-                <h3 className="text-lg font-medium mb-4 text-center">
+            <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="houses-page-input-title"
+                className="modal-sheet w-full max-w-xs p-5 sm:rounded-2xl sm:p-6"
+              >
+                <h3
+                  id="houses-page-input-title"
+                  className="mb-4 text-center text-lg font-semibold text-gray-900"
+                >
                   ไปที่หน้า
                 </h3>
                 <input
@@ -1336,10 +1344,10 @@ export default function HousesPage() {
                   onKeyDown={(e) =>
                     e.key === "Enter" && handlePageInputSubmit()
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-lg font-medium"
+                  className="input text-center text-lg"
                   placeholder={`1 - ${totalPages}`}
                 />
-                <div className="flex gap-3 mt-5">
+                <div className="modal-foot flex gap-3">
                   <button
                     onClick={() => {
                       setShowPageInput(false);
