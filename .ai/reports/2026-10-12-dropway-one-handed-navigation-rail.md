@@ -132,6 +132,12 @@ replaced by a real `badge badge-amber` labelled "ไม่มีพิกัด"
 
 ## Git
 - Baseline: `bf4ef5c6c36e93127869f84bcf0e151ae1409503`
-- Changes committed and pushed to `main`; the exact SHA, push verification and
-  deployment status are recorded in `.ai/CHANGELOG.md` and `.ai/CURRENT_STATE.md`.
+- Commit: `3c240d0e77805c82c76e4808505e302cd361c371` (`bf4ef5c..3c240d0`)
+- Push: `git push origin main` succeeded; `git ls-remote --heads origin main` and
+  `gh api repos/MnsEn2001/drop-way/commits/main` both returned
+  `3c240d0e77805c82c76e4808505e302cd361c371`
+- GitHub Actions runs: none found (no CI configured in the repository)
+- Production deployment: GitHub reports a Production deployment for `3c240d0`
+  created 2026-10-12T01:15:30Z with `state=success` / "Deployment has completed".
+  The deployed build was not exercised in a browser here.
 - `package-lock.json` remains untracked and out of scope.

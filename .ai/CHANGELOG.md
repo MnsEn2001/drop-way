@@ -111,6 +111,10 @@ This document records meaningful project and documentation changes for the DropW
   (9/9 pages), `/navigation` + `/houses` + `/login` + `/register` HTTP 200 in the
   managed preview, `.action-rail`/`.modal-foot` present in the compiled CSS and
   the rail markup present in the built client chunk.
+- Pushed to `main` as `3c240d0e77805c82c76e4808505e302cd361c371`
+  (`bf4ef5c..3c240d0`), confirmed with `git ls-remote --heads origin main` and
+  the GitHub API; GitHub reports a Production deployment for that SHA created
+  2026-10-12T01:15:30Z with `state=success`.
 - Interaction checks on a real device/browser remain NOT VERIFIED (no browser or
   session in this environment).
 
