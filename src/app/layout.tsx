@@ -39,22 +39,26 @@ export default function RootLayout({
             right: 12,
           }}
           toastOptions={{
-            duration: 1000,
+            // Thai copy needs to stay on screen long enough to be read.
+            duration: 4000,
             style: {
               background: "#0f172a",
               color: "#fff",
-              fontSize: "14px",
-              padding: "12px 14px",
-              borderRadius: "10px",
+              fontSize: "15px",
+              lineHeight: 1.5,
+              padding: "12px 16px",
+              borderRadius: "12px",
               maxWidth: "92vw",
               boxShadow: "0 4px 10px rgba(15, 23, 42, 0.18)",
             },
             success: {
+              duration: 3500,
               style: {
                 background: "#0f766e",
               },
             },
             error: {
+              duration: 6000,
               style: {
                 background: "#b91c1c",
               },

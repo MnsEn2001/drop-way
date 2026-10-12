@@ -4,80 +4,140 @@ import { supabase } from "@/lib/supabase";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import toast from "react-hot-toast"; // ⭐ เพิ่ม import นี้
+import toast from "react-hot-toast";
+import { Loader2, ShieldCheck, Warehouse } from "lucide-react";
+import { EMAIL_PATTERN, toThaiAuthError } from "@/lib/authMessages";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
 
-  const login = async () => {
-    if (!email || !password) {
-      toast.error("กรุณากรอกอีเมลและรหัสผ่าน");
+  const login = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (loading) return;
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
+      setFormError("กรุณากรอกอีเมลและรหัสผ่าน");
+      return;
+    }
+    if (!EMAIL_PATTERN.test(trimmedEmail)) {
+      setFormError("รูปแบบอีเมลไม่ถูกต้อง");
       return;
     }
 
+    setFormError(null);
     setLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password,
+      });
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+      if (error) {
+        const message = toThaiAuthError(error.message);
+        setFormError(message);
+        toast.error(message);
+        return;
+      }
 
-    setLoading(false);
-
-    if (error) {
-      toast.error("เข้าสู่ระบบไม่สำเร็จ: " + error.message);
-    } else {
-      toast.success("เข้าสู่ระบบสำเร็จ!");
+      toast.success("เข้าสู่ระบบสำเร็จ");
       router.push("/houses");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-2">
-          เข้าสู่ระบบ
-        </h1>
-        <p className="text-center text-gray-600 mb-8">ยินดีต้อนรับกลับมา!</p>
-
-        <div className="space-y-5">
-          <input
-            type="email"
-            placeholder="อีเมลของคุณ"
-            value={email}
-            onChange={(e) => setEmail(e.target.value.trim())}
-            className="w-full px-5 py-3.5 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-            disabled={loading}
-          />
-          <input
-            type="password"
-            placeholder="รหัสผ่าน"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-5 py-3.5 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
-            disabled={loading}
-          />
-          <button
-            onClick={login}
-            disabled={loading}
-            className="w-full py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white text-lg font-semibold rounded-xl hover:from-indigo-700 hover:to-blue-700 transition shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"}
-          </button>
+    <div className="flex min-h-svh items-center justify-center bg-background-subtle px-4 py-10">
+      <div className="w-full max-w-md">
+        <div className="mb-6 flex items-center justify-center gap-2">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50">
+            <Warehouse className="h-6 w-6 text-teal-700" aria-hidden="true" />
+          </span>
+          <span className="text-xl font-bold tracking-tight text-teal-700">
+            DropWay
+          </span>
         </div>
 
-        <p className="text-center mt-8 text-gray-600">
-          ยังไม่มีบัญชี?{" "}
-          <Link
-            href="/register"
-            className="text-indigo-600 font-semibold hover:underline"
-          >
-            สมัครสมาชิก
-          </Link>
-        </p>
+        <div className="card p-6 sm:p-8">
+          <h1 className="text-2xl font-bold text-gray-900">เข้าสู่ระบบ</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            จัดการคลังบ้านและเส้นทางส่งของของคุณ
+          </p>
+
+          <form onSubmit={login} className="mt-6 space-y-4" noValidate>
+            <div>
+              <label htmlFor="login-email" className="label">
+                อีเมล
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                name="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="name@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input"
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="login-password" className="label">
+                รหัสผ่าน
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                placeholder="รหัสผ่านของคุณ"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input"
+                disabled={loading}
+              />
+            </div>
+
+            {formError && (
+              <p role="alert" className="field-error">
+                {formError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn btn-primary btn-block py-3 text-base"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                  กำลังเข้าสู่ระบบ...
+                </>
+              ) : (
+                "เข้าสู่ระบบ"
+              )}
+            </button>
+          </form>
+
+          <p className="mt-6 flex items-center justify-center gap-1.5 text-center text-sm text-gray-600">
+            <ShieldCheck className="h-4 w-4 text-teal-700" aria-hidden="true" />
+            ยังไม่มีบัญชี?{" "}
+            <Link
+              href="/register"
+              className="font-semibold text-teal-700 hover:underline"
+            >
+              สมัครสมาชิก
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

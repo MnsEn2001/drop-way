@@ -2,7 +2,7 @@
 "use client";
 import { supabase } from "@/lib/supabase";
 import { House } from "@/types/house";
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Home,
@@ -32,6 +32,8 @@ export default function HousesPage() {
   const [filteredHouses, setFilteredHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [houseToDelete, setHouseToDelete] = useState<House | null>(null);
+  const [isDeletingHouse, setIsDeletingHouse] = useState(false);
   const [totalInDB, setTotalInDB] = useState<number | null>(null);
   const [addingIds, setAddingIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -325,12 +327,13 @@ export default function HousesPage() {
     setProvinceFilter("");
   };
 
-  useEffect(() => {
-    const fetchHouses = async () => {
-      setLoading(true);
-      let allHouses: House[] = [];
-      let start = 0;
-      const pageSize = 1000;
+  // โหลดบ้านทั้งหมด (ใช้ทั้งตอนเปิดหน้าและตอนกด "ลองใหม่" — โค้ดชุดเดียว)
+  const loadHouses = useCallback(async () => {
+    setLoading(true);
+    setLoadingError(null);
+    let allHouses: House[] = [];
+    let start = 0;
+    const pageSize = 1000;
 
       while (true) {
         const { data, error } = await supabase
@@ -342,6 +345,9 @@ export default function HousesPage() {
         if (error) {
           console.error("Error:", error);
           toast.error("โหลดข้อมูลไม่สำเร็จ");
+          setLoadingError(
+            "ตรวจสอบการเชื่อมต่ออินเทอร์เน็ตแล้วกดลองใหม่อีกครั้ง",
+          );
           break;
         }
 
@@ -354,50 +360,18 @@ export default function HousesPage() {
         if (data.length < pageSize) break;
       }
 
-      setHouses(allHouses);
-      setTotalInDB(allHouses.length);
-      setLoading(false);
-      setLoadingError(null);
-    };
-    fetchHouses();
+    setHouses(allHouses);
+    setTotalInDB(allHouses.length);
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadHouses();
+  }, [loadHouses]);
 
   // หากโหลดครั้งแรกแล้วล้มเหลว ให้แสดงปุ่มลองใหม่ ไม่ใช่แค่หน้าว่าง
   const retryInitialLoad = () => {
-    setLoading(true);
-    setLoadingError(null);
-    const fetchHouses = async () => {
-      let allHouses: House[] = [];
-      let start = 0;
-      const pageSize = 1000;
-
-      while (true) {
-        const { data, error } = await supabase
-          .from("houses")
-          .select("*")
-          .order("created_at", { ascending: false })
-          .range(start, start + pageSize - 1);
-
-        if (error) {
-          console.error("Error:", error);
-          toast.error("โหลดข้อมูลไม่สำเร็จ");
-          break;
-        }
-
-        if (!data || data.length === 0) break;
-
-        allHouses = [...allHouses, ...data];
-        start += pageSize;
-
-        if (data.length < pageSize) break;
-      }
-
-      setHouses(allHouses);
-      setTotalInDB(allHouses.length);
-      setLoading(false);
-      setLoadingError(null);
-    };
-    fetchHouses();
+    loadHouses();
   };
 
   // แก้ฟังก์ชัน getCountText() ให้แสดงจำนวนจริงทั้งหมด
@@ -487,7 +461,7 @@ export default function HousesPage() {
           type="button"
           onClick={() => goToPage(1)}
           onMouseDown={(e) => e.preventDefault()}
-          className="w-10 h-10 rounded-lg font-medium bg-gray-200 hover:bg-gray-300 transition-all active:scale-95"
+          className="h-10 w-10 rounded-lg border border-gray-200 bg-white font-medium transition-all hover:bg-gray-100 active:scale-95"
         >
           1
         </button>,
@@ -502,10 +476,11 @@ export default function HousesPage() {
           type="button"
           onClick={() => goToPage(i)}
           onMouseDown={(e) => e.preventDefault()}
-          className={`w-10 h-10 rounded-lg font-medium transition-all active:scale-95 ${
+          aria-current={i === currentPage ? "page" : undefined}
+          className={`h-10 w-10 rounded-lg font-medium transition-all active:scale-95 ${
             i === currentPage
-              ? "bg-indigo-600 text-white shadow-md"
-              : "bg-gray-200 hover:bg-gray-300"
+              ? "border border-teal-600 bg-teal-600 text-white shadow-sm"
+              : "border border-gray-200 bg-white hover:bg-gray-100"
           }`}
         >
           {i}
@@ -805,12 +780,39 @@ export default function HousesPage() {
     }
   };
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     setEditingHouse(null);
     setIsAdding(false);
     setFormData({});
     setIsDetecting(false);
-  };
+  }, []);
+
+  // ปุ่ม Escape = ปิดหน้าต่างที่เปิดอยู่ (ยกเว้นระหว่างบันทึก/ลบ)
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (isSavingHouse || isDeletingHouse) return;
+
+      if (houseToDelete) {
+        setHouseToDelete(null);
+      } else if (editingHouse || isAdding) {
+        closeModal();
+      } else if (showFilterModal) {
+        setShowFilterModal(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [
+    closeModal,
+    editingHouse,
+    houseToDelete,
+    isAdding,
+    isDeletingHouse,
+    isSavingHouse,
+    showFilterModal,
+  ]);
 
   const detectLocation = () => {
     if (!navigator.geolocation) {
@@ -929,32 +931,43 @@ export default function HousesPage() {
     setDownloading(false);
   };
 
-  const deleteHouse = async (houseId: string) => {
-    if (!confirm("ยืนยันการลบบ้านนี้? การกระทำนี้ไม่สามารถย้อนกลับได้")) return;
+  // ลบได้เฉพาะหลังยืนยันในหน้าต่างยืนยันของแอป (ไม่ใช้ confirm ของเบราว์เซอร์)
+  const confirmDeleteHouse = async () => {
+    const house = houseToDelete;
+    if (!house || isDeletingHouse) return;
 
-    const { data, error } = await supabase
-      .from("houses")
-      .delete()
-      .eq("id", houseId)
-      .select();
+    setIsDeletingHouse(true);
+    try {
+      const { data, error } = await supabase
+        .from("houses")
+        .delete()
+        .eq("id", house.id)
+        .select();
 
-    if (error) {
-      toast.error("ลบไม่สำเร็จ: " + error.message);
-      console.error("Delete error:", error);
-      return;
-    }
+      if (error) {
+        toast.error("ลบไม่สำเร็จ: " + error.message);
+        console.error("Delete error:", error);
+        return;
+      }
 
-    if (!data || data.length === 0) {
-      toast.error("ลบไม่สำเร็จ: ไม่มีสิทธิ์หรือไม่พบข้อมูล");
-      return;
-    }
+      if (!data || data.length === 0) {
+        toast.error("ลบไม่สำเร็จ: ไม่มีสิทธิ์หรือไม่พบข้อมูล");
+        return;
+      }
 
-    toast.success("ลบบ้านเรียบร้อย");
-    setHouses((prev) => prev.filter((h) => h.id !== houseId));
-    // หากกำลังแสดงหน้าที่ว่างเปล่าหลังจากลบ ให้ย้อนกลับหน้าก่อน
-    const totalPagesAfter = Math.ceil(filteredHouses.filter((h) => h.id !== houseId).length / ITEMS_PER_PAGE);
-    if (currentPage > Math.max(1, totalPagesAfter)) {
-      setCurrentPage(Math.max(1, totalPagesAfter));
+      toast.success("ลบบ้านเรียบร้อย");
+      setHouses((prev) => prev.filter((h) => h.id !== house.id));
+      // หากกำลังแสดงหน้าที่ว่างเปล่าหลังจากลบ ให้ย้อนกลับหน้าก่อน
+      const totalPagesAfter = Math.ceil(
+        filteredHouses.filter((h) => h.id !== house.id).length /
+          ITEMS_PER_PAGE,
+      );
+      if (currentPage > Math.max(1, totalPagesAfter)) {
+        setCurrentPage(Math.max(1, totalPagesAfter));
+      }
+      setHouseToDelete(null);
+    } finally {
+      setIsDeletingHouse(false);
     }
   };
 
@@ -963,58 +976,58 @@ export default function HousesPage() {
     window.location.href = url;
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen px-4">
-        <div className="text-lg text-gray-600">กำลังโหลดคลังบ้าน...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 pb-32 md:pb-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 pb-32 sm:py-8 md:pb-8">
       {/* หัวข้อ + ปุ่ม + จำนวนบ้าน */}
-      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Home className="w-8 h-8 text-indigo-600" />
+          <h1 className="page-title">
+            <Home className="h-7 w-7 text-teal-700" aria-hidden="true" />
             คลังบ้านทั้งหมด
           </h1>
-          <p className="text-gray-600 mt-2 text-sm font-medium">
+          <p className="mt-2 text-sm font-medium text-gray-600">
             {getCountText()}
           </p>
         </div>
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={downloadAllHousesCsv}
             disabled={downloading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white text-sm font-semibold rounded-xl disabled:opacity-60"
+            className="btn btn-secondary flex-1 sm:flex-none"
           >
-            <Download className="w-4 h-4" />
+            <Download className="h-4 w-4" aria-hidden="true" />
             {downloading ? "กำลังโหลด..." : "โหลด CSV"}
           </button>
           <button
+            type="button"
             onClick={openAddModal}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl"
+            className="btn btn-primary flex-1 sm:flex-none"
           >
-            <Plus className="w-4 h-4" />
-            เพิ่ม
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            เพิ่มบ้าน
           </button>
         </div>
       </div>
 
       {/* ช่องค้นหา + ปุ่ม X + ปุ่มกรอง */}
-      <div className="mb-6 relative">
-        {/* ... ภายในส่วนของช่องค้นหา ... */}
+      <div className="mb-4">
         <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+          <label htmlFor="house-search" className="sr-only">
+            ค้นหาบ้าน
+          </label>
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
+            aria-hidden="true"
+          />
           <input
+            id="house-search"
             ref={searchInputRef}
-            type="text"
+            type="search"
             placeholder="ค้นหาด้วยชื่อหรือที่อยู่..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-28 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-base"
+            className="input pl-10 pr-28"
           />
           {searchTerm && (
             <button
@@ -1023,47 +1036,54 @@ export default function HousesPage() {
                 clearSearch();
                 searchInputRef.current?.focus();
               }}
-              className="absolute right-6 top-1/2 -translate-y-1/2 p-8 text-gray-500 hover:text-gray-700 z-10"
               type="button"
+              aria-label="ล้างคำค้นหา"
+              className="zoom-pinch-ok absolute right-14 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
             >
-              <XIcon className="w-5 h-5" />
+              <XIcon className="h-5 w-5" aria-hidden="true" />
             </button>
           )}
 
           <button
+            type="button"
             onClick={() => setShowFilterModal(true)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+            aria-label="เปิดตัวกรองบ้าน"
+            className="zoom-pinch-ok absolute right-2 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl bg-gray-100 text-gray-700 transition-colors hover:bg-gray-200"
           >
-            <Filter className="w-4 h-4 text-gray-700" />
+            <Filter className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
       </div>
 
       {/* ตัวกรองพิกัด + เลือกอำเภอ */}
-      <div className="flex flex-wrap items-center gap-6 mb-8 bg-gray-50 p-5 rounded-xl border border-gray-200">
+      <div className="card mb-6 flex flex-wrap items-center gap-x-6 gap-y-3 p-4 sm:p-5">
         {/* Checkbox เดิม */}
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
           <input
             type="checkbox"
             checked={showNoCoords}
             onChange={(e) => setShowNoCoords(e.target.checked)}
-            className="w-4 h-4 text-orange-600 rounded"
+            className="h-5 w-5 rounded accent-amber-600"
           />
           <span>ไม่มีพิกัด</span>
         </label>
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
           <input
             type="checkbox"
             checked={showWithCoords}
             onChange={(e) => setShowWithCoords(e.target.checked)}
-            className="w-4 h-4 text-green-600 rounded"
+            className="h-5 w-5 rounded accent-teal-600"
           />
           <span>มีพิกัด</span>
         </label>
 
         {/* Dropdown เลือกอำเภอ */}
         <div className="flex items-center gap-3">
+          <label htmlFor="house-district" className="sr-only">
+            เลือกอำเภอ
+          </label>
           <select
+            id="house-district"
             value={selectedDistrict}
             onChange={(e) => {
               setSelectedDistrict(e.target.value);
@@ -1071,7 +1091,7 @@ export default function HousesPage() {
               setHasShownVillageSuggestions(false);
               setAddressSuggestions([]);
             }}
-            className="px-4 py-2 text-sm border border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none bg-white"
+            className="min-h-11 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm focus:border-teal-500 focus:outline-none"
           >
             {districts.map((dist) => (
               <option key={dist} value={dist}>
@@ -1084,29 +1104,39 @@ export default function HousesPage() {
       {/* รายการบ้าน */}
       {currentHouses.length === 0 ? (
         loading ? (
-          <div className="text-center py-20">
-            <p className="text-lg text-gray-500">กำลังโหลดคลังบ้าน...</p>
+          <div
+            className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+            aria-busy="true"
+            aria-label="กำลังโหลดคลังบ้าน"
+          >
+            {[0, 1, 2, 3].map((key) => (
+              <div key={key} className="card p-5">
+                <div className="skeleton h-5 w-2/3" />
+                <div className="skeleton mt-3 h-4 w-1/2" />
+                <div className="skeleton mt-4 h-4 w-full" />
+                <div className="skeleton mt-2 h-4 w-4/5" />
+              </div>
+            ))}
           </div>
         ) : loadingError ? (
-          <div className="text-center py-20">
-            <p className="text-base text-red-700 font-medium">
-              โหลดคลังบ้านไม่สำเร็จ
-            </p>
-            <p className="mt-1 text-sm text-gray-600">
-              กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง
-            </p>
+          <div className="error-state">
+            <p className="text-base font-semibold">โหลดคลังบ้านไม่สำเร็จ</p>
+            <p className="text-sm">{loadingError}</p>
             <button
               type="button"
               onClick={retryInitialLoad}
-              className="mt-4 px-4 py-2 bg-teal-700 text-white text-sm font-semibold rounded-lg hover:bg-teal-800"
+              className="btn btn-primary mt-2"
             >
               ลองใหม่
             </button>
           </div>
         ) : (
-          <div className="text-center py-20">
-            <p className="text-base text-gray-600">
+          <div className="empty-state">
+            <p className="text-base font-medium text-gray-700">
               ไม่พบบ้านที่ตรงกับเงื่อนไขการค้นหา
+            </p>
+            <p className="text-sm">
+              ลองล้างคำค้นหาหรือเปลี่ยนตัวกรอง แล้วค้นหาอีกครั้ง
             </p>
           </div>
         )
@@ -1116,7 +1146,7 @@ export default function HousesPage() {
             {currentHouses.map((h) => (
               <div
                 key={h.id}
-                className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
+                className="card relative flex flex-col overflow-hidden transition-shadow hover:shadow-md"
               >
                 {/* มุมขวาบน: ปุ่ม + (ป้องกันคีย์บอร์ดปิด) */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
@@ -1124,10 +1154,15 @@ export default function HousesPage() {
                     onClick={() => addToNav(h.id)}
                     onMouseDown={(e) => e.preventDefault()}
                     disabled={addingIds.includes(h.id)}
-                    className={`p-2 bg-transparent border rounded hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center ${
+                    aria-label={
+                      addingIds.includes(h.id)
+                        ? "กำลังเพิ่มเข้าสู่การนำทาง"
+                        : "เพิ่มเข้าสู่การนำทาง"
+                    }
+                    className={`zoom-pinch-ok flex h-11 w-11 items-center justify-center rounded-xl border bg-white shadow-sm transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${
                       h.lat && h.lng
-                        ? "border-green-600 text-green-700 hover:border-green-800 hover:bg-green-50"
-                        : "border-orange-600 text-orange-700 hover:border-orange-800 hover:bg-orange-50"
+                        ? "border-teal-200 text-teal-700 hover:border-teal-400 hover:bg-teal-50"
+                        : "border-amber-200 text-amber-700 hover:border-amber-400 hover:bg-amber-50"
                     }`}
                     title={
                       addingIds.includes(h.id)
@@ -1145,12 +1180,24 @@ export default function HousesPage() {
 
                 {/* เนื้อหาการ์ด */}
                 <div className="p-5 flex-1 flex flex-col">
-                  <h3 className="font-bold text-lg text-indigo-700 line-clamp-2">
+                  <h3 className="line-clamp-2 text-lg font-bold text-gray-900 text-wrap-safe">
                     {h.full_name || "ไม่มีชื่อ"}
                   </h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {h.lat && h.lng ? (
+                      <span className="badge badge-teal">มีพิกัด</span>
+                    ) : (
+                      <span className="badge badge-amber">ไม่มีพิกัด</span>
+                    )}
+                    {typeof h.quantity === "number" && h.quantity > 0 && (
+                      <span className="badge badge-slate">
+                        {h.quantity.toLocaleString("th-TH")} ชิ้น
+                      </span>
+                    )}
+                  </div>
                   {h.phone && (
-                    <div className="flex items-center gap-2 mt-2 group">
-                      <p className="text-sm text-gray-600 select-none font-medium">
+                    <div className="mt-3 flex items-center gap-2">
+                      <p className="select-none text-sm font-medium text-gray-700">
                         {h.phone}
                       </p>
 
@@ -1161,91 +1208,97 @@ export default function HousesPage() {
                           navigator.clipboard.writeText(h.phone!);
                           toast.success("คัดลอกเบอร์เรียบร้อยแล้ว!");
                         }}
-                        className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-gray-100"
+                        className="zoom-pinch-ok flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:border-gray-300 hover:bg-gray-50"
                         title="คัดลอกเบอร์โทร"
                         aria-label="คัดลอกเบอร์โทร"
                       >
-                        <Copy className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" />
+                        <Copy className="h-4 w-4" aria-hidden="true" />
                       </button>
 
                       {/* ปุ่ม โทร ออกทันที */}
                       <a
                         href={`tel:${h.phone.replace(/[^0-9+]/g, "")}`} // ล้างอักขระพิเศษออกให้โทรได้จริง
                         onClick={(e) => e.stopPropagation()} // ป้องกัน bubble ไป card
-                        className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-green-50"
+                        className="zoom-pinch-ok flex h-9 w-9 items-center justify-center rounded-lg border border-teal-200 bg-teal-50 text-teal-700 transition-colors hover:border-teal-400 hover:bg-teal-100"
                         title={`โทรหา ${h.full_name || "ลูกค้า"}`}
                         aria-label="โทรออกทันที"
                       >
-                        <Phone className="w-4 h-4 text-green-600 hover:text-green-700 transition-colors" />
+                        <Phone className="h-4 w-4" aria-hidden="true" />
                       </a>
                     </div>
                   )}
-                  <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">
-                    <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
-                    <span className="line-clamp-3">{h.address}</span>
+                  <div className="mt-3 flex items-start gap-2 text-sm text-gray-600">
+                    <MapPin
+                      className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400"
+                      aria-hidden="true"
+                    />
+                    <span className="line-clamp-3 text-wrap-safe">
+                      {h.address || "ไม่ระบุที่อยู่"}
+                    </span>
                   </div>
                   {h.note && (
-                    <div className="mt-3 text-xs">
-                      <div className="flex">
-                        <span className="font-semibold text-amber-800 shrink-0">
-                          หมายเหตุ:{" "}
-                        </span>
-                        <div className="text-amber-700 italic whitespace-pre-line">
-                          {h.note}
-                        </div>
-                      </div>
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
+                      <span className="font-semibold text-amber-900">
+                        หมายเหตุ:{" "}
+                      </span>
+                      <span className="whitespace-pre-line text-wrap-safe text-amber-900">
+                        {h.note}
+                      </span>
                     </div>
                   )}
                 </div>
 
                 {/* ปุ่มด้านล่าง: ลบ, นำทาง, แก้ไข */}
-                <div className="px-5 pb-5 flex justify-center items-center gap-4">
+                <div className="mt-auto flex items-center gap-2 border-t border-gray-100 px-4 py-3">
                   <button
                     type="button"
-                    onClick={() => deleteHouse(h.id)}
-                    onMouseDown={(e) => e.preventDefault()} // เพิ่มบรรทัดนี้
-                    className="p-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition active:scale-95"
+                    onClick={() => setHouseToDelete(h)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="icon-btn icon-btn-danger"
                     title="ลบ"
+                    aria-label="ลบบ้านหลังนี้"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 className="h-5 w-5" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(h)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="icon-btn"
+                    title="แก้ไข"
+                    aria-label="แก้ไขข้อมูลบ้าน"
+                  >
+                    <Edit3 className="h-5 w-5" aria-hidden="true" />
                   </button>
 
                   {h.lat && h.lng && (
                     <button
                       type="button"
                       onClick={() => openNavigation(h.lat!, h.lng!)}
-                      onMouseDown={(e) => e.preventDefault()} // เพิ่ม
-                      className="p-3 bg-emerald-100 text-emerald-700 rounded-lg hover:bg-emerald-200 transition active:scale-95"
-                      title="นำทาง"
+                      onMouseDown={(e) => e.preventDefault()}
+                      className="btn btn-primary flex-1"
                     >
-                      <Navigation className="w-5 h-5" />
+                      <Navigation className="h-4 w-4" aria-hidden="true" />
+                      นำทาง
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(h)}
-                    onMouseDown={(e) => e.preventDefault()} // เพิ่ม
-                    className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition active:scale-95"
-                    title="แก้ไข"
-                  >
-                    <Edit3 className="w-5 h-5" />
-                  </button>
                 </div>
               </div>
             ))}
           </div>
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="mt-12 mb-8 flex items-center justify-center gap-3">
+            <div className="mb-6 mt-10 flex items-center justify-center gap-2">
               <button
                 type="button"
                 onClick={() => goToPage(currentPage - 1)}
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={currentPage === 1}
-                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center active:scale-95"
+                className="icon-btn"
+                aria-label="หน้าก่อนหน้า"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
               </button>
               <div className="flex items-center gap-2">
                 {renderPageNumbers()}
@@ -1255,16 +1308,17 @@ export default function HousesPage() {
                 onClick={() => goToPage(currentPage + 1)}
                 onMouseDown={(e) => e.preventDefault()}
                 disabled={currentPage === totalPages}
-                className="w-10 h-10 rounded-lg bg-gray-200 disabled:opacity-50 hover:bg-gray-300 flex items-center justify-center active:scale-95"
+                className="icon-btn"
+                aria-label="หน้าถัดไป"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
           )}
 
           {/* Input กรอกหน้าเมื่อกด ... */}
           {showPageInput && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="modal-overlay flex items-center justify-center p-4">
               <div className="bg-white rounded-xl p-6 shadow-xl max-w-xs w-full">
                 <h3 className="text-lg font-medium mb-4 text-center">
                   ไปที่หน้า
@@ -1307,22 +1361,41 @@ export default function HousesPage() {
 
       {/* แก้ Filter Modal: เพิ่มส่วนตัวเลือกการค้นหา */}
       {showFilterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-5 text-center">ตัวกรองบ้าน</h2>
+        <div
+          className="modal-overlay flex items-end justify-center sm:items-center sm:p-4"
+          onClick={() => setShowFilterModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="filter-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="modal-sheet w-full max-w-md p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2 id="filter-modal-title" className="text-lg font-bold">
+                ตัวกรองบ้าน
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowFilterModal(false)}
+                aria-label="ปิดตัวกรอง"
+                className="icon-btn h-10 w-10 shrink-0"
+              >
+                <XIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
 
-            {/* ส่วนใหม่: ค้นหาจากฟิลด์ไหนบ้าง */}
-            <div className="mb-6 p-4 bg-indigo-50 rounded-xl">
-              <p className="text-sm font-semibold text-indigo-800 mb-3">
-                ช่องค้นหาหลักจะค้นหาจาก:
-              </p>
+            {/* ค้นหาจากฟิลด์ใดบ้าง */}
+            <div className="card-muted mb-5 p-4">
+              <p className="section-label mb-3">ช่องค้นหาหลักจะค้นหาจาก</p>
               <div className="space-y-3">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={searchInName}
                     onChange={(e) => setSearchInName(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">ชื่อ-นามสกุล</span>
                 </label>
@@ -1331,7 +1404,7 @@ export default function HousesPage() {
                     type="checkbox"
                     checked={searchInAddress}
                     onChange={(e) => setSearchInAddress(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">ที่อยู่</span>
                 </label>
@@ -1340,7 +1413,7 @@ export default function HousesPage() {
                     type="checkbox"
                     checked={searchInPhone}
                     onChange={(e) => setSearchInPhone(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">เบอร์โทรศัพท์</span>
                 </label>
@@ -1349,7 +1422,7 @@ export default function HousesPage() {
                     type="checkbox"
                     checked={searchInNote}
                     onChange={(e) => setSearchInNote(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">หมายเหตุ</span>
                 </label>
@@ -1363,7 +1436,8 @@ export default function HousesPage() {
                 placeholder="บ้านเลขที่"
                 value={houseNumberFilter}
                 onChange={(e) => setHouseNumberFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border-2 border-amber-300 rounded-xl focus:border-amber-500 focus:outline-none font-medium"
+                aria-label="บ้านเลขที่"
+                className="input"
               />
               <input
                 type="text"
@@ -1372,7 +1446,8 @@ export default function HousesPage() {
                 onChange={(e) =>
                   setPhoneFilter(e.target.value.replace(/\D/g, ""))
                 }
-                className="w-full px-4 py-2.5 text-sm border-2 border-blue-300 rounded-xl focus:border-blue-500 focus:outline-none font-medium"
+                aria-label="เบอร์โทร"
+                className="input"
               />
               <input
                 type="text"
@@ -1381,44 +1456,47 @@ export default function HousesPage() {
                 onChange={(e) =>
                   setVillageFilter(e.target.value.replace(/[^\d]/g, ""))
                 }
-                className="w-full px-4 py-2.5 text-sm border-2 border-orange-300 rounded-xl focus:border-orange-500 focus:outline-none font-bold text-orange-700"
+                aria-label="หมู่ที่"
+                className="input"
               />
               <input
                 type="text"
                 placeholder="ตำบล"
                 value={subdistrictFilter}
                 onChange={(e) => setSubdistrictFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
               <input
                 type="text"
                 placeholder="อำเภอ"
                 value={districtFilter}
                 onChange={(e) => setDistrictFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
               <input
                 type="text"
                 placeholder="จังหวัด"
                 value={provinceFilter}
                 onChange={(e) => setProvinceFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
             </div>
 
             <div className="flex gap-3 mt-6">
               <button
+                type="button"
                 onClick={() => {
                   clearFilters();
                   setShowFilterModal(false);
                 }}
-                className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300"
+                className="btn btn-secondary flex-1"
               >
                 ล้างทั้งหมด
               </button>
               <button
+                type="button"
                 onClick={() => setShowFilterModal(false)}
-                className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold"
+                className="btn btn-primary flex-1"
               >
                 ใช้ตัวกรอง
               </button>
@@ -1427,43 +1505,75 @@ export default function HousesPage() {
         </div>
       )}
 
-      {/* Modal เพิ่ม / แก้ไขบ้าน */}
-      {(editingHouse || isAdding) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-5">
+      {/* Modal เพิ่ม / แก้ไขบ้าน */}      {(editingHouse || isAdding) && (
+        <div
+          className="modal-overlay flex items-end justify-center sm:items-center sm:p-4"
+          onClick={() => {
+            if (!isSavingHouse) closeModal();
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="house-form-title"
+            onClick={(e) => e.stopPropagation()}
+            className="modal-sheet w-full max-w-md p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+          >
+            <h2 id="house-form-title" className="text-lg font-bold">
               {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
             </h2>
-            <p className="text-xs text-gray-500">
-              ậpข้อมูลเท่าที่มีได้ — ไม่จำเป็นต้องกรอกทุกช่อง
+            <p className="mt-1 text-xs text-gray-500">
+              กรอกข้อมูลเท่าที่มีได้ — ไม่จำเป็นต้องกรอกทุกช่อง
             </p>
-            <div className="space-y-4">
-              <input
-                type="text"
-                placeholder="ชื่อ-นามสกุล"
-                value={formData.full_name || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, full_name: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
-              />
-              <input
-                type="text"
-                placeholder="เบอร์โทรศัพท์"
-                value={formData.phone || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, phone: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
-              />
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="house-full-name" className="label">
+                    ชื่อ-นามสกุล
+                  </label>
+                  <input
+                    id="house-full-name"
+                    type="text"
+                    autoComplete="name"
+                    placeholder="เช่น คุณสมชาย"
+                    value={formData.full_name || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, full_name: e.target.value }))
+                    }
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="house-phone" className="label">
+                    เบอร์โทรศัพท์
+                  </label>
+                  <input
+                    id="house-phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="เช่น 0812345678"
+                    value={formData.phone || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, phone: e.target.value }))
+                    }
+                    className="input"
+                  />
+                </div>
+              </div>
               <div className="relative">
+                <label htmlFor="house-address" className="label">
+                  ที่อยู่
+                </label>
                 <input
+                  id="house-address"
                   type="text"
-                  placeholder="ที่อยู่เต็ม (พิมพ์บ้านเลขที่ → space → เลือกหมู่ที่ → space → เลือกตำบล → space → เลือกหมู่บ้าน)"
+                  autoComplete="street-address"
+                  placeholder="บ้านเลขที่ → space → เลือกหมู่ที่ → space → เลือกตำบล → space → เลือกหมู่บ้าน"
                   value={addressInput}
                   onChange={(e) => handleAddressChange(e.target.value)}
                   onKeyDown={handleAddressKeyDown}
-                  className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                  className="input"
                 />
 
                 {/* Dropdown แนะนำที่อยู่ */}
@@ -1475,9 +1585,9 @@ export default function HousesPage() {
                         type="button"
                         onMouseDown={(e) => e.preventDefault()} // ป้องกัน input เสีย focus
                         onClick={() => selectAddressSuggestion(suggestion)}
-                        className={`w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 transition ${
+                        className={`w-full px-4 py-3 text-left text-sm transition hover:bg-teal-50 ${
                           index === highlightedSuggestionIndex
-                            ? "bg-indigo-100"
+                            ? "bg-teal-100"
                             : ""
                         }`}
                       >
@@ -1487,30 +1597,42 @@ export default function HousesPage() {
                   </div>
                 )}
               </div>
-              <textarea
-                placeholder="หมายเหตุ (เช่น ข้างศูนย์เด็กเล็ก, หลังอบต.)"
-                rows={2}
-                value={formData.note || ""}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, note: e.target.value }))
-                }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none resize-none"
-              />
+              <div>
+                <label htmlFor="house-note" className="label">
+                  หมายเหตุ
+                </label>
+                <textarea
+                  id="house-note"
+                  placeholder="เช่น ข้างศูนย์เด็กเล็ก, หลังอบต."
+                  rows={2}
+                  value={formData.note || ""}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, note: e.target.value }))
+                  }
+                  className="input resize-none"
+                />
+              </div>
               <button
+                type="button"
                 onClick={detectLocation}
                 disabled={isDetecting}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+                className="btn btn-secondary btn-block"
               >
                 {isDetecting ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
                 ) : (
-                  <MapPin className="w-5 h-5" />
+                  <MapPin className="h-5 w-5" aria-hidden="true" />
                 )}
                 {isDetecting ? "กำลังตรวจจับ..." : "ตรวจจับตำแหน่งปัจจุบัน"}
               </button>
+              <div>
+                <label htmlFor="house-coords" className="label">
+                  พิกัด (ไม่บังคับ)
+                </label>
               <input
+                id="house-coords"
                 type="text"
-                placeholder="พิกัด (lat,lng) เช่น 16.123456,99.123456"
+                placeholder="เช่น 16.123456,99.123456"
                 value={coordsInput}
                 onChange={(e) => {
                   const value = e.target.value.trim(); // trim เพื่อความสะอาด
@@ -1550,15 +1672,17 @@ export default function HousesPage() {
                     setFormData((prev) => ({ ...prev, lat: null, lng: null }));
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
+              </div>
               {formData.lat && formData.lng && (
-                <div className="text-center -mt-2 mb-2">
+                <div className="-mt-2 mb-2 text-center">
                   <button
+                    type="button"
                     onClick={() => verifyOnMaps(formData.lat!, formData.lng!)}
-                    className="text-blue-600 text-xs underline flex items-center gap-1 mx-auto"
+                    className="mx-auto flex items-center gap-1 text-xs font-medium text-teal-700 underline"
                   >
-                    <ExternalLink className="w-3 h-3" />
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
                     ตรวจสอบบน Google Maps
                   </button>
                 </div>
@@ -1569,7 +1693,7 @@ export default function HousesPage() {
                   onClick={closeModal}
                   onMouseDown={(e) => e.preventDefault()}
                   disabled={isSavingHouse}
-                  className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  className="btn btn-secondary flex-1"
                 >
                   ยกเลิก
                 </button>
@@ -1579,15 +1703,80 @@ export default function HousesPage() {
                   onClick={saveHouse}
                   onMouseDown={(e) => e.preventDefault()}
                   disabled={isSavingHouse}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  className="btn btn-primary flex-1"
                 >
-                  {isSavingHouse
-                    ? "กำลังบันทึก..."
-                    : isAdding
-                      ? "เพิ่มบ้าน"
-                      : "บันทึก"}
+                  {isSavingHouse ? (
+                    <>
+                      <Loader2
+                        className="h-4 w-4 animate-spin"
+                        aria-hidden="true"
+                      />
+                      กำลังบันทึก...
+                    </>
+                  ) : isAdding ? (
+                    "เพิ่มบ้าน"
+                  ) : (
+                    "บันทึก"
+                  )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ยืนยันการลบบ้าน */}
+      {houseToDelete && (
+        <div
+          className="modal-overlay flex items-end justify-center sm:items-center sm:p-4"
+          onClick={() => {
+            if (!isDeletingHouse) setHouseToDelete(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-house-title"
+            onClick={(e) => e.stopPropagation()}
+            className="modal-sheet w-full max-w-md p-5 sm:rounded-2xl"
+          >
+            <h2
+              id="delete-house-title"
+              className="text-lg font-bold text-gray-900"
+            >
+              ลบบ้านหลังนี้?
+            </h2>
+            <p className="mt-2 text-sm break-words text-gray-600">
+              {houseToDelete.full_name?.trim() || "รายการที่เลือก"} —
+              การลบไม่สามารถย้อนกลับได้
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setHouseToDelete(null)}
+                disabled={isDeletingHouse}
+                className="btn btn-secondary flex-1"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteHouse}
+                disabled={isDeletingHouse}
+                className="btn flex-1 border-transparent bg-red-600 font-semibold text-white hover:bg-red-700 hover:text-white"
+              >
+                {isDeletingHouse ? (
+                  <>
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    กำลังลบ...
+                  </>
+                ) : (
+                  "ลบบ้าน"
+                )}
+              </button>
             </div>
           </div>
         </div>

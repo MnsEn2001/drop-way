@@ -62,5 +62,28 @@ This document records meaningful project and documentation changes for the DropW
 - Documented the verified push procedure in `.ai/AI_HANDOFF.md` and
   `.ai/WORKFLOW.md`, including what must never be pushed.
 
+## 2026-10-12 (full-system audit + UI/UX redesign)
+- Full audit and UI/UX redesign of every route and shared component (see
+  `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md` for evidence):
+  - token-based design system in `src/app/globals.css` + `tailwind.config.ts`
+    (teal/neutral palette, `.btn`/`.icon-btn`/`.input`/`.card`/`.modal-sheet`/
+    `.badge*`/`.page-title`/`.empty-state`/`.error-state`/`.skeleton`)
+  - app shell, Thai toast durations, and long-copy wrapping in `src/app/layout.tsx`
+  - single consistent mobile navigation (top header + bottom bar + drawer with
+    dialog semantics) in `src/components/Navbar.tsx`
+  - `/login` and `/register` rebuilt around labels, inline errors,
+    duplicate-submit guards and per-request loading states, with new
+    `src/lib/authMessages.ts` for readable Thai auth errors
+  - `/houses`: single shared loader (removing a duplicated Supabase paging loop),
+    wired error + retry, skeleton loading, empty state, long-address wrapping,
+    grouped add/edit form, and an in-app delete confirmation replacing `confirm()`
+  - `/navigation`: GPS status + retry shortcut, per-action submitting states,
+    `try/finally` around the report save, guarded localStorage toggle,
+    labelled primary action per card, and unified modal surfaces
+- Behaviour intentionally preserved: Supabase queries/schema/RLS, auth rules,
+  route ordering and distance math, financial parsing, `delivery_status` values.
+- Verified: `git diff --check`, `npx tsc --noEmit`, `npm run lint`, `npm run build`
+  all pass. No automated tests exist in the repository (NOT RUN).
+
 ## Notes on scope
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.

@@ -121,6 +121,15 @@ export default function Navbar() {
 
   const closeMenu = () => setMobileMenuOpen(false);
 
+  // Current section label for the mobile top header.
+  const sectionLabel = (() => {
+    if (pathname === "/houses") return "คลังบ้าน";
+    if (pathname === "/navigation") return "นำทาง";
+    if (pathname === "/login") return "เข้าสู่ระบบ";
+    if (pathname === "/register") return "สมัครสมาชิก";
+    return "DropWay";
+  })();
+
   // ฟังก์ชันเช็กว่า path นี้ active หรือไม่
   const isActive = (path: string) => pathname === path;
 
@@ -133,6 +142,14 @@ export default function Navbar() {
           <span className="text-lg font-semibold text-teal-700">DropWay</span>
           <div className="flex-1" />
         </nav>
+
+        {/* Mobile header skeleton: same geometry as the real header, no links */}
+        <div aria-hidden="true" className="mobile-top-header md:hidden">
+          <div className="mobile-header-inner mx-auto flex max-w-3xl items-center justify-between px-4">
+            <div className="h-5 w-24 animate-pulse rounded bg-gray-100" />
+            <div className="h-5 w-20 animate-pulse rounded-full bg-gray-100" />
+          </div>
+        </div>
 
         {/* Mobile Loading skeleton: same geometry as the real bottom bar, no links */}
         <div
@@ -198,6 +215,21 @@ export default function Navbar() {
           </button>
         )}
       </nav>
+
+      {/* Mobile Top Header — brand + current section, sticky */}
+      <header className="mobile-top-header md:hidden">
+        <div className="mobile-header-inner mx-auto flex max-w-3xl items-center justify-between px-4">
+          <Link
+            href={user ? "/houses" : "/login"}
+            className="text-base font-semibold text-teal-700 zoom-pinch-ok"
+          >
+            DropWay
+          </Link>
+          <span className="badge badge-teal" aria-current="page">
+            {sectionLabel}
+          </span>
+        </div>
+      </header>
 
       {/* Mobile Bottom Bar — the only mobile navigation system */}
       <nav aria-label="แถบนำทางหลัก" className="mobile-bottom-nav md:hidden">

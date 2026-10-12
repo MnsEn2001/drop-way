@@ -1070,7 +1070,7 @@ export default function NavigationPage() {
             onClick={() => goToPage(i)}
             className={`w-10 h-10 rounded-lg font-medium transition-colors ${
               i === currentPage
-                ? "bg-indigo-600 text-white"
+                ? "bg-teal-600 text-white"
                 : "bg-gray-200 hover:bg-gray-300"
             }`}
           >
@@ -1116,7 +1116,7 @@ export default function NavigationPage() {
           onClick={() => goToPage(i)}
           className={`w-10 h-10 rounded-lg font-medium transition-colors ${
             i === currentPage
-              ? "bg-indigo-600 text-white"
+              ? "bg-teal-600 text-white"
               : "bg-gray-200 hover:bg-gray-300"
           }`}
         >
@@ -1493,51 +1493,56 @@ export default function NavigationPage() {
   const confirmReport = async () => {
     if (!houseToReport) return;
     if (isReportSubmitting) return;
-    setIsReportSubmitting(true);
 
     const finalReason =
       reportReason === "อื่นๆ" ? reportReasonCustom.trim() : reportReason;
     if (!finalReason) {
       toast.error("กรุณาเลือกหรือกรอกเหตุผล");
-      setIsReportSubmitting(false);
       return;
     }
 
-    const { error } = await supabase
-      .from("user_navigation_houses")
-      .update({
-        delivery_status: "reported",
-        report_reason: finalReason,
-        reported_at: new Date().toISOString(),
-      })
-      .eq("id", houseToReport.nav_id);
+    setIsReportSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("user_navigation_houses")
+        .update({
+          delivery_status: "reported",
+          report_reason: finalReason,
+          reported_at: new Date().toISOString(),
+        })
+        .eq("id", houseToReport.nav_id);
 
-    if (error) {
-      toast.error("บันทึกรายงานไม่สำเร็จ: " + error.message);
+      if (error) {
+        toast.error("บันทึกรายงานไม่สำเร็จ: " + error.message);
+        return;
+      }
+
+      toast.success("⚠️ บันทึกรายงานเรียบร้อยแล้ว");
+      await reloadNavigation();
+      setShowReportModal(false);
+      setReportReason("โทรไม่รับ"); // รีเซ็ตค่าเริ่มต้น
+      setReportReasonCustom("");
+    } finally {
       setIsReportSubmitting(false);
-      return;
     }
-
-    toast.success("⚠️ บันทึกรายงานเรียบร้อยแล้ว");
-    await reloadNavigation();
-    setShowReportModal(false);
-    setReportReason("โทรไม่รับ"); // รีเซ็ตค่าเริ่มต้น
-    setReportReasonCustom("");
-    setIsReportSubmitting(false);
   };
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen px-4">
-        <div className="text-lg text-gray-600">กำลังโหลดการนำทาง...</div>
+      <div className="flex min-h-screen items-center justify-center gap-3 px-4">
+        <Loader2
+          className="h-5 w-5 animate-spin text-teal-700"
+          aria-hidden="true"
+        />
+        <div className="text-base text-gray-600">กำลังโหลดการนำทาง...</div>
       </div>
     );
   }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 pb-32 md:pb-8 relative">
-      <div className="mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <Home className="w-8 h-8 text-blue-600" />
+      <div className="mb-6 sm:mb-8">
+        <h1 className="page-title">
+          <Home className="h-7 w-7 text-teal-700" aria-hidden="true" />
           การนำทางของฉัน
         </h1>
         {(() => {
@@ -1564,9 +1569,25 @@ export default function NavigationPage() {
             </div>
           );
         })()}
-        <p className="text-gray-600 mt-2 text-sm font-medium">
+        <p className="mt-2 text-sm font-medium text-gray-600">
           {getCountText()}
         </p>
+        {/* สถานะ GPS + ทางลัดไปหน้าตั้งจุดเริ่มต้น/ลองใหม่ */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span
+            className={`badge ${isRealTimeMode ? "badge-teal" : "badge-slate"}`}
+          >
+            {isRealTimeMode ? "GPS เรียลไทม์" : "ใช้จุดเริ่มต้นคงที่"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowStartModal(true)}
+            className="btn btn-secondary btn-sm"
+          >
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+            ตั้งจุดเริ่มต้น / ลองใหม่
+          </button>
+        </div>
       </div>
 
       {/* Tab หลัก - เพิ่ม Tab "รอปิดยอด QR" */}
@@ -1574,9 +1595,9 @@ export default function NavigationPage() {
         <div className="flex bg-gray-100 p-1 rounded-xl max-w-2xl overflow-x-auto">
           <button
             onClick={() => setViewMode("today")}
-            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
+            className={`flex min-w-fit items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-bold transition-all ${
               viewMode === "today"
-                ? "bg-blue-600 text-white shadow-md"
+                ? "bg-teal-600 text-white shadow-sm"
                 : "text-gray-600"
             }`}
           >
@@ -1594,9 +1615,9 @@ export default function NavigationPage() {
 
           <button
             onClick={() => setViewMode("delivered")}
-            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
+            className={`flex min-w-fit items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-bold transition-all ${
               viewMode === "delivered"
-                ? "bg-green-600 text-white shadow-md"
+                ? "bg-emerald-600 text-white shadow-sm"
                 : "text-gray-600"
             }`}
           >
@@ -1609,9 +1630,9 @@ export default function NavigationPage() {
 
           <button
             onClick={() => setViewMode("qr_pending")}
-            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
+            className={`flex min-w-fit items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-bold transition-all ${
               viewMode === "qr_pending"
-                ? "bg-purple-600 text-white shadow-md"
+                ? "bg-amber-600 text-white shadow-sm"
                 : "text-gray-600"
             }`}
           >
@@ -1632,9 +1653,9 @@ export default function NavigationPage() {
 
           <button
             onClick={() => setViewMode("reported")}
-            className={`px-5 py-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-2 min-w-fit ${
+            className={`flex min-w-fit items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-bold transition-all ${
               viewMode === "reported"
-                ? "bg-orange-600 text-white shadow-md"
+                ? "bg-orange-600 text-white shadow-sm"
                 : "text-gray-600"
             }`}
           >
@@ -1742,14 +1763,14 @@ export default function NavigationPage() {
                     type="checkbox"
                     checked={sortByRoad}
                     onChange={(e) => setSortByRoad(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="flex items-center gap-2">
                     เรียงตามถนน
                     <span
                       className={`inline-flex items-center justify-center px-2.5 py-1 text-xs font-bold rounded-full min-w-[2rem] transition-colors ${
                         sortByRoad
-                          ? "text-indigo-700 bg-indigo-100"
+                          ? "text-teal-700 bg-teal-50"
                           : "text-gray-600 bg-gray-200"
                       }`}
                     >
@@ -1818,7 +1839,7 @@ export default function NavigationPage() {
           {/* เป้า - กระชับมาก + แสดงทศนิยมครบ */}
           <div className="space-y-4">
             {/* เป้า COD - ทำเหมือนเป้าส่งชิ้น */}
-            <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+            <div className="card-muted p-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-semibold text-amber-800">
                   เป้า COD วันนี้
@@ -2137,14 +2158,16 @@ export default function NavigationPage() {
                       )}
                       <div className="flex items-start gap-2 mt-3 text-gray-600 text-sm">
                         <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0 text-gray-400" />
-                        <span className="line-clamp-3">{h.address}</span>
+                        <span className="text-wrap-safe line-clamp-3">
+                          {h.address}
+                        </span>
                       </div>
 
                       {/* ระยะทางโดยประมาณ */}
                       {h.distance !== undefined && h.distance < Infinity && (
                         <p className="text-xs text-gray-500 mt-3">
                           ระยะทางโดยประมาณ ~{" "}
-                          <span className="font-bold text-blue-600">
+                          <span className="font-bold text-teal-700">
                             {h.distance.toFixed(1)} กม.
                           </span>
                         </p>
@@ -2154,10 +2177,10 @@ export default function NavigationPage() {
                       {h.note && (
                         <div className="mt-3 text-xs">
                           <div className="flex">
-                            <span className="font-semibold text-amber-800 shrink-0">
+                            <span className="shrink-0 font-semibold text-gray-700">
                               หมายเหตุ:{" "}
                             </span>
-                            <div className="text-amber-700 italic whitespace-pre-line">
+                            <div className="text-wrap-safe whitespace-pre-line text-gray-700">
                               {h.note}
                             </div>
                           </div>
@@ -2168,10 +2191,10 @@ export default function NavigationPage() {
                       {h.driver_note && (
                         <div className="mt-2 text-xs">
                           <div className="flex">
-                            <span className="font-semibold text-purple-800 shrink-0">
+                            <span className="font-semibold text-teal-700 shrink-0">
                               คนขับบันทึก:{" "}
                             </span>
-                            <div className="text-purple-700 italic whitespace-pre-line">
+                            <div className="text-wrap-safe whitespace-pre-line text-gray-700">
                               {h.driver_note}
                             </div>
                           </div>
@@ -2225,16 +2248,17 @@ export default function NavigationPage() {
                       )}
                     </div>
                     {/* ปุ่มด้านล่าง */}
-                    <div className="px-5 pb-5 flex flex-wrap justify-center items-center gap-3">
+                    <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-gray-100 px-4 py-3">
                       {/* ปุ่มลบออกจากการนำทาง */}
                       <button
                         type="button"
                         onClick={() => removeFromNavigation(h.nav_id)}
                         onMouseDown={(e) => e.preventDefault()}
-                        className="p-3 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition active:scale-95"
+                        className="icon-btn icon-btn-danger"
                         title="ลบออกจากการนำทาง"
+                        aria-label="ลบออกจากการนำทาง"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="h-5 w-5" aria-hidden="true" />
                       </button>
 
                       {/* ปุ่มคอมเมนต์ */}
@@ -2242,11 +2266,11 @@ export default function NavigationPage() {
                         type="button"
                         onClick={() => openCommentModal(h)}
                         onMouseDown={(e) => e.preventDefault()}
-                        className="p-3 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition active:scale-95"
+                        className="icon-btn"
                         title="บันทึกคอมเมนต์ / ฝากข้อความ"
+                        aria-label="บันทึกคอมเมนต์ / ฝากข้อความ"
                       >
-                        <MessageSquare className="w-5 h-5" />{" "}
-                        {/* ไอคอนจาก lucide-react */}
+                        <MessageSquare className="h-5 w-5" aria-hidden="true" />
                       </button>
 
                       {/* ปุ่มรายงาน */}
@@ -2273,8 +2297,13 @@ export default function NavigationPage() {
                             setShowReportModal(true);
                           }}
                           onMouseDown={(e) => e.preventDefault()}
-                          className="p-3 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition active:scale-95"
+                          className="icon-btn icon-btn-warn"
                           title={
+                            h.delivery_status === "reported"
+                              ? "แก้ไขหมายเหตุรายงาน"
+                              : "รายงานปัญหา"
+                          }
+                          aria-label={
                             h.delivery_status === "reported"
                               ? "แก้ไขหมายเหตุรายงาน"
                               : "รายงานปัญหา"
@@ -2289,10 +2318,11 @@ export default function NavigationPage() {
                         type="button"
                         onClick={() => openEditModal(h)}
                         onMouseDown={(e) => e.preventDefault()}
-                        className="p-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition active:scale-95"
+                        className="icon-btn"
                         title="แก้ไข"
+                        aria-label="แก้ไขข้อมูลบ้าน"
                       >
-                        <Edit3 className="w-5 h-5" />
+                        <Edit3 className="h-5 w-5" aria-hidden="true" />
                       </button>
 
                       {/* ปุ่มส่งงาน */}
@@ -2306,14 +2336,17 @@ export default function NavigationPage() {
                             setShowDeliverModal(true);
                           }}
                           onMouseDown={(e) => e.preventDefault()}
-                          className="p-3 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition active:scale-95"
+                          className="btn btn-primary flex-1"
                           title={
                             h.delivery_status === "reported"
                               ? "เปลี่ยนเป็นส่งแล้ว"
                               : "ส่งงาน"
                           }
                         >
-                          <CheckCircle className="w-5 h-5" />
+                          <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                          {h.delivery_status === "reported"
+                            ? "เปลี่ยนเป็นส่งแล้ว"
+                            : "ส่งงาน"}
                         </button>
                       )}
 
@@ -2331,10 +2364,10 @@ export default function NavigationPage() {
                               setShowDeliverModal(true);
                             }}
                             onMouseDown={(e) => e.preventDefault()}
-                            className="p-3 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition active:scale-95 flex items-center gap-2"
+                            className="btn btn-secondary btn-sm"
                             title="ปิดยอด QR แล้ว"
                           >
-                            <CheckCircle className="w-5 h-5" />
+                            <CheckCircle className="h-4 w-4" aria-hidden="true" />
                             <span className="text-sm font-medium">
                               ปิดยอด QR
                             </span>
@@ -2405,13 +2438,13 @@ export default function NavigationPage() {
                       setShowPageInput(false);
                       setPageInputValue("");
                     }}
-                    className="flex-1 py-2.5 bg-gray-200 rounded-lg font-medium hover:bg-gray-300"
+                    className="btn btn-secondary flex-1"
                   >
                     ยกเลิก
                   </button>
                   <button
                     onClick={handlePageInputSubmit}
-                    className="flex-1 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"
+                    className="btn btn-primary flex-1"
                   >
                     ไป
                   </button>
@@ -2445,7 +2478,7 @@ export default function NavigationPage() {
                 type="button"
                 onClick={openFullRoute}
                 onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3 px-6 py-3.5 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-2xl shadow-lg hover:from-orange-700 hover:to-red-700 transition-all hover:shadow-xl min-w-44 active:scale-95"
+                className="flex min-w-44 items-center gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-3.5 text-gray-900 shadow-lg transition-all hover:bg-gray-50 active:scale-95"
               >
                 <Map className="w-5 h-5" />
                 <span className="text-base font-medium">เส้นทางทั้งหมด</span>
@@ -2458,7 +2491,7 @@ export default function NavigationPage() {
                   setIsFabOpen(false);
                 }}
                 onMouseDown={(e) => e.preventDefault()}
-                className="flex items-center gap-3 px-6 py-3.5 bg-purple-600 text-white rounded-2xl shadow-lg hover:bg-purple-700 transition-all hover:shadow-xl min-w-44 active:scale-95"
+                className="flex min-w-44 items-center gap-3 rounded-2xl bg-teal-600 px-6 py-3.5 text-white shadow-lg transition-all hover:bg-teal-700 active:scale-95"
               >
                 <MapPin className="w-5 h-5" />
                 <span className="text-base font-medium">ตั้งจุดเริ่มต้น</span>
@@ -2466,10 +2499,15 @@ export default function NavigationPage() {
             </div>
             {/* ปุ่มหลัก - แสดงตอนเปิด (หมุนลูกศร) */}
             <button
+              type="button"
               onClick={() => setIsFabOpen(false)}
-              className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:bg-indigo-700 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+              aria-label="ปิดเมนูเครื่องมือ"
+              className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-teal-700 active:scale-95"
             >
-              <ChevronUp className="w-6 h-6 rotate-180 transition-transform duration-300" />
+              <ChevronUp
+                className="h-6 w-6 rotate-180 transition-transform duration-300"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </>
@@ -2477,31 +2515,51 @@ export default function NavigationPage() {
         /* เมื่อปิด FAB - แสดงเฉพาะปุ่มหลักตัวเดียว (ไม่หมุนลูกศร) */
         <div className="fixed bottom-20 right-4 z-50">
           <button
+            type="button"
             onClick={() => setIsFabOpen(true)}
-            className="w-12 h-12 bg-indigo-600 text-white rounded-2xl shadow-2xl hover:bg-indigo-700 flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+            aria-label="เปิดเมนูเครื่องมือ"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-600 text-white shadow-lg transition-all duration-300 hover:scale-105 hover:bg-teal-700 active:scale-95"
           >
-            <ChevronUp className="w-6 h-6 transition-transform duration-300" />
+            <ChevronUp
+              className="h-6 w-6 transition-transform duration-300"
+              aria-hidden="true"
+            />
           </button>
         </div>
       )}
 
       {/* Filter Modal */}
       {showFilterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-5 text-center">ตัวกรองบ้าน</h2>
-            {/* ส่วนใหม่: เลือกค้นหาจากฟิลด์ไหน */}
-            <div className="mb-6 p-4 bg-indigo-50 rounded-xl">
-              <p className="text-sm font-semibold text-indigo-800 mb-3">
-                ช่องค้นหาหลักจะค้นหาจาก:
-              </p>
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="nav-filter-title"
+            className="modal-sheet w-full max-w-md p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2 id="nav-filter-title" className="text-lg font-bold">
+                ตัวกรองบ้าน
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowFilterModal(false)}
+                aria-label="ปิดตัวกรอง"
+                className="icon-btn h-10 w-10 shrink-0"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            {/* เลือกค้นหาจากฟิลด์ไหน */}
+            <div className="card-muted mb-5 p-4">
+              <p className="section-label mb-3">ช่องค้นหาหลักจะค้นหาจาก</p>
               <div className="space-y-3">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={searchInName}
                     onChange={(e) => setSearchInName(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">ชื่อ-นามสกุล</span>
                 </label>
@@ -2510,7 +2568,7 @@ export default function NavigationPage() {
                     type="checkbox"
                     checked={searchInAddress}
                     onChange={(e) => setSearchInAddress(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">ที่อยู่</span>
                 </label>
@@ -2519,7 +2577,7 @@ export default function NavigationPage() {
                     type="checkbox"
                     checked={searchInPhone}
                     onChange={(e) => setSearchInPhone(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">เบอร์โทรศัพท์</span>
                 </label>
@@ -2528,7 +2586,7 @@ export default function NavigationPage() {
                     type="checkbox"
                     checked={searchInNote}
                     onChange={(e) => setSearchInNote(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">หมายเหตุ</span>
                 </label>
@@ -2537,7 +2595,7 @@ export default function NavigationPage() {
                     type="checkbox"
                     checked={searchInDriverNote}
                     onChange={(e) => setSearchInDriverNote(e.target.checked)}
-                    className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"
+                    className="h-5 w-5 accent-teal-700"
                   />
                   <span className="text-sm font-medium">คนขับบันทึก</span>
                 </label>
@@ -2550,7 +2608,8 @@ export default function NavigationPage() {
                 placeholder="บ้านเลขที่"
                 value={houseNumberFilter}
                 onChange={(e) => setHouseNumberFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border-2 border-amber-300 rounded-xl focus:border-amber-500 focus:outline-none font-medium"
+                aria-label="บ้านเลขที่"
+                className="input"
               />
               <input
                 type="text"
@@ -2559,7 +2618,8 @@ export default function NavigationPage() {
                 onChange={(e) =>
                   setPhoneFilter(e.target.value.replace(/\D/g, ""))
                 }
-                className="w-full px-4 py-2.5 text-sm border-2 border-blue-300 rounded-xl focus:border-blue-500 focus:outline-none font-medium"
+                aria-label="เบอร์โทร"
+                className="input"
               />
               <input
                 type="text"
@@ -2568,48 +2628,51 @@ export default function NavigationPage() {
                 onChange={(e) =>
                   setVillageFilter(e.target.value.replace(/[^\d]/g, ""))
                 }
-                className="w-full px-4 py-2.5 text-sm border-2 border-orange-300 rounded-xl focus:border-orange-500 focus:outline-none font-bold text-orange-700"
+                aria-label="หมู่ที่"
+                className="input"
               />
               <input
                 type="text"
                 placeholder="ตำบล"
                 value={subdistrictFilter}
                 onChange={(e) => setSubdistrictFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
               <input
                 type="text"
                 placeholder="อำเภอ"
                 value={districtFilter}
                 onChange={(e) => setDistrictFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
               <input
                 type="text"
                 placeholder="จังหวัด"
                 value={provinceFilter}
                 onChange={(e) => setProvinceFilter(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
             </div>
             <div className="flex gap-3 mt-6">
               <button
+                type="button"
                 onClick={() => {
                   clearFilters();
-                  // รีเซ็ตค่าค้นหาด้วย (หรือจะไม่รีเซ็ตก็ได้ตามต้องการ)
+                  // รีเซ็ตค่าค้นหาด้วย (ตามค่าที่หน้านี้ใช้จริง)
                   setSearchInName(true);
                   setSearchInAddress(true);
                   setSearchInPhone(false);
                   setSearchInNote(true);
                   setShowFilterModal(false);
                 }}
-                className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300"
+                className="btn btn-secondary flex-1"
               >
                 ล้างทั้งหมด
               </button>
               <button
+                type="button"
                 onClick={() => setShowFilterModal(false)}
-                className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold"
+                className="btn btn-primary flex-1"
               >
                 ใช้ตัวกรอง
               </button>
@@ -2619,7 +2682,7 @@ export default function NavigationPage() {
       )}
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 text-gray-800">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
             <div className="space-y-4">
@@ -2630,7 +2693,7 @@ export default function NavigationPage() {
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, full_name: e.target.value }))
                 }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
               <input
                 type="text"
@@ -2639,7 +2702,7 @@ export default function NavigationPage() {
                 onChange={(e) =>
                   setFormData((p) => ({ ...p, phone: e.target.value }))
                 }
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
               <div className="relative">
                 <input
@@ -2648,7 +2711,7 @@ export default function NavigationPage() {
                   value={addressInput}
                   onChange={(e) => handleAddressChange(e.target.value)}
                   onKeyDown={handleAddressKeyDown}
-                  className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                  className="input"
                 />
                 {/* Dropdown แนะนำที่อยู่ */}
                 {addressSuggestions.length > 0 && (
@@ -2659,9 +2722,9 @@ export default function NavigationPage() {
                         type="button"
                         onMouseDown={(e) => e.preventDefault()} // ป้องกันเสีย focus
                         onClick={() => selectAddressSuggestion(suggestion)}
-                        className={`w-full text-left px-4 py-3 text-sm hover:bg-indigo-50 transition ${
+                        className={`w-full text-left px-4 py-3 text-sm transition hover:bg-teal-50 ${
                           index === highlightedSuggestionIndex
-                            ? "bg-indigo-100"
+                            ? "bg-teal-100"
                             : ""
                         }`}
                       >
@@ -2734,7 +2797,7 @@ export default function NavigationPage() {
                     setFormData((prev) => ({ ...prev, lat: null, lng: null }));
                   }
                 }}
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none"
+                className="input"
               />
 
               {formData.lat == null && formData.lng == null && (
@@ -2762,7 +2825,7 @@ export default function NavigationPage() {
                 </button>
                 <button
                   onClick={saveHouse}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl text-sm font-bold"
+                  className="btn btn-primary flex-1"
                 >
                   บันทึก
                 </button>
@@ -2774,7 +2837,7 @@ export default function NavigationPage() {
 
       {/* Modal ตั้งจุดเริ่มต้นทาง */}
       {showStartModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-xl font-bold text-purple-600">
@@ -2857,23 +2920,39 @@ export default function NavigationPage() {
                 onClick={() => {
                   const newMode = !isRealTimeMode;
                   setIsRealTimeMode(newMode);
-                  localStorage.setItem(
-                    "navigationRealTimeMode",
-                    newMode.toString(),
-                  );
+                  let storageOk = true;
+                  try {
+                    localStorage.setItem(
+                      "navigationRealTimeMode",
+                      newMode.toString(),
+                    );
+                    if (newMode) {
+                      localStorage.removeItem("navigationStartPosition");
+                    }
+                  } catch {
+                    // พื้นที่จัดเก็บถูกปิด/เต็ม — ยังสลับโหมดได้ในหน้านี้
+                    storageOk = false;
+                  }
                   if (newMode) {
-                    localStorage.removeItem("navigationStartPosition");
                     setStartPosition(null);
-                    toast.success("เปิดโหมดเรียลไทม์แล้ว");
+                  }
+                  if (storageOk) {
+                    toast.success(
+                      newMode
+                        ? "เปิดโหมดเรียลไทม์แล้ว"
+                        : "ปิดโหมดเรียลไทม์ – ใช้ค่าคงที่",
+                    );
                   } else {
-                    toast.success("ปิดโหมดเรียลไทม์ – ใช้ค่าคงที่");
+                    toast.error(
+                      "บันทึกโหมดลงเครื่องไม่สำเร็จ แต่ยังใช้โหมดนี้ในหน้านี้ได้",
+                    );
                   }
                   setShowStartModal(false);
                 }}
                 className={`py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${
                   isRealTimeMode
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "bg-green-500 text-white hover:bg-green-600"
+                    ? "border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
+                    : "bg-teal-600 text-white hover:bg-teal-700"
                 }`}
               >
                 {isRealTimeMode ? <>ปิดเรียลไทม์</> : <>เปิดเรียลไทม์</>}
@@ -2884,7 +2963,7 @@ export default function NavigationPage() {
                   isDetecting ||
                   (detectedStartLat === null && detectedStartLng === null)
                 }
-                className="py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50"
+                className="btn btn-primary py-3"
               >
                 ตั้งค่าคงที่
               </button>
@@ -2900,7 +2979,7 @@ export default function NavigationPage() {
 
       {/* Modal ยืนยันส่งแล้ว */}
       {showDeliverModal && houseToDeliver && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-green-600 mb-4">
               ยืนยันส่งแล้ว
@@ -3077,7 +3156,7 @@ export default function NavigationPage() {
                   setDeliverNoteCustom("");
                   // ไม่ต้อง reset localCash / localTransfer เพราะ useEffect จะจัดการตอนเปิด modal ใหม่
                 }}
-                className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
+                className="btn btn-secondary flex-1 py-3"
               >
                 ยกเลิก
               </button>
@@ -3086,6 +3165,7 @@ export default function NavigationPage() {
                 type="button"
                 onClick={() => confirmDeliver(localCash, localTransfer)}
                 disabled={
+                  isDeliverSubmitting ||
                   ((deliverNote === "จ่ายด้วยเงินสด" ||
                     deliverNote === "จ่ายรวมเงินสด") &&
                     !localCash.trim()) ||
@@ -3093,9 +3173,16 @@ export default function NavigationPage() {
                     !localTransfer.trim()) ||
                   (deliverNote === "อื่นๆ" && !deliverNoteCustom.trim())
                 }
-                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                className="btn btn-primary flex-1 py-3"
               >
-                ‘ส่งแล้ว’
+                {isDeliverSubmitting ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "ส่งแล้ว"
+                )}
               </button>
             </div>
           </div>
@@ -3104,7 +3191,7 @@ export default function NavigationPage() {
 
       {/* Modal บันทึกคอมเมนต์ */}
       {showCommentModal && houseToComment && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold text-purple-600 mb-4">
               บันทึกคอมเมนต์ / ฝากข้อความ
@@ -3130,8 +3217,8 @@ export default function NavigationPage() {
             />
 
             {/* Preview */}
-            <div className="mt-4 p-3 bg-purple-50 rounded-xl">
-              <p className="text-sm text-purple-800 font-medium">
+            <div className="card-muted p-3">
+              <p className="text-sm font-medium text-gray-700">
                 คอมเมนต์ที่จะบันทึก:
                 <span className="block font-bold mt-1">
                   {commentText.trim() || "ยังไม่ได้กรอก..."}
@@ -3146,14 +3233,14 @@ export default function NavigationPage() {
                   setShowCommentModal(false);
                   setCommentText("");
                 }}
-                className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
+                className="btn btn-secondary flex-1 py-3"
               >
                 ยกเลิก
               </button>
               <button
                 onClick={confirmComment}
                 disabled={isCommentSubmitting}
-                className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                className="btn btn-primary flex-1 py-3"
               >
                 {isCommentSubmitting ? (
                   <>
@@ -3171,10 +3258,10 @@ export default function NavigationPage() {
 
       {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ (ไม่มีปุ่มใช้ยอดนี้) */}
       {showCalculatorModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md sm:max-w-lg overflow-hidden">
             {/* Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 text-center">
+            <div className="bg-teal-700 text-white p-4 text-center">
               <h3 className="text-lg font-bold">เครื่องคิดเลขเงินทอน</h3>
             </div>
 
@@ -3317,7 +3404,7 @@ export default function NavigationPage() {
 
       {/* Modal รายงานปัญหา */}
       {showReportModal && houseToReport && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
             <h2 className="text-xl font-bold text-orange-600 mb-4">
               รายงานปัญหา / ฝากไว้ก่อน
@@ -3382,19 +3469,28 @@ export default function NavigationPage() {
                   setReportReason("โทรไม่รับ"); // รีเซ็ตกลับค่าเริ่มต้น
                   setReportReasonCustom("");
                 }}
-                className="flex-1 py-3 bg-gray-200 rounded-xl font-medium"
+                className="btn btn-secondary flex-1 py-3"
               >
                 ยกเลิก
               </button>
               <button
+                type="button"
                 onClick={confirmReport}
                 disabled={
+                  isReportSubmitting ||
                   !reportReason ||
                   (reportReason === "อื่นๆ" && !reportReasonCustom?.trim())
                 }
-                className="flex-1 py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary flex-1 py-3"
               >
-                รายงานแล้ว
+                {isReportSubmitting ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "รายงานแล้ว"
+                )}
               </button>
             </div>
           </div>
