@@ -110,6 +110,16 @@ Notes learned in this environment:
   (icon-only, 44px, `aria-label` required), hand mode is stored in
   `localStorage["navigationActionRailSide"]`, and no `autoFocus` is allowed on
   dialog inputs.
+- Navigation card color scheme (2026-10-12, keep it consistent for future UI
+  work): name `orange-700`, phone + call icon `blue-700`/`blue-600`, address +
+  MapPin `teal-800`/`teal-600`, "หมายเหตุ" label + note
+  `amber-700`/`amber-900`, "คนขับบันทึก" label + driver note
+  `purple-700`/`purple-900`; status/money/report pills keep their original
+  semantic colors. The houses card "นำทาง" button is deliberately
+  `btn btn-secondary ml-auto` (not `flex-1`, not filled primary).
+- Interaction/visual checks for these colors on real devices remain NOT
+  VERIFIED (no browser or test account in this environment). See
+  `.ai/reports/2026-10-12-dropway-card-button-and-data-color-polish.md`.
 
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.

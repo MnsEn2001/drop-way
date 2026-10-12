@@ -125,5 +125,33 @@ This document records meaningful project and documentation changes for the DropW
 - Interaction checks on a real device/browser remain NOT VERIFIED (no browser or
   session in this environment).
 
+## 2026-10-12 (houses navigate button balance + navigation card data colors)
+- UI polish only (report:
+  `.ai/reports/2026-10-12-dropway-card-button-and-data-color-polish.md`):
+  - the "นำทาง" card button in `src/app/houses/page.tsx` no longer stretches
+    with `flex-1` and is no longer filled primary; it is now
+    `btn btn-secondary ml-auto` — content-width (~110px), anchored right next
+    to the 44px delete/edit icon buttons, still ≥44px via `.btn` min sizes;
+    `openNavigation()` and the Google Maps URL are untouched
+  - navigation cards (one shared render, so all four tabs are consistent) now
+    color-code data by type: recipient name (`full_name`) `orange-700`, phone
+    + call icon `blue-700`/`blue-600`, address + MapPin `teal-800`/`teal-600`,
+    "หมายเหตุ:" label + note `amber-700`/`amber-900`, "คนขับบันทึก:" label +
+    `driver_note` `purple-700`/`purple-900`
+  - delivered/money pills, report pills, badges, distance, timestamps and the
+    action rail keep their original semantic colors; no database text, note
+    format, status, or money rule changed — the whole diff is 10 className
+    lines across 2 files
+- Verified: `git diff --check`, `npx tsc --noEmit`, `npm run lint`, `npm run
+  build` (9/9 pages), `/login` `/register` `/houses` `/navigation` HTTP 200 in
+  the managed preview, and all eight new utility classes present in the
+  compiled CSS + client chunks. (Running `next build` while the dev server was
+  up briefly 500'd `/login` `/register` via webpack cache corruption;
+  `freebuff-preview restart` restored 200 — environment, not code.)
+- Pushed to `main` as `1fe54494a4031bab611767324e7f2d303162e401`
+  (`992e02d..1fe5449`), confirmed with `git ls-remote --heads origin main`,
+  `git rev-parse HEAD` and the GitHub API. Visual/device verification remains
+  NOT VERIFIED (no browser or test session in this environment).
+
 ## Notes on scope
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.
