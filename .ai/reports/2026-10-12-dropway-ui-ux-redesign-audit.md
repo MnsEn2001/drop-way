@@ -114,7 +114,11 @@ targets. No change was made to route ordering, distance math, financial parsing,
   `gh api repos/MnsEn2001/drop-way/commits/main` both returned
   `89cd5011428fb4a95e22662ed2f295569e2d98a8`
 - GitHub Actions runs: none found (no CI configured in the repository)
-- Production deployment: the latest observed successful Production deployment was
-  `f3ab31d` (2026-10-12T00:18:12Z). No deployment for `89cd501` was observed at
-  verification time — deployment of this commit is NOT VERIFIED.
+- Production deployment: GitHub reports a Production deployment for
+  `89cd5011428fb4a95e22662ed2f295569e2d98a8` created 2026-10-12T00:51:36Z with
+  `state=success` / "Deployment has completed". This is the code commit of this
+  session; the later `.ai/` documentation commits do not affect runtime.
+- Deployment for the documentation commits themselves was not observed and is not
+  needed; runtime verification of the deployed build on a real device remains
+  NOT VERIFIED in this environment.
 - `package-lock.json` remains untracked and out of scope.

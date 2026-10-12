@@ -113,8 +113,7 @@ This is a factual snapshot of the repository and the documentation effort that c
   `f3ab31d18c5b16ffb93e0af500046fcc18fa9758`
 - 2026-10-12 UI/UX redesign: `89cd5011428fb4a95e22662ed2f295569e2d98a8`,
   pushed to `main` and verified with `git ls-remote` and the GitHub API.
-- Production deployment observed on GitHub: latest successful Production
-  deployment was for `f3ab31d` (2026-10-12T00:18:12Z); a deployment for
-  `89cd501` was **not** observed at verification time. Deployment of this
-  commit is NOT VERIFIED.
+- Production deployment observed on GitHub for the redesign commit: created
+  2026-10-12T00:51:36Z with `state=success` ("Deployment has completed").
+  Runtime behaviour of that deployed build was not exercised in a browser here.
 - `package-lock.json` is still untracked and out of scope.
