@@ -28,9 +28,16 @@ import {
   Calculator,
   MessageSquare,
   Phone,
+  PanelLeft,
+  PanelRight,
+  QrCode,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { useVisualViewportHeightVar } from "@/lib/viewport";
 const ITEMS_PER_PAGE = 20;
+// ตำแหน่งแถบปุ่มการทำงานที่ผู้ใช้เลือก (มือซ้าย / มือขวา)
+const HAND_MODE_KEY = "navigationActionRailSide";
+type HandMode = "left" | "right";
 // ฟังก์ชันคำนวณระยะทาง Haversine (km)
 function getDistanceFromLatLon(
   lat1: number,
@@ -71,6 +78,13 @@ export default function NavigationPage() {
   const [showNoCoords, setShowNoCoords] = useState(false);
   const [showWithCoords, setShowWithCoords] = useState(false);
   const [sortByRoad, setSortByRoad] = useState(true);
+  // โหมดมือ: ค่าเริ่มต้น = มือขวา (แถบปุ่มด้านขวา)
+  const [handMode, setHandMode] = useState<HandMode>("right");
+  // ปุ่มที่กดเปิด Dialog ไว้ เพื่อคืนโฟกัสหลังปิด (ไม่เปิดคีย์บอร์ดซ้ำ)
+  const dialogTriggerRef = useRef<HTMLElement | null>(null);
+
+  // ให้ Dialog คำนวณความสูงจากพื้นที่ที่มองเห็นจริง (คีย์บอร์ดเปิดอยู่ก็ไม่ล้น)
+  useVisualViewportHeightVar();
 
   // Modal คอมเมนต์
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -450,11 +464,57 @@ export default function NavigationPage() {
       // ไม่ทำอะไร
     }
 
+    try {
+      const savedHand = localStorage.getItem(HAND_MODE_KEY);
+      if (savedHand === "left" || savedHand === "right") {
+        setHandMode(savedHand);
+      }
+    } catch {
+      // localStorage ใช้ไม่ได้ → ใช้ค่าเริ่มต้น (มือขวา)
+    }
+
     if (startPos) {
       setStartPosition(startPos);
     }
     setIsRealTimeMode(realTimeMode);
   }, []);
+
+  const changeHandMode = (next: HandMode) => {
+    setHandMode(next);
+    try {
+      localStorage.setItem(HAND_MODE_KEY, next);
+      toast.success(
+        next === "left" ? "ย้ายแถบปุ่มไปด้านซ้ายแล้ว" : "ย้ายแถบปุ่มไปด้านขวาแล้ว",
+      );
+    } catch {
+      toast.error("บันทึกค่าไม่สำเร็จ แต่ย้ายแถบปุ่มให้แล้วในหน้านี้");
+    }
+  };
+
+  // Dialog ที่เปิดอยู่ตอนนี้ (ใช้คุมการคืนโฟกัสหลังปิด)
+  const anyDialogOpen =
+    showFilterModal ||
+    showStartModal ||
+    showCalculatorModal ||
+    showPageInput ||
+    !!editingHouse ||
+    (showDeliverModal && !!houseToDeliver) ||
+    (showCommentModal && !!houseToComment) ||
+    (showReportModal && !!houseToReport);
+
+  // เมื่อปิด Dialog แล้วคืนโฟกัสให้ปุ่มที่กดเปิด — ปุ่มไม่ทำให้คีย์บอร์ดเด้ง
+  useEffect(() => {
+    if (anyDialogOpen) return;
+    const trigger = dialogTriggerRef.current;
+    dialogTriggerRef.current = null;
+    if (trigger && document.contains(trigger)) {
+      trigger.focus({ preventScroll: true });
+    }
+  }, [anyDialogOpen]);
+
+  const rememberDialogTrigger = (element: HTMLElement | null) => {
+    dialogTriggerRef.current = element;
+  };
 
   // เช็ก session
   useEffect(() => {
@@ -1539,7 +1599,7 @@ export default function NavigationPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 pb-32 md:pb-8 relative">
+    <div className="page-shell relative mx-auto max-w-7xl px-4 py-6 pb-32 sm:py-8 md:pb-8">
       <div className="mb-6 sm:mb-8">
         <h1 className="page-title">
           <Home className="h-7 w-7 text-teal-700" aria-hidden="true" />
@@ -1586,6 +1646,40 @@ export default function NavigationPage() {
           >
             <MapPin className="h-4 w-4" aria-hidden="true" />
             ตั้งจุดเริ่มต้น / ลองใหม่
+          </button>
+        </div>
+
+        {/* โหมดมือ: ย้ายแถบปุ่มการทำงานไปด้านซ้ายหรือขวา */}
+        <div
+          role="group"
+          aria-label="ตำแหน่งแถบปุ่มการทำงาน"
+          className="mt-3 inline-flex rounded-full border border-gray-200 bg-white p-0.5"
+        >
+          <button
+            type="button"
+            onClick={() => changeHandMode("right")}
+            aria-pressed={handMode === "right"}
+            className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
+              handMode === "right"
+                ? "bg-teal-600 text-white"
+                : "text-gray-600 hover:text-teal-700"
+            }`}
+          >
+            <PanelRight className="h-4 w-4" aria-hidden="true" />
+            มือขวา
+          </button>
+          <button
+            type="button"
+            onClick={() => changeHandMode("left")}
+            aria-pressed={handMode === "left"}
+            className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
+              handMode === "left"
+                ? "bg-teal-600 text-white"
+                : "text-gray-600 hover:text-teal-700"
+            }`}
+          >
+            <PanelLeft className="h-4 w-4" aria-hidden="true" />
+            มือซ้าย
           </button>
         </div>
       </div>
@@ -1973,95 +2067,17 @@ export default function NavigationPage() {
                 return (
                   <div
                     key={h.nav_id}
-                    className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden flex flex-col relative"
+                    className={`card relative flex overflow-hidden ${
+                      handMode === "left" ? "flex-row-reverse" : ""
+                    }`}
                   >
-                    {/* ปุ่มนำทาง + ปุ่มแก้ไขสถานะ - มุมขวาบน */}
-                    <div className="absolute top-3 right-3 z-10 flex flex-col gap-2">
-                      {/* ปุ่มนำทาง */}
-                      {h.lat && h.lng && (
-                        <button
-                          type="button"
-                          onClick={() => openNavigation(h.lat!, h.lng!)}
-                          onMouseDown={(e) => e.preventDefault()}
-                          className="p-2 bg-transparent border border-emerald-600 text-emerald-700 rounded hover:bg-emerald-50 hover:border-emerald-800 transition-all active:scale-95"
-                          title="นำทาง"
-                        >
-                          <Navigation className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {/* ปุ่มแก้ไขส่งแล้ว */}
-                      {h.delivery_status === "delivered" && (
-                        <button
-                          onClick={() => {
-                            setHouseToDeliver(h);
-                            const note = h.delivery_note || "";
-                            if (note.includes("จ่ายรวมเงินสด")) {
-                              setDeliverNote("จ่ายรวมเงินสด");
-                            } else if (note.includes("เงินสด")) {
-                              setDeliverNote("จ่ายด้วยเงินสด");
-                            } else if (note.includes("โอนเข้าบัญชีฉัน")) {
-                              setDeliverNote("โอนเข้าบัญชีฉัน");
-                            } else if (
-                              note.includes("โอนเข้าบริษัท") ||
-                              note === "โอนเข้าบริษัท"
-                            ) {
-                              setDeliverNote("โอนเข้าบริษัท");
-                            } else if (note === "ไม่มียอด") {
-                              setDeliverNote("ไม่มียอด");
-                            } else {
-                              setDeliverNote("อื่นๆ");
-                              setDeliverNoteCustom(note.trim());
-                            }
-                            setShowDeliverModal(true);
-                          }}
-                          className="p-2 bg-transparent border border-orange-600 text-orange-700 rounded hover:bg-orange-50 hover:border-orange-800 transition-all active:scale-95"
-                          title="แก้ไขส่งแล้ว"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {/* ปุ่มแก้ไขรายงาน */}
-                      {h.delivery_status === "reported" && (
-                        <button
-                          onClick={() => {
-                            setHouseToReport(h);
-                            const reason = h.report_reason || "โทรไม่รับ";
-                            if (
-                              ["โทรไม่รับ", "เลื่อน", "ตีกลับ"].includes(reason)
-                            ) {
-                              setReportReason(reason);
-                              setReportReasonCustom("");
-                            } else {
-                              setReportReason("อื่นๆ");
-                              setReportReasonCustom(reason);
-                            }
-                            setShowReportModal(true);
-                          }}
-                          className="p-2 bg-transparent border border-orange-600 text-orange-700 rounded hover:bg-orange-50 hover:border-orange-800 transition-all active:scale-95"
-                          title="แก้ไขรายงาน"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                      )}
-
-                      {/* ถ้าไม่มีพิกัดเลย - ปรับให้เป็นกรอบเหมือนกันเป๊ะ */}
-                      {!h.lat && !h.lng && (
-                        <div
-                          className="p-2 bg-transparent border border-orange-600 text-orange-700 rounded flex items-center justify-center hover:bg-orange-50 hover:border-orange-800 transition-all"
-                          title="บ้านนี้ยังไม่มีพิกัด"
-                        >
-                          <MapPin className="w-4 h-4" />
-                        </div>
-                      )}
-                    </div>
+                    <div className="flex min-w-0 flex-1 flex-col">
 
                     {/* === แสดงวันที่-เวลา มุมซ้ายบน (ไม่มีกรอบ) === */}
                     {(h.delivery_status === "delivered" ||
                       h.delivery_status === "reported") && (
                       <div
-                        className="absolute top-2 left-3 z-10 text-xs font-mono text-gray-500"
+                        className="border-b border-gray-100 px-4 py-1.5 text-xs font-mono text-gray-500"
                         title={
                           h.delivery_status === "delivered"
                             ? h.delivered_at
@@ -2106,23 +2122,18 @@ export default function NavigationPage() {
                       </div>
                     )}
 
-                    {/* ปรับ padding-top ตามว่ามีวันที่ไหม */}
-                    <div
-                      className={`p-5 flex-1 flex flex-col relative ${
-                        h.delivery_status === "delivered" ||
-                        h.delivery_status === "reported"
-                          ? "pt-10" // มีวันที่ → เว้นด้านบนเยอะหน่อย
-                          : "pt-5" // ไม่มีวันที่ (แท็บวันนี้) → เว้นน้อย หรือเปลี่ยนเป็น pt-5 / pt-6
-                      }`}
-                    >
-                      {/* ลำดับที่ + ชื่อ */}
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-lg font-extrabold text-indigo-600">
+                    <div className="relative flex flex-1 flex-col p-4 sm:p-5">
+                      {/* ลำดับที่ + ชื่อ + สถานะพิกัด */}
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <span className="text-lg font-extrabold text-teal-700">
                           #{displayOrder}
                         </span>
-                        <h3 className="font-bold text-lg text-indigo-700 line-clamp-2">
+                        <h3 className="text-wrap-safe line-clamp-2 text-lg font-bold text-gray-900">
                           {h.full_name || "ไม่มีชื่อ"}
                         </h3>
+                        {!h.lat && !h.lng && (
+                          <span className="badge badge-amber">ไม่มีพิกัด</span>
+                        )}
                       </div>
                       {h.phone && (
                         <div className="flex items-center gap-2 mt-2 group">
@@ -2137,22 +2148,22 @@ export default function NavigationPage() {
                               navigator.clipboard.writeText(h.phone!);
                               toast.success("คัดลอกเบอร์เรียบร้อยแล้ว!");
                             }}
-                            className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-gray-100"
+                            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-800"
                             title="คัดลอกเบอร์โทร"
                             aria-label="คัดลอกเบอร์โทร"
                           >
-                            <Copy className="w-4 h-4 text-gray-500 hover:text-gray-700 transition-colors" />
+                            <Copy className="h-4 w-4" aria-hidden="true" />
                           </button>
 
                           {/* ปุ่ม โทร ออกทันที */}
                           <a
                             href={`tel:${h.phone}`}
                             onClick={(e) => e.stopPropagation()} // ป้องกัน bubble ไป card
-                            className="opacity-40 group-hover:opacity-100 transition-opacity duration-200 p-1 rounded hover:bg-green-50"
+                            className="flex h-9 w-9 items-center justify-center rounded-lg text-emerald-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
                             title="โทรหาลูกค้า"
                             aria-label="โทรหาลูกค้า"
                           >
-                            <Phone className="w-4 h-4 text-green-600 hover:text-green-700 transition-colors" />
+                            <Phone className="h-4 w-4" aria-hidden="true" />
                           </a>
                         </div>
                       )}
@@ -2247,25 +2258,93 @@ export default function NavigationPage() {
                         </div>
                       )}
                     </div>
-                    {/* ปุ่มด้านล่าง */}
-                    <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-gray-100 px-4 py-3">
-                      {/* ปุ่มลบออกจากการนำทาง */}
-                      <button
-                        type="button"
-                        onClick={() => removeFromNavigation(h.nav_id)}
-                        onMouseDown={(e) => e.preventDefault()}
-                        className="icon-btn icon-btn-danger"
-                        title="ลบออกจากการนำทาง"
-                        aria-label="ลบออกจากการนำทาง"
-                      >
-                        <Trash2 className="h-5 w-5" aria-hidden="true" />
-                      </button>
+                    </div>
 
-                      {/* ปุ่มคอมเมนต์ */}
+                    {/* แถบปุ่มการทำงานแนวตั้ง - ไอคอนเท่านั้น */}
+                    <div
+                      role="group"
+                      aria-label={`การทำงานของ ${h.full_name || "รายการนี้"}`}
+                      className={`action-rail ${
+                        handMode === "left" ? "border-r" : "border-l"
+                      }`}
+                    >
+                      {/* นำทาง */}
+                      {h.lat && h.lng && (
+                        <button
+                          type="button"
+                          onClick={() => openNavigation(h.lat!, h.lng!)}
+                          className="icon-btn icon-btn-teal"
+                          title="นำทางด้วย Google Maps"
+                          aria-label="นำทางด้วย Google Maps"
+                        >
+                          <Navigation className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      )}
+
+                      {/* ส่งงาน / แก้ไขข้อมูลการส่ง */}
+                      {h.delivery_status === "delivered" ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            rememberDialogTrigger(e.currentTarget);
+                            setHouseToDeliver(h);
+                            const note = h.delivery_note || "";
+                            if (note.includes("จ่ายรวมเงินสด")) {
+                              setDeliverNote("จ่ายรวมเงินสด");
+                            } else if (note.includes("เงินสด")) {
+                              setDeliverNote("จ่ายด้วยเงินสด");
+                            } else if (note.includes("โอนเข้าบัญชีฉัน")) {
+                              setDeliverNote("โอนเข้าบัญชีฉัน");
+                            } else if (
+                              note.includes("โอนเข้าบริษัท") ||
+                              note === "โอนเข้าบริษัท"
+                            ) {
+                              setDeliverNote("โอนเข้าบริษัท");
+                            } else if (note === "ไม่มียอด") {
+                              setDeliverNote("ไม่มียอด");
+                            } else {
+                              setDeliverNote("อื่นๆ");
+                              setDeliverNoteCustom(note.trim());
+                            }
+                            setShowDeliverModal(true);
+                          }}
+                          className="icon-btn icon-btn-warn"
+                          title="แก้ไขข้อมูลการส่ง"
+                          aria-label="แก้ไขข้อมูลการส่งของบ้านหลังนี้"
+                        >
+                          <Edit3 className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            rememberDialogTrigger(e.currentTarget);
+                            setHouseToDeliver(h);
+                            setShowDeliverModal(true);
+                          }}
+                          className="icon-btn icon-btn-primary"
+                          title={
+                            h.delivery_status === "reported"
+                              ? "เปลี่ยนเป็นส่งแล้ว"
+                              : "ส่งงาน"
+                          }
+                          aria-label={
+                            h.delivery_status === "reported"
+                              ? "เปลี่ยนสถานะเป็นส่งแล้ว"
+                              : "บันทึกว่าส่งงานแล้ว"
+                          }
+                        >
+                          <CheckCircle className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      )}
+
+                      {/* คอมเมนต์ / ฝากข้อความ */}
                       <button
                         type="button"
-                        onClick={() => openCommentModal(h)}
-                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                          rememberDialogTrigger(e.currentTarget);
+                          openCommentModal(h);
+                        }}
                         className="icon-btn"
                         title="บันทึกคอมเมนต์ / ฝากข้อความ"
                         aria-label="บันทึกคอมเมนต์ / ฝากข้อความ"
@@ -2273,16 +2352,16 @@ export default function NavigationPage() {
                         <MessageSquare className="h-5 w-5" aria-hidden="true" />
                       </button>
 
-                      {/* ปุ่มรายงาน */}
+                      {/* รายงานปัญหา / แก้ไขหมายเหตุรายงาน */}
                       {(!h.delivery_status ||
                         h.delivery_status === "pending" ||
                         h.delivery_status === "reported") && (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            rememberDialogTrigger(e.currentTarget);
                             setHouseToReport(h);
-                            const existingReason =
-                              h.report_reason || "โทรไม่รับ";
+                            const existingReason = h.report_reason || "โทรไม่รับ";
                             if (
                               ["โทรไม่รับ", "เลื่อน", "ตีกลับ"].includes(
                                 existingReason,
@@ -2296,7 +2375,6 @@ export default function NavigationPage() {
                             }
                             setShowReportModal(true);
                           }}
-                          onMouseDown={(e) => e.preventDefault()}
                           className="icon-btn icon-btn-warn"
                           title={
                             h.delivery_status === "reported"
@@ -2309,53 +2387,31 @@ export default function NavigationPage() {
                               : "รายงานปัญหา"
                           }
                         >
-                          <AlertCircle className="w-5 h-5" />
+                          <AlertCircle className="h-5 w-5" aria-hidden="true" />
                         </button>
                       )}
 
-                      {/* ปุ่มแก้ไขบ้าน */}
+                      {/* แก้ไขข้อมูลบ้าน */}
                       <button
                         type="button"
-                        onClick={() => openEditModal(h)}
-                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => {
+                          rememberDialogTrigger(e.currentTarget);
+                          openEditModal(h);
+                        }}
                         className="icon-btn"
-                        title="แก้ไข"
+                        title="แก้ไขข้อมูลบ้าน"
                         aria-label="แก้ไขข้อมูลบ้าน"
                       >
                         <Edit3 className="h-5 w-5" aria-hidden="true" />
                       </button>
 
-                      {/* ปุ่มส่งงาน */}
-                      {(!h.delivery_status ||
-                        h.delivery_status === "pending" ||
-                        h.delivery_status === "reported") && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHouseToDeliver(h);
-                            setShowDeliverModal(true);
-                          }}
-                          onMouseDown={(e) => e.preventDefault()}
-                          className="btn btn-primary flex-1"
-                          title={
-                            h.delivery_status === "reported"
-                              ? "เปลี่ยนเป็นส่งแล้ว"
-                              : "ส่งงาน"
-                          }
-                        >
-                          <CheckCircle className="h-4 w-4" aria-hidden="true" />
-                          {h.delivery_status === "reported"
-                            ? "เปลี่ยนเป็นส่งแล้ว"
-                            : "ส่งงาน"}
-                        </button>
-                      )}
-
-                      {/* ปุ่มปิดยอด QR */}
+                      {/* ปิดยอด QR */}
                       {viewMode === "qr_pending" &&
                         h.delivery_status === "delivered" && (
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              rememberDialogTrigger(e.currentTarget);
                               setHouseToDeliver(h);
                               setDeliverNote("โอนเข้าบริษัท");
                               setLocalCash("");
@@ -2363,16 +2419,28 @@ export default function NavigationPage() {
                               setDeliverNoteCustom("");
                               setShowDeliverModal(true);
                             }}
-                            onMouseDown={(e) => e.preventDefault()}
-                            className="btn btn-secondary btn-sm"
+                            className="icon-btn"
                             title="ปิดยอด QR แล้ว"
+                            aria-label="ปิดยอด QR แล้ว"
                           >
-                            <CheckCircle className="h-4 w-4" aria-hidden="true" />
-                            <span className="text-sm font-medium">
-                              ปิดยอด QR
-                            </span>
+                            <QrCode className="h-5 w-5" aria-hidden="true" />
                           </button>
                         )}
+
+                      <div className="mt-auto w-full pt-2" aria-hidden="true">
+                        <span className="mx-auto block h-px w-6 bg-gray-200" />
+                      </div>
+
+                      {/* ลบออกจากการนำทาง (แยกไว้ท้ายสุด กันกดพลาด) */}
+                      <button
+                        type="button"
+                        onClick={() => removeFromNavigation(h.nav_id)}
+                        className="icon-btn icon-btn-danger"
+                        title="ลบออกจากการนำทาง"
+                        aria-label="ลบออกจากการนำทาง"
+                      >
+                        <Trash2 className="h-5 w-5" aria-hidden="true" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -2430,7 +2498,6 @@ export default function NavigationPage() {
                   }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-lg font-medium"
                   placeholder={`1 - ${totalPages}`}
-                  autoFocus
                 />
                 <div className="flex gap-3 mt-5">
                   <button
@@ -2653,7 +2720,7 @@ export default function NavigationPage() {
                 className="input"
               />
             </div>
-            <div className="flex gap-3 mt-6">
+            <div className="modal-foot flex gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -2683,7 +2750,7 @@ export default function NavigationPage() {
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
         <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
+          <div className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
             <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
             <div className="space-y-4">
               <input
@@ -2816,10 +2883,11 @@ export default function NavigationPage() {
                   </button>
                 </div>
               )}
-              <div className="flex gap-3 pt-4">
+              <div className="modal-foot flex gap-3">
                 <button
+                  type="button"
                   onClick={closeModal}
-                  className="flex-1 py-2.5 bg-gray-200 rounded-xl text-sm font-medium hover:bg-gray-300"
+                  className="btn btn-secondary flex-1 py-2.5"
                 >
                   ยกเลิก
                 </button>
@@ -2838,9 +2906,9 @@ export default function NavigationPage() {
       {/* Modal ตั้งจุดเริ่มต้นทาง */}
       {showStartModal && (
         <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold text-purple-600">
+          <div className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <h2 className="text-lg font-bold text-gray-900">
                 ตั้งจุดเริ่มต้นทาง
               </h2>
               <button onClick={() => setShowStartModal(false)}>
@@ -2980,10 +3048,8 @@ export default function NavigationPage() {
       {/* Modal ยืนยันส่งแล้ว */}
       {showDeliverModal && houseToDeliver && (
         <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-green-600 mb-4">
-              ยืนยันส่งแล้ว
-            </h2>
+          <div className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+            <h2 className="mb-4 text-lg font-bold text-teal-700">ยืนยันส่งแล้ว</h2>
 
             <div className="bg-gray-50 p-4 rounded-xl mb-4">
               <p className="font-bold">{houseToDeliver.full_name}</p>
@@ -3037,8 +3103,7 @@ export default function NavigationPage() {
                           setLocalCash(value);
                         }
                       }}
-                      className="flex-1 px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
-                      autoFocus
+                      className="input text-center text-lg font-bold"
                     />
                     <button
                       type="button"
@@ -3081,8 +3146,7 @@ export default function NavigationPage() {
                           setLocalTransfer(value);
                         }
                       }}
-                      className="flex-1 px-4 py-3 border-2 border-green-300 rounded-xl focus:border-green-500 outline-none text-center font-bold text-lg"
-                      autoFocus
+                      className="input text-center text-lg font-bold"
                     />
                     <button
                       type="button"
@@ -3110,8 +3174,7 @@ export default function NavigationPage() {
                   value={deliverNoteCustom}
                   onChange={(e) => setDeliverNoteCustom(e.target.value)}
                   rows={3}
-                  autoFocus
-                  className="w-full mt-4 px-4 py-3 border-2 border-green-200 rounded-xl focus:border-green-500 outline-none resize-none"
+                  className="input mt-4 resize-none"
                 />
               )}
 
@@ -3148,7 +3211,7 @@ export default function NavigationPage() {
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="modal-foot flex gap-3">
               <button
                 onClick={() => {
                   setShowDeliverModal(false);
@@ -3192,8 +3255,8 @@ export default function NavigationPage() {
       {/* Modal บันทึกคอมเมนต์ */}
       {showCommentModal && houseToComment && (
         <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold text-purple-600 mb-4">
+          <div className="modal-sheet w-full max-w-sm p-5 sm:max-h-[90vh] sm:rounded-2xl sm:p-6">
+            <h2 className="mb-4 text-lg font-bold text-gray-900">
               บันทึกคอมเมนต์ / ฝากข้อความ
             </h2>
 
@@ -3212,8 +3275,7 @@ export default function NavigationPage() {
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               rows={5}
-              autoFocus
-              className="w-full px-4 py-3 border-2 border-purple-200 rounded-xl focus:border-purple-500 outline-none resize-none text-sm"
+              className="input resize-none"
             />
 
             {/* Preview */}
@@ -3227,7 +3289,7 @@ export default function NavigationPage() {
             </div>
 
             {/* ปุ่ม */}
-            <div className="flex gap-3 mt-6">
+            <div className="modal-foot flex gap-3">
               <button
                 onClick={() => {
                   setShowCommentModal(false);
@@ -3259,7 +3321,7 @@ export default function NavigationPage() {
       {/* Modal เครื่องคิดเลข - เวอร์ชันปรับปรุงสำหรับใช้งานตอนขับรถ (ไม่มีปุ่มใช้ยอดนี้) */}
       {showCalculatorModal && (
         <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md sm:max-w-lg overflow-hidden">
+          <div className="modal-sheet w-full max-w-md overflow-hidden p-0 sm:max-w-lg">
             {/* Header */}
             <div className="bg-teal-700 text-white p-4 text-center">
               <h3 className="text-lg font-bold">เครื่องคิดเลขเงินทอน</h3>
@@ -3405,8 +3467,8 @@ export default function NavigationPage() {
       {/* Modal รายงานปัญหา */}
       {showReportModal && houseToReport && (
         <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
-            <h2 className="text-xl font-bold text-orange-600 mb-4">
+          <div className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6">
+            <h2 className="mb-4 text-lg font-bold text-gray-900">
               รายงานปัญหา / ฝากไว้ก่อน
             </h2>
             {/* ข้อมูลบ้าน */}
@@ -3444,8 +3506,7 @@ export default function NavigationPage() {
                   value={reportReasonCustom || ""}
                   onChange={(e) => setReportReasonCustom(e.target.value)}
                   rows={3}
-                  autoFocus
-                  className="w-full mt-4 px-4 py-3 border-2 border-orange-200 rounded-xl focus:border-orange-500 outline-none resize-none transition-all"
+                  className="input mt-4 resize-none"
                 />
               )}
               {/* Preview เหตุผลที่เลือก */}
@@ -3461,7 +3522,7 @@ export default function NavigationPage() {
               </div>
             </div>
             {/* ปุ่มยืนยัน / ยกเลิก */}
-            <div className="flex gap-3">
+            <div className="modal-foot flex gap-3">
               <button
                 onClick={() => {
                   setShowReportModal(false);

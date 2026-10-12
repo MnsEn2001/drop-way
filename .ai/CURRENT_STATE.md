@@ -9,6 +9,33 @@ This is a factual snapshot of the repository and the documentation effort that c
 ## Latest verified GitHub `main` SHA
 - Before the 2026-10-12 redesign session: `f3ab31d18c5b16ffb93e0af500046fcc18fa9758`
 - Redesign commit pushed and verified: `89cd5011428fb4a95e22662ed2f295569e2d98a8`
+- Before the 2026-10-12 one-handed navigation session:
+  `bf4ef5c6c36e93127869f84bcf0e151ae1409503`
+- One-handed navigation commit: SHA + push/deployment verification are recorded in
+  the "Commit status" section below and in `.ai/CHANGELOG.md`
+
+## Latest verified full product audit
+- `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md` (full-system audit)
+- `.ai/reports/2026-10-12-dropway-one-handed-navigation-rail.md` (rail, hand mode,
+  keyboard/dialog fixes)
+- Result: PASS for `git diff --check`, `npx tsc --noEmit`, `npm run lint`,
+  `npm run build`, and HTTP 200 on `/`, `/login`, `/register`, `/houses`,
+  `/navigation` in the managed preview
+- BLOCKED: Supabase RLS/ownership verification, CI/deployment status, and all
+  interaction checks that need a signed-in browser session
+- NOT VERIFIED: real-device mobile behaviour (keyboard, safe areas, landscape)
+  and end-to-end Supabase workflows
+
+## Navigation UI (2026-10-12)
+- Card actions live in a vertical icon-only rail (`src/app/globals.css` →
+  `.action-rail`), 44px targets, `aria-label` on every button.
+- Hand mode: header switch "มือขวา" / "มือซ้าย", default right, persisted as
+  `localStorage["navigationActionRailSide"]` with try/catch.
+- No `autoFocus` remains in `src/`; dialogs focus the trigger on close instead.
+- Dialog sizing: `.modal-sheet` (`min(85dvh, --app-vvh * 0.85)`) + sticky
+  `.modal-foot`; `--app-vvh` comes from `src/lib/viewport.ts`.
+- Business logic, Supabase calls, statuses, money parsing and distance math were
+  deliberately left untouched.
 
 ## Last verified full product audit
 - `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md`
@@ -127,4 +154,6 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Production deployment observed on GitHub for the redesign commit: created
   2026-10-12T00:51:36Z with `state=success` ("Deployment has completed").
   Runtime behaviour of that deployed build was not exercised in a browser here.
+- The 2026-10-12 one-handed navigation work is pushed to `main`; the pushed SHA
+  and its deployment state are recorded in `.ai/CHANGELOG.md`.
 - `package-lock.json` is still untracked and out of scope.

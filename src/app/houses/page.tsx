@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import Papa from "papaparse";
 import { toast } from "react-hot-toast";
+import { useVisualViewportHeightVar } from "@/lib/viewport";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -34,6 +35,9 @@ export default function HousesPage() {
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [houseToDelete, setHouseToDelete] = useState<House | null>(null);
   const [isDeletingHouse, setIsDeletingHouse] = useState(false);
+
+  // ให้ Dialog คำนวณความสูงจากพื้นที่ที่มองเห็นจริง (คีย์บอร์ดเปิดอยู่ก็ไม่ล้น)
+  useVisualViewportHeightVar();
   const [totalInDB, setTotalInDB] = useState<number | null>(null);
   const [addingIds, setAddingIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -977,7 +981,7 @@ export default function HousesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 pb-32 sm:py-8 md:pb-8">
+    <div className="page-shell mx-auto max-w-7xl px-4 py-6 pb-32 sm:py-8 md:pb-8">
       {/* หัวข้อ + ปุ่ม + จำนวนบ้าน */}
       <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -1334,7 +1338,6 @@ export default function HousesPage() {
                   }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-lg font-medium"
                   placeholder={`1 - ${totalPages}`}
-                  autoFocus
                 />
                 <div className="flex gap-3 mt-5">
                   <button
@@ -1482,7 +1485,7 @@ export default function HousesPage() {
               />
             </div>
 
-            <div className="flex gap-3 mt-6">
+            <div className="modal-foot flex gap-3">
               <button
                 type="button"
                 onClick={() => {
@@ -1687,7 +1690,7 @@ export default function HousesPage() {
                   </button>
                 </div>
               )}
-              <div className="flex gap-3 pt-4">
+              <div className="modal-foot flex gap-3">
                 <button
                   type="button"
                   onClick={closeModal}

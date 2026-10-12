@@ -281,6 +281,17 @@ body {
     border-color: #fbc4c4;
   }
 
+  .icon-btn-warn {
+    color: var(--warning);
+    border-color: #fde68a;
+    background: var(--warning-subtle);
+  }
+
+  .icon-btn-warn:hover {
+    background: #fde68a;
+    border-color: #f59e0b;
+  }
+
   .input {
     display: block;
     width: 100%;
@@ -350,10 +361,45 @@ body {
     background: var(--background);
     border-radius: 1rem 1rem 0 0;
     box-shadow: var(--shadow-md);
-    max-height: 85vh;
+    /* 80vh is the fallback for browsers without dvh or the visual-viewport
+       variable; the second declaration keeps the sheet inside the area that
+       is actually visible while the on-screen keyboard is open. */
+    max-height: 80vh;
+    max-height: min(85dvh, calc(var(--app-vvh, 100dvh) * 0.85));
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Sticky footer inside a scrollable sheet: the save/cancel buttons stay
+     reachable without scrolling through the whole form. */
+  .modal-foot {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.5rem;
+    background: var(--background);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Vertical, icon-only action rail on the side of a navigation card. */
+  .action-rail {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.625rem;
+    width: 60px;
+    padding: 0.75rem 0.5rem;
+    background: var(--surface-muted);
+  }
+
+  .page-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
   }
 
   .badge {

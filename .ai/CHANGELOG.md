@@ -89,5 +89,30 @@ This document records meaningful project and documentation changes for the DropW
   the GitHub API. Production deployment for this SHA completed successfully
   (GitHub deployment created 2026-10-12T00:51:36Z, `state=success`).
 
+## 2026-10-12 (one-handed navigation rail, hand mode, keyboard fix)
+- Navigation page rebuilt for one-handed use (report:
+  `.ai/reports/2026-10-12-dropway-one-handed-navigation-rail.md`):
+  - card actions moved out of the bottom row into a vertical, icon-only
+    `.action-rail` on the side (44px targets, `aria-label` + `title` on every
+    button, teal/neutral/amber/red by meaning, delete separated at the rail end)
+  - left/right hand switch in the page header, default right hand, persisted in
+    `localStorage["navigationActionRailSide"]` with the project's guarded pattern
+  - every `autoFocus` removed (6 in navigation, 1 in houses) and focus now
+    returns to the button that opened a dialog, so dialogs never raise the
+    on-screen keyboard by themselves
+  - dialog panels use `.modal-sheet` with
+    `max-height: min(85dvh, var(--app-vvh) * 0.85)` (80vh fallback) and sticky
+    `.modal-foot` rows so save/cancel stay reachable
+  - new `src/lib/viewport.ts` publishes the visible viewport height with proper
+    listener cleanup; `.page-shell` gives `100dvh` + fallback
+  - no changes to Supabase queries, status values, money parsing, distance math
+    or auth; the only new persisted key is the hand-mode preference
+- Verified: `git diff --check`, `npx tsc --noEmit`, `npm run lint`, `npm run build`
+  (9/9 pages), `/navigation` + `/houses` + `/login` + `/register` HTTP 200 in the
+  managed preview, `.action-rail`/`.modal-foot` present in the compiled CSS and
+  the rail markup present in the built client chunk.
+- Interaction checks on a real device/browser remain NOT VERIFIED (no browser or
+  session in this environment).
+
 ## Notes on scope
 - Do not add entries here for routine checkpoints unless the change is meaningful to an agent resuming work later.

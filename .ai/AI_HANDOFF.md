@@ -95,6 +95,22 @@ Notes learned in this environment:
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
+## Current open items (as of 2026-10-12)
+- **`middleware.ts` is never executed** (it sits outside `src/` and checks legacy
+  Supabase cookie names). Verified finding, documented in
+  `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md`. Treat as its own
+  security task — do not bundle it into UI work.
+- **Supabase RLS / ownership is still unverified** from this environment.
+- **No automated tests exist.** Navigation-rail interaction checks (hand-mode
+  persistence, keyboard behaviour on real phones, landscape/short screens) still
+  need a signed-in browser or device run; they are listed as NOT VERIFIED in
+  `.ai/reports/2026-10-12-dropway-one-handed-navigation-rail.md`.
+- `package-lock.json` stays untracked — do not stage it.
+- Navigation UI rules now in force: actions live in the vertical `.action-rail`
+  (icon-only, 44px, `aria-label` required), hand mode is stored in
+  `localStorage["navigationActionRailSide"]`, and no `autoFocus` is allowed on
+  dialog inputs.
+
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.
 - Do not invent completed work.
