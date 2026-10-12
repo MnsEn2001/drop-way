@@ -635,6 +635,18 @@ export default function NavigationPage() {
     );
   };
 
+  // Unsaved-changes confirmation for dialogs that should not silently lose
+  // typed input when the user dismisses the sheet backdrop.
+  const [showUnsavedChangesConfirmModal, setShowUnsavedChangesConfirmModal] =
+    useState(false);
+
+  // Restricted-changes confirmation for sheets whose dirty state is handled by
+  // the same confirmation pattern across the navigation page.
+  const [showRestrictedConfirmModal, setShowRestrictedConfirmModal] =
+    useState(false);
+  const [restrictedConfirmPayload, setRestrictedConfirmPayload] =
+    useState<{ label: string; onConfirm: () => void } | null>(null);
+
   // เช็ก session
   useEffect(() => {
     const checkSession = async () => {
@@ -2602,12 +2614,10 @@ export default function NavigationPage() {
                 รายการ
               </p>
             </div>
-          )}
-          {/* Input ไปหน้าตรง */}
+          )}      {/* Input ไปหน้าตรง */}
           {showPageInput && (
             <div
-              className="modal-overlay flex items-center justify-center p-4"
-          onClick={() => {
+              className="modal-overlay flex items-center justify-center p-4"          onClick={() => {
             if (!isPageInputDirty()) {
               setShowPageInput(false);
               setPageInputValue("");
@@ -2615,7 +2625,7 @@ export default function NavigationPage() {
               setShowUnsavedChangesConfirmModal(true);
             }
           }}
-            >
+              >
               <div
                 role="dialog"
                 aria-modal="true"
@@ -2642,8 +2652,9 @@ export default function NavigationPage() {
                       if (!isPageInputDirty()) {
                         setShowPageInput(false);
                         setPageInputValue("");
+                        setShowUnsavedChangesConfirmModal(false);
                       } else {
-                        setShowRestrictedConfirmModal(true);
+                        setShowUnsavedChangesConfirmModal(true);
                       }
                     } else if (e.key === "Enter") {
                       e.preventDefault();
@@ -2658,8 +2669,16 @@ export default function NavigationPage() {
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
-                      setShowPageInput(false);
-                      setPageInputValue("");
+                      if (!isPageInputDirty()) {
+                        setShowPageInput(false);
+                        setPageInputValue("");
+                      } else if (showUnsavedChangesConfirmModal) {
+                        setShowUnsavedChangesConfirmModal(false);
+                        return;
+                      } else {
+                        setShowPageInput(false);
+                        setPageInputValue("");
+                      }
                     }}
                     className="btn btn-secondary flex-1"
                   >
@@ -2677,6 +2696,106 @@ export default function NavigationPage() {
             </div>
           )}
         </>
+      )}
+      {/* Modal ยืนยัน restricted / unsaved changes */}
+      {showRestrictedConfirmModal && restrictedConfirmPayload && (
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => {
+            setShowRestrictedConfirmModal(false);
+            setRestrictedConfirmPayload(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restricted-changes-title"
+            className="modal-sheet w-full max-w-xs p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="restricted-changes-title"
+              className="mb-4 text-lg font-bold text-gray-900"
+            >
+              มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
+            </h2>
+            <p className="text-sm text-gray-600">
+              ถ้าปิดตอนนี้ ข้อมูลที่กรอกไว้จะหาย
+            </p>
+            <div className="modal-foot flex gap-3">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setShowRestrictedConfirmModal(false);
+                  setRestrictedConfirmPayload(null);
+                }}
+                className="btn btn-secondary flex-1"
+              >
+                ไม่ปิด
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setShowRestrictedConfirmModal(false);
+                  setRestrictedConfirmPayload(null);
+                  restrictedConfirmPayload.onConfirm();
+                }}
+                className="btn btn-primary flex-1"
+              >
+                ปิดทิ้ง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal ยืนยันการยกเลิกจากการแก้ไขที่ unsaved */}
+      {showUnsavedChangesConfirmModal && (
+        <div
+          className="modal-overlay flex items-center justify-center p-4"
+          onClick={() => setShowUnsavedChangesConfirmModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="unsaved-changes-title"
+            className="modal-sheet w-full max-w-xs p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="unsaved-changes-title"
+              className="mb-4 text-lg font-bold text-gray-900"
+            >
+              มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
+            </h2>
+            <p className="text-sm text-gray-600">
+              ถ้าปิดตอนนี้ ข้อมูลที่กรอกไว้จะหาย
+            </p>
+            <div className="modal-foot flex gap-3">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setShowUnsavedChangesConfirmModal(false)}
+                className="btn btn-secondary flex-1"
+              >
+                ไม่ปิด
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setShowUnsavedChangesConfirmModal(false);
+                  setShowPageInput(false);
+                  setPageInputValue("");
+                }}
+                className="btn btn-primary flex-1"
+              >
+                ปิดทิ้ง
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {/* FAB Menu ทั้งหมด - เมื่อปิดจะหายไปสนิท ไม่บังอะไรเลย */}
       {isFabOpen ? (
@@ -2760,6 +2879,17 @@ export default function NavigationPage() {
             if (!isFilterDirty()) {
               setShowFilterModal(false);
             } else {
+              setRestrictedConfirmPayload({
+                label: "ตัวกรองบ้าน",
+                onConfirm: () => {
+                  setShowFilterModal(false);
+                  clearFilters();
+                  setSearchInName(true);
+                  setSearchInAddress(true);
+                  setSearchInPhone(false);
+                  setSearchInNote(true);
+                },
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
@@ -2782,6 +2912,10 @@ export default function NavigationPage() {
                   if (!isFilterDirty()) {
                     setShowFilterModal(false);
                   } else {
+                    setRestrictedConfirmPayload({
+                      label: "ตัวกรองบ้าน",
+                      onConfirm: () => setShowFilterModal(false),
+                    });
                     setShowRestrictedConfirmModal(true);
                   }
                 }}
@@ -2900,6 +3034,17 @@ export default function NavigationPage() {
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   if (isFilterDirty()) {
+                    setRestrictedConfirmPayload({
+                      label: "ตัวกรองบ้าน",
+                      onConfirm: () => {
+                        clearFilters();
+                        setSearchInName(true);
+                        setSearchInAddress(true);
+                        setSearchInPhone(false);
+                        setSearchInNote(true);
+                        setShowFilterModal(false);
+                      },
+                    });
                     setShowRestrictedConfirmModal(true);
                   } else {
                     clearFilters();
@@ -2948,6 +3093,10 @@ export default function NavigationPage() {
             ) {
               closeModal();
             } else {
+              setRestrictedConfirmPayload({
+                label: "แก้ไขบ้าน",
+                onConfirm: () => closeModal(),
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
@@ -2974,6 +3123,10 @@ export default function NavigationPage() {
                 ) {
                   closeModal();
                 } else {
+                  setRestrictedConfirmPayload({
+                    label: "แก้ไขบ้าน",
+                    onConfirm: () => closeModal(),
+                  });
                   setShowRestrictedConfirmModal(true);
                 }
               }}
@@ -3143,6 +3296,10 @@ export default function NavigationPage() {
             if (!isStartPositionDirty()) {
               setShowStartModal(false);
             } else {
+              setRestrictedConfirmPayload({
+                label: "ตั้งจุดเริ่มต้นทาง",
+                onConfirm: () => setShowStartModal(false),
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
@@ -3165,6 +3322,10 @@ export default function NavigationPage() {
                   if (!isStartPositionDirty()) {
                     setShowStartModal(false);
                   } else {
+                    setRestrictedConfirmPayload({
+                      label: "ตั้งจุดเริ่มต้นทาง",
+                      onConfirm: () => setShowStartModal(false),
+                    });
                     setShowRestrictedConfirmModal(true);
                   }
                 }}
@@ -3317,6 +3478,14 @@ export default function NavigationPage() {
               setDeliverNote("โอนเข้าบริษัท");
               setDeliverNoteCustom("");
             } else {
+              setRestrictedConfirmPayload({
+                label: "ยืนยันส่งแล้ว",
+                onConfirm: () => {
+                  setShowDeliverModal(false);
+                  setDeliverNote("โอนเข้าบริษัท");
+                  setDeliverNoteCustom("");
+                },
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
@@ -3545,6 +3714,13 @@ export default function NavigationPage() {
               setShowCommentModal(false);
               setCommentText("");
             } else {
+              setRestrictedConfirmPayload({
+                label: "บันทึกคอมเมนต์ / ฝากข้อความ",
+                onConfirm: () => {
+                  setShowCommentModal(false);
+                  setCommentText("");
+                },
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
@@ -3597,6 +3773,13 @@ export default function NavigationPage() {
                     setShowCommentModal(false);
                     setCommentText("");
                   } else {
+                    setRestrictedConfirmPayload({
+                      label: "บันทึกคอมเมนต์ / ฝากข้อความ",
+                      onConfirm: () => {
+                        setShowCommentModal(false);
+                        setCommentText("");
+                      },
+                    });
                     setShowRestrictedConfirmModal(true);
                   }
                 }}
@@ -3635,6 +3818,14 @@ export default function NavigationPage() {
               setCalculatorInput("");
               setCalculatorResult(null);
             } else {
+              setRestrictedConfirmPayload({
+                label: "เครื่องคิดเลขเงินทอน",
+                onConfirm: () => {
+                  setShowCalculatorModal(false);
+                  setCalculatorInput("");
+                  setCalculatorResult(null);
+                },
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
@@ -3786,6 +3977,14 @@ export default function NavigationPage() {
                     setCalculatorInput("");
                     setCalculatorResult(null);
                   } else {
+                    setRestrictedConfirmPayload({
+                      label: "เครื่องคิดเลขเงินทอน",
+                      onConfirm: () => {
+                        setShowCalculatorModal(false);
+                        setCalculatorInput("");
+                        setCalculatorResult(null);
+                      },
+                    });
                     setShowRestrictedConfirmModal(true);
                   }
                 }}
@@ -3809,6 +4008,15 @@ export default function NavigationPage() {
               setReportReason("โทรไม่รับ");
               setReportReasonCustom("");
             } else {
+              setRestrictedConfirmPayload({
+                label: "รายงานปัญหา / ฝากไว้ก่อน",
+                onConfirm: () => {
+                  setShowReportModal(false);
+                  setHouseToReport(null);
+                  setReportReason("โทรไม่รับ");
+                  setReportReasonCustom("");
+                },
+              });
               setShowRestrictedConfirmModal(true);
             }
           }}
