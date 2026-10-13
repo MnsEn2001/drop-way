@@ -1021,22 +1021,6 @@ export default function HousesPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="input pl-10 pr-28"
           />
-          {searchTerm && (
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.preventDefault();
-                clearSearch();
-                searchInputRef.current?.focus();
-              }}
-              aria-label="ล้างคำค้นหา"
-              className="zoom-pinch-ok absolute right-14 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            >
-              <XIcon className="h-5 w-5" aria-hidden="true" />
-            </button>
-          )}
-
           <button
             type="button"
             onClick={() => setShowFilterModal(true)}
