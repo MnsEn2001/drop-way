@@ -182,9 +182,23 @@ PASS  B.6 รายการที่ไม่ระบุอำเภอ ไม
 ## Commit และการตรวจสอบ GitHub หลัง push
 | รายการ | ค่า |
 | --- | --- |
+| `origin/main` ก่อนเริ่มงาน | `c8f92b9a2337b75b4799507009224df57bc3b8e5` |
 | commit (code) | `cd3bcbb968d4f0cf05671efbdfde5f97882d1512` |
-| commit (docs) | _ดูหัวข้อถัดไป / รายงานในแชท_ |
-| `origin/main` หลัง push | _ยืนยันด้วย `git ls-remote --heads origin main`_ |
+| commit (docs) | `cddc478d4d526c285edceb295dbdf3eeb8bda5bf` |
+| `origin/main` หลัง push | `cddc478d4d526c285edceb295dbdf3eeb8bda5bf` |
+
+คำสั่งและผลจริง:
+```
+git push origin HEAD:main
+#  c8f92b9..cddc478  HEAD -> main
+
+git ls-remote --heads origin main
+#  cddc478d4d526c285edceb295dbdf3eeb8bda5bf	refs/heads/main
+
+git rev-parse HEAD
+#  cddc478d4d526c285edceb295dbdf3eeb8bda5bf   → ตรงกัน
+```
+ไม่ได้ใช้ force push และไม่ได้ reset/rewrite history แม้แต่ครั้งเดียว
 
 ## ปัญหาที่ยังเหลือ / ยังตรวจสอบไม่ได้
 1. **BLOCKED — ข้อมูลอำเภอในฐานข้อมูลจริง**: โค้ดเดิมก็ใช้ `address.includes("อ." + district)`
