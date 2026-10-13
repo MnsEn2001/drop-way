@@ -1001,16 +1001,18 @@ export default function HousesPage() {
         </div>
       </div>
 
-      {/* ช่องค้นหา + ปุ่ม X + ปุ่มกรอง */}
+      {/* ช่องค้นหา + ปุ่ม X ล้างคำค้นหา + ปุ่มกรอง */}
       <div className="mb-4">
         <div className="relative max-w-md">
           <label htmlFor="house-search" className="sr-only">
             ค้นหาบ้าน
           </label>
+        
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
             aria-hidden="true"
           />
+        
           <input
             id="house-search"
             ref={searchInputRef}
@@ -1020,6 +1022,24 @@ export default function HousesPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="input pl-10 pr-28"
           />
+      
+          {/* ปุ่ม X ล้างคำค้นหา: อยู่ตำแหน่งเดิมก่อนปุ่ม Filter */}
+          {searchTerm && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setSearchTerm("");
+                searchInputRef.current?.focus();
+              }}
+              aria-label="ล้างคำค้นหา"
+              className="zoom-pinch-ok absolute right-14 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            >
+              <XIcon className="h-5 w-5" aria-hidden="true" />
+            </button>
+          )}
+        
+          {/* ปุ่ม Filter: อยู่ขวาสุดเหมือนเดิม */}
           <button
             type="button"
             onClick={() => setShowFilterModal(true)}
