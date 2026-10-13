@@ -2967,31 +2967,6 @@ export default function NavigationPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
-            <button
-              type="button"
-              aria-label="ปิดการแก้ไข"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                if (
-                  formData.full_name === editingHouse.full_name &&
-                  formData.phone === editingHouse.phone &&
-                  formData.address === editingHouse.address &&
-                  formData.note === editingHouse.note &&
-                  formData.lat === editingHouse.lat &&
-                  formData.lng === editingHouse.lng
-                ) {
-                  closeModal();
-                } else {
-                  setRestrictedConfirmPayload({
-                    label: "แก้ไขบ้าน",
-                    onConfirm: () => closeModal(),
-                  });
-                  setShowRestrictedConfirmModal(true);
-                }
-              }}
-              className="icon-btn h-10 w-10 shrink-0"
-            >
-            </button>
             <div className="space-y-4">
               <input
                 type="text"
