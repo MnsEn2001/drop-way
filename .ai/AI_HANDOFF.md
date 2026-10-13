@@ -95,7 +95,24 @@ Notes learned in this environment:
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
-## Current open items (as of 2026-10-12)
+## Current open items (as of 2026-10-13)
+- House search + district rules (2026-10-13, do not regress): in
+  `src/app/houses/page.tsx` the ranking is two separated bands — house numbers
+  (`rankHouseNumberMatch`, read from `address` only) sit above text scores
+  (`rankTextFields`, capped at `MAX_TEXT_SCORE`). Tiers are exact > subForm
+  (`5` → `5/1`) > prefix (`5` → `55`) > contains ordered by fewer digits first.
+  Filtering happens once (`matchesSearch`); `sortByRelevance` only sorts and is
+  explicitly stable. The filter effect must keep the full pipeline in order:
+  district/area → existing filters → text search → rank → paginate. Every
+  filter state in the dependency array must actually be used in the effect
+  body — a previous rewrite silently dropped them.
+- District filtering is strict (`extractDistrict` reads `อ.<amphoe>` /
+  `อำเภอ<amphoe>` from the address and compares with `===`; rows with no amphoe
+  marker are never guessed into the selected district).
+- **UNVERIFIED data assumption**: real `houses.address` rows are assumed to
+  contain the amphoe marker. Confirm with a real query before trusting district
+  filtering on production data — rows without the marker disappear when an
+  amphoe is selected.
 - **`middleware.ts` is never executed** (it sits outside `src/` and checks legacy
   Supabase cookie names). Verified finding, documented in
   `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md`. Treat as its own

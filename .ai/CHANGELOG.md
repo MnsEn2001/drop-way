@@ -1,5 +1,41 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-13 — House Search Ranking + Strict District Filtering
+
+### หัวข้อ
+- ค้นหาเลขบ้านจัดอันดับตาม "ความตรงของเลขบ้าน" ก่อนคะแนนข้อความเสมอ
+- เลือกอำเภอแล้วเหลือเฉพาะบ้านของอำเภอนั้นจริง ๆ (strict)
+
+### Root cause
+- `rankHouse()` รวมคะแนนทุกฟิลด์ (ชื่อ/ที่อยู่/เบอร์/หมายเหตุ) เป็นก้อนเดียว
+  และเอา bonus ของเลขบ้านบวกเข้าไปในก้อนเดียวกัน → ข้อความแซงเลขบ้านได้
+- useEffect กรองข้อมูลมี `selectedDistrict` และตัวกรองอื่น ๆ อยู่ใน dependency
+  array แต่ **ไม่มีการใช้ใน body เลย** → ตัวกรองอำเภอ/พิกัด/หมู่/ตำบล/จังหวัด
+  ไม่มีผล (regression จากตอนเขียน ranking ทับใน `2a08bb8`)
+
+### เปลี่ยนอะไร
+- `src/app/houses/page.tsx`:
+  - เพิ่ม `extractDistrict()` อ่านเครื่องหมายอำเภอจริงจากที่อยู่
+    (`อ.<อำเภอ>` / `อำเภอ<อำเภอ>`), เทียบแบบตรงทั้งชื่อ, ที่อยู่ที่ไม่ระบุอำเภอ
+    จะไม่ถูกเดาเข้าอำเภอที่เลือก
+  - เพิ่ม `rankHouseNumberMatch()` แยกระดับเลขบ้าน: exact → subForm (5 → 5/1)
+    → prefix (5 → 55) → contains เรียงจำนวนหลักน้อยก่อน (15 ก่อน 105)
+    บนฐาน `HOUSE_NUMBER_BASE` ที่สูงกว่าคะแนนข้อความเสมอ
+  - เพิ่ม `rankTextFields()` (จำกัดเพดาน `MAX_TEXT_SCORE`) + `matchesSearch()`
+    (กรองครั้งเดียว) + `sortByRelevance()` (เรียงอย่างเดียว, stable ด้วย index)
+  - คืนตัวกรองทั้งหมดที่หลุดไป และจัดลำดับ pipeline:
+    อำเภอ/พื้นที่ → ตัวกรองเดิม → ค้นหาข้อความ → จัดอันดับ → แบ่งหน้า
+  - ลบ `rankHouseNumber()` / `rankResults()` เดิมที่รวมคะแนนและกรองซ้ำ
+- ไม่แตะ schema, dependency, env, query/session/RLS หรือไฟล์อื่น
+
+### สถานะ
+- commit: `cd3bcbb968d4f0cf05671efbdfde5f97882d1512`
+- ผ่าน `npx tsc -b --noEmit`, `npm run lint`, `npm run build`, `git diff --check`
+- harness ทดสอบฟังก์ชันจริง 18/18 PASS (ดูรายงาน)
+- BLOCKED: ตรวจรูปแบบอำเภอในฐานข้อมูลจริง, interaction บนเบราว์เซอร์จริง,
+  Supabase RLS
+- Report: `.ai/reports/2026-10-13-dropway-house-search-ranking-and-district-filter.md`
+
 ## 2026-10-12 — Modal เข้มงวด: backdrop/Escape ไม่ปิด + คีย์บอร์ดไม่ดัน modal
 
 ### หัวข้อ

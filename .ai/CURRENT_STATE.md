@@ -25,7 +25,13 @@ This is a factual snapshot of the repository and the documentation effort that c
 - 2026-10-12 modal keyboard stability (no backdrop/Escape dismissal, shared
   `useModalKeyboardBehavior`, position pinning, real body lock) pushed and
   verified: `90c1d1d08b793702890ec25bd16315d12858f6d0`
-- Latest verified GitHub `main`: `90c1d1d08b793702890ec25bd16315d12858f6d0`
+- 2026-10-13 search-options fix (pass `searchInName`/`searchInAddress`/
+  `searchInPhone`/`searchInNote` into the ranking call) pushed and verified:
+  `c8f92b9a2337b75b4799507009224df57bc3b8e5`
+- 2026-10-13 house search ranking + strict district filtering (code commit)
+  pushed and verified: `cd3bcbb968d4f0cf05671efbdfde5f97882d1512`
+- Latest verified GitHub `main`: `cd3bcbb968d4f0cf05671efbdfde5f97882d1512`
+  (docs commit for this session follows on top)
 
 ## Latest verified full product audit
 - `.ai/reports/2026-10-12-dropway-ui-ux-redesign-audit.md` (full-system audit)
@@ -119,6 +125,36 @@ This is a factual snapshot of the repository and the documentation effort that c
 - NOT VERIFIED: real-device Android Chrome keyboard behavior (this environment
   has no signed-in browser session or device); evidence is source-level plus
   compiled CSS, type check, lint, and build.
+
+## House search ranking + district filter (2026-10-13)
+- `src/app/houses/page.tsx` now scores in two separated bands. House numbers
+  dominate: `rankHouseNumberMatch()` returns `HOUSE_NUMBER_BASE` (1,000,000)
+  plus a tier — exact > subForm (`5` → `5/1`) > prefix (`5` → `55`) > contains
+  ordered by fewer digits first (`15` before `105`). Text scores from
+  `rankTextFields()` are capped at `MAX_TEXT_SCORE` (10,000) so a name/phone/
+  note/other-address match can never outrank a house-number match.
+- House numbers are read from `address` only (`extractHouseNumber`), so phone
+  digits are never treated as a house number; the house-number band is skipped
+  entirely when the user turns address search off.
+- Search is filtered once (`matchesSearch`), ranking only sorts
+  (`sortByRelevance`, explicit stable sort via original index). Turning any of
+  `searchInName` / `searchInAddress` / `searchInPhone` / `searchInNote` off
+  removes that field from both filtering and scoring.
+- District selection is now strict: `extractDistrict()` reads the real amphoe
+  marker out of the address (`อ.<amphoe>` or `อำเภอ<amphoe>`) and compares with
+  `===`. A row whose address names no amphoe is never guessed into the
+  selected district. "ทั้งหมด" disables district filtering.
+- The filter effect runs one ordered pipeline: district/area → every existing
+  filter (coordinates, house number, phone, village, subdistrict, district
+  text, province) → text search → rank → paginate. Ranking runs after
+  filtering and can never reintroduce rows from other districts.
+- IMPORTANT assumed data shape: addresses are expected to contain the amphoe
+  marker (`... ต.<subdistrict> อ.<amphoe> จ.<province>`) because the app's
+  address builder writes it and the previous filter also required `อ.`.
+  Whether real rows always carry it is NOT VERIFIED from this environment.
+- Report: `.ai/reports/2026-10-13-dropway-house-search-ranking-and-district-filter.md`
+- NOT VERIFIED: clicking the district dropdown in a real signed-in browser;
+  evidence is source-level plus an 18/18 logic harness, type check, lint, build.
 
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
