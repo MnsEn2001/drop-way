@@ -323,7 +323,6 @@ export default function HousesPage() {
     selectedDistrict,
   ]);
 
-  const clearSearch = () => setSearchTerm("");
   const clearFilters = () => {
     setHouseNumberFilter("");
     setPhoneFilter("");
