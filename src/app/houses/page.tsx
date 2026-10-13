@@ -1609,7 +1609,8 @@ export default function HousesPage() {
                 type="button"
                 onClick={detectLocation}
                 disabled={isDetecting}
-                className="btn btn-secondary btn-block"
+                //className="btn btn-secondary btn-block"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50"
               >
                 {isDetecting ? (
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
