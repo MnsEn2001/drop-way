@@ -2606,9 +2606,12 @@ export default function NavigationPage() {
           )}
         </>
       )}
-      {/* Modal ยืนยัน restricted / unsaved changes */}
+      {/* Modal ยืนยัน restricted / unsaved changes — TOPMOST LAYER */}
       {showRestrictedConfirmModal && restrictedConfirmPayload && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div
+          className="modal-overlay modal-overlay-top flex items-center justify-center p-4"
+          role="presentation"
+        >
           <div
             role="dialog"
             aria-modal="true"
@@ -2622,9 +2625,11 @@ export default function NavigationPage() {
             >
               มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
             </h2>
+        
             <p className="text-sm text-gray-600">
               ถ้าปิดตอนนี้ ข้อมูลที่กรอกไว้จะหาย
             </p>
+        
             <div className="modal-foot flex gap-3">
               <button
                 type="button"
@@ -2637,13 +2642,17 @@ export default function NavigationPage() {
               >
                 ไม่ปิด
               </button>
+        
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
+                  const onConfirm = restrictedConfirmPayload.onConfirm;
+        
                   setShowRestrictedConfirmModal(false);
                   setRestrictedConfirmPayload(null);
-                  restrictedConfirmPayload.onConfirm();
+        
+                  onConfirm();
                 }}
                 className="btn btn-primary flex-1"
               >
@@ -2653,9 +2662,12 @@ export default function NavigationPage() {
           </div>
         </div>
       )}
-      {/* Modal ยืนยันการยกเลิกจากการแก้ไขที่ unsaved */}
+      {/* Modal ยืนยันการยกเลิกจากการแก้ไขที่ unsaved — TOPMOST LAYER */}
       {showUnsavedChangesConfirmModal && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div
+          className="modal-overlay modal-overlay-top flex items-center justify-center p-4"
+          role="presentation"
+        >
           <div
             role="dialog"
             aria-modal="true"
@@ -2669,18 +2681,23 @@ export default function NavigationPage() {
             >
               มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก
             </h2>
+        
             <p className="text-sm text-gray-600">
               ถ้าปิดตอนนี้ ข้อมูลที่กรอกไว้จะหาย
             </p>
+        
             <div className="modal-foot flex gap-3">
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setShowUnsavedChangesConfirmModal(false)}
+                onClick={() => {
+                  setShowUnsavedChangesConfirmModal(false);
+                }}
                 className="btn btn-secondary flex-1"
               >
                 ไม่ปิด
               </button>
+        
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
@@ -2967,32 +2984,6 @@ export default function NavigationPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
-            <button
-              type="button"
-              aria-label="ปิดการแก้ไข"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                if (
-                  formData.full_name === editingHouse.full_name &&
-                  formData.phone === editingHouse.phone &&
-                  formData.address === editingHouse.address &&
-                  formData.note === editingHouse.note &&
-                  formData.lat === editingHouse.lat &&
-                  formData.lng === editingHouse.lng
-                ) {
-                  closeModal();
-                } else {
-                  setRestrictedConfirmPayload({
-                    label: "แก้ไขบ้าน",
-                    onConfirm: () => closeModal(),
-                  });
-                  setShowRestrictedConfirmModal(true);
-                }
-              }}
-              className="icon-btn h-10 w-10 shrink-0"
-            >
-              <X className="h-5 w-5" aria-hidden="true" />
-            </button>
             <div className="space-y-4">
               <input
                 type="text"

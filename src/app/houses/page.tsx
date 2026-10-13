@@ -455,7 +455,6 @@ export default function HousesPage() {
     selectedDistrict,
   ]);
 
-  const clearSearch = () => setSearchTerm("");
   const clearFilters = () => {
     setHouseNumberFilter("");
     setPhoneFilter("");
@@ -1134,32 +1133,35 @@ export default function HousesPage() {
         </div>
       </div>
 
-      {/* ช่องค้นหา + ปุ่ม X + ปุ่มกรอง */}
+      {/* ช่องค้นหา + ปุ่ม X ล้างคำค้นหา + ปุ่มกรอง */}
       <div className="mb-4">
         <div className="relative max-w-md">
           <label htmlFor="house-search" className="sr-only">
             ค้นหาบ้าน
           </label>
+        
           <Search
             className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400"
             aria-hidden="true"
           />
+        
           <input
             id="house-search"
             ref={searchInputRef}
-            type="search"
+            type="text"
             placeholder="ค้นหาด้วยชื่อหรือที่อยู่..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="input pl-10 pr-28"
           />
+      
+          {/* ปุ่ม X ล้างคำค้นหา: อยู่ตำแหน่งเดิมก่อนปุ่ม Filter */}
           {searchTerm && (
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
-              onClick={(e) => {
-                e.preventDefault();
-                clearSearch();
+              onClick={() => {
+                setSearchTerm("");
                 searchInputRef.current?.focus();
               }}
               aria-label="ล้างคำค้นหา"
@@ -1168,7 +1170,8 @@ export default function HousesPage() {
               <XIcon className="h-5 w-5" aria-hidden="true" />
             </button>
           )}
-
+        
+          {/* ปุ่ม Filter: อยู่ขวาสุดเหมือนเดิม */}
           <button
             type="button"
             onClick={() => setShowFilterModal(true)}
@@ -1650,9 +1653,6 @@ export default function HousesPage() {
             <h2 id="house-form-title" className="text-lg font-bold">
               {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
             </h2>
-            <p className="mt-1 text-xs text-gray-500">
-              กรอกข้อมูลเท่าที่มีได้ — ไม่จำเป็นต้องกรอกทุกช่อง
-            </p>
             <div className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
@@ -1744,7 +1744,8 @@ export default function HousesPage() {
                 type="button"
                 onClick={detectLocation}
                 disabled={isDetecting}
-                className="btn btn-secondary btn-block"
+                //className="btn btn-secondary btn-block"
+                className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50"
               >
                 {isDetecting ? (
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
