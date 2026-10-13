@@ -1518,9 +1518,6 @@ export default function HousesPage() {
             <h2 id="house-form-title" className="text-lg font-bold">
               {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
             </h2>
-            <p className="mt-1 text-xs text-gray-500">
-              กรอกข้อมูลเท่าที่มีได้ — ไม่จำเป็นต้องกรอกทุกช่อง
-            </p>
             <div className="mt-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
