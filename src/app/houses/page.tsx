@@ -1016,7 +1016,7 @@ export default function HousesPage() {
           <input
             id="house-search"
             ref={searchInputRef}
-            type="search"
+            type="text"
             placeholder="ค้นหาด้วยชื่อหรือที่อยู่..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
