@@ -2991,7 +2991,6 @@ export default function NavigationPage() {
               }}
               className="icon-btn h-10 w-10 shrink-0"
             >
-              <X className="h-5 w-5" aria-hidden="true" />
             </button>
             <div className="space-y-4">
               <input
