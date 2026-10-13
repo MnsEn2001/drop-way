@@ -40,161 +40,165 @@ function extractHouseNumber(address: string | null): string | null {
 }
 
 /**
- * คำนวณคะแนนความตรงของ houseNumber กับ searchTerm
- * priority:
- *   1. exact match        = 1000
- *   2. prefix match       = 900
- *   3. contains           = 800
- *      - ถ้า searchTerm อยู่ที่ตำแหน่งแรกของ houseNumber ให้ +50
- *      - ถ้า searchTerm เป็นตัวสุดท้ายของ houseNumber ให้ +30
+ * ฟิลด์ที่ "ช่องค้นหาหลัก" จะค้นหา (ผู้ใช้เปิด/ปิดได้จาก Filter)
  */
-function rankHouseNumber(
-  houseNumber: string,
-  searchTerm: string,
-): number {
-  if (houseNumber === searchTerm) return 1000;
-  if (houseNumber.startsWith(searchTerm)) return 900;
+type SearchOptions = {
+  searchInName: boolean;
+  searchInAddress: boolean;
+  searchInPhone: boolean;
+  searchInNote: boolean;
+};
 
-  const idx = houseNumber.indexOf(searchTerm);
-  if (idx === -1) return 0;
-
-  let score = 800;
-  if (idx === 0) score += 50;
-  const lastPart = houseNumber.split("/")[0];
-  if (lastPart.endsWith(searchTerm)) score += 30;
-  return score;
+/**
+ * ดึงชื่ออำเภอจาก "ที่อยู่จริง" ซึ่งแอปสร้างในรูปแบบ
+ * "... ต.<ตำบล> อ.<อำเภอ> จ.<จังหวัด>"
+ * รองรับ "อ.แม่สอด", "อ. แม่สอด", "อำเภอแม่สอด" และกรณีไม่มีช่องว่างหน้า "จ."
+ * คืนค่า null เมื่อที่อยู่ไม่มีข้อมูลอำเภอ → จะไม่ถูกจัดเข้าในอำเภอที่ผู้ใช้เลือก
+ * (ฐานข้อมูลไม่มีคอลัมน์อำเภอแยก ข้อมูลอำเภออยู่ใน address เท่านั้น)
+ */
+function extractDistrict(address: string | null): string | null {
+  if (!address) return null;
+  const match = address.match(/(?:อ\.|อำเภอ)\s*([^ \t\n]+)/);
+  if (!match) return null;
+  const name = match[1].replace(/(?:จ\.|จังหวัด).*$/, "").trim();
+  return name.length > 0 ? name : null;
 }
 
 /**
- * คำนวณ score รวมทุก field สำหรับ house หนึ่งหลัง
- * priority:
- *   1. exact match        = 1000
- *   2. prefix match       = 900
- *   3. word/token match   = 850
- *   4. contains           = 800
- *      - ถ้า searchTerm อยู่ที่ตำแหน่งแรกให้ +50
- *      - ถ้า searchTerm เป็นตัวสุดท้ายให้ +30
+ * คำค้นที่เป็นไปได้ว่าเป็น "เลขบ้าน" = ตัวเลขล้วน หรือตัวเลขที่มีเศษ เช่น "5", "12", "5/1"
+ * ใช้เทียบกับเลขบ้านที่ดึงจาก field address เท่านั้น จึงไม่ปนกับเบอร์โทรศัพท์
+ */
+function isHouseNumberSearch(term: string): boolean {
+  return /^\d+(?:\/\d+)?$/.test(term.trim());
+}
+
+// ฐานคะแนนของ "เลขบ้าน" ต้องอยู่เหนือคะแนนข้อความเสมอ
+const HOUSE_NUMBER_BASE = 1_000_000;
+// ช่องว่างระหว่างระดับ (มากกว่าเพดานคะแนนข้อความ) ทำให้แต่ละระดับไม่ทับกัน
+const HOUSE_NUMBER_TIER = {
+  exact: 500_000,
+  subForm: 400_000,
+  prefix: 300_000,
+  contains: 200_000,
+};
+const MAX_TEXT_SCORE = 10_000;
+
+/**
+ * คะแนนความตรงของ "เลขบ้าน" (แยกออกจากคะแนนข้อความทั้งหมด)
  *
- * field weight:
- *   full_name : 3
- *   address   : 4
- *   phone     : 2
- *   note      : 1
+ * ระดับ (มาก → น้อย):
+ *   1. exact  : เลขบ้านตรงกับคำค้นทั้งค่า                  เช่น 5 → "5"
+ *   2. subForm: รูปแบบย่อย/ต่อเนื่องของเลขบ้านที่ค้นหา      เช่น 5 → "5/1", "5/2"
+ *   3. prefix : เลขบ้านที่มีคำค้นเป็นส่วนต้น (ไม่ใช่ตรงตัว)  เช่น 5 → "55", 12 → "125"
+ *   4. contains: เลขบ้านที่มีคำค้นอยู่ภายใน                เช่น 5 → "15", "105"
+ *
+ * ระดับ 3-4 เรียง "จำนวนหลักน้อยก่อน" เพื่อให้ 2 หลัก (15) มาก่อน 3 หลัก (105)
+ * คืนค่า 0 เมื่อไม่มีการจับคู่กับเลขบ้านเลย
  */
-function rankHouse(
-  h: House,
-  searchTerm: string,
-): number {
-  if (!searchTerm) return 0;
+function rankHouseNumberMatch(address: string | null, term: string): number {
+  if (!address) return 0;
+  const search = term.trim();
+  if (!isHouseNumberSearch(search)) return 0;
 
-  const lower = searchTerm.toLowerCase();
-  let total = 0;
+  const houseNumber = extractHouseNumber(address);
+  if (!houseNumber) return 0;
 
-  // full_name (weight 3)
-  if (h.full_name) {
-    const name = h.full_name.toLowerCase();
-    if (name === lower) total += 1000 * 3;
-    else if (name.startsWith(lower)) total += 900 * 3;
-    else if (name.includes(lower)) {
-      const idx = name.indexOf(lower);
-      let s = 800 * 3;
-      if (idx === 0) s += 50 * 3;
-      const lastWord = name.split(" ").pop() || "";
-      if (lastWord.endsWith(lower)) s += 30 * 3;
-      total += s;
-    }
+  const mainPart = houseNumber.split("/")[0];
+  const hasFraction = houseNumber.includes("/");
+
+  if (houseNumber === search) {
+    return HOUSE_NUMBER_BASE + HOUSE_NUMBER_TIER.exact;
   }
-
-  // address (weight 4)
-  if (h.address) {
-    const address = h.address.toLowerCase();
-    if (address === lower) total += 1000 * 4;
-    else if (address.startsWith(lower)) total += 900 * 4;
-    else if (address.includes(lower)) {
-      const idx = address.indexOf(lower);
-      let s = 800 * 4;
-      if (idx === 0) s += 50 * 4;
-      const lastPart = address.split(" ").pop() || "";
-      if (lastPart.endsWith(lower)) s += 30 * 4;
-      total += s;
-    }
-
-    // กรณีค้นหาเลขบ้าน: extra bonus สำหรับเลขบ้านที่ตรงกัน
-    const houseNumber = extractHouseNumber(h.address);
-    if (houseNumber && houseNumber !== lower) {
-      const hnScore = rankHouseNumber(houseNumber, lower);
-      if (hnScore > 0) total += hnScore * 4;
-    }
+  if (mainPart === search && hasFraction) {
+    return HOUSE_NUMBER_BASE + HOUSE_NUMBER_TIER.subForm;
   }
-
-  // phone (weight 2)
-  if (h.phone) {
-    if (h.phone === searchTerm) total += 1000 * 2;
-    else if (h.phone.startsWith(searchTerm)) total += 900 * 2;
-    else if (h.phone.includes(searchTerm)) {
-      const idx = h.phone.indexOf(searchTerm);
-      let s = 800 * 2;
-      if (idx === 0) s += 50 * 2;
-      total += s;
-    }
+  if (mainPart.startsWith(search)) {
+    return HOUSE_NUMBER_BASE + HOUSE_NUMBER_TIER.prefix - mainPart.length;
   }
-
-  // note (weight 1)
-  if (h.note) {
-    const note = h.note.toLowerCase();
-    if (note === lower) total += 1000 * 1;
-    else if (note.startsWith(lower)) total += 900 * 1;
-    else if (note.includes(lower)) {
-      const idx = note.indexOf(lower);
-      let s = 800 * 1;
-      if (idx === 0) s += 50 * 1;
-      const lastWord = note.split(" ").pop() || "";
-      if (lastWord.endsWith(lower)) s += 30 * 1;
-      total += s;
-    }
+  if (mainPart.includes(search)) {
+    return HOUSE_NUMBER_BASE + HOUSE_NUMBER_TIER.contains - mainPart.length;
   }
-
-  return total;
+  return 0;
 }
 
 /**
- * เรียงลำดับ houses ตามความตรงของ searchTerm
- * - exact match > prefix match > word/token > contains
- * - ถ้าคะแนนเท่ากัน: รักษาลำดับเดิม (stable sort)
+ * คะแนนความตรงของ "ข้อความ" (ชื่อ / ที่อยู่ / เบอร์โทร / หมายเหตุ)
+ * ใช้เฉพาะฟิลด์ที่ผู้ใช้เปิดไว้ และถูกจำกัดเพดานให้ต่ำกว่าคะแนนเลขบ้านเสมอ
+ * จึงไม่สามารถแซงรายการที่ตรงกับเลขบ้านได้
  */
-function rankResults(
+function rankTextFields(h: House, term: string, opts: SearchOptions): number {
+  const lower = term.toLowerCase();
+
+  const scoreText = (value: string, weight: number, caseSensitive: boolean) => {
+    const haystack = caseSensitive ? value : value.toLowerCase();
+    const needle = caseSensitive ? term : lower;
+    if (haystack === needle) return 1000 * weight;
+    if (haystack.startsWith(needle)) return 900 * weight;
+    if (haystack.includes(needle)) {
+      let score = 800 * weight;
+      if (haystack.indexOf(needle) === 0) score += 50 * weight;
+      const lastToken = haystack.split(" ").pop() || "";
+      if (lastToken.endsWith(needle)) score += 30 * weight;
+      return score;
+    }
+    return 0;
+  };
+
+  let total = 0;
+  if (opts.searchInName && h.full_name) total += scoreText(h.full_name, 3, false);
+  if (opts.searchInAddress && h.address) total += scoreText(h.address, 4, false);
+  if (opts.searchInPhone && h.phone) total += scoreText(h.phone, 2, true);
+  if (opts.searchInNote && h.note) total += scoreText(h.note, 1, false);
+
+  return Math.min(total, MAX_TEXT_SCORE);
+}
+
+/**
+ * คะแนนรวมของบ้านหนึ่งหลัง
+ * = คะแนนเลขบ้าน (แยกส่วน, อยู่เหนือกว่าเสมอ) + คะแนนข้อความ (ตัวตัดสินเมื่อเลขบ้านเท่ากัน)
+ * เลขบ้านดึงจาก address เท่านั้น ไม่ใช้ตัวเลขจากเบอร์โทร
+ */
+function rankHouse(h: House, term: string, opts: SearchOptions): number {
+  if (!term.trim()) return 0;
+
+  // เลขบ้านอยู่ใน field address → คิดคะแนนเลขบ้านเฉพาะเมื่อผู้ใช้เปิดค้นหาที่อยู่
+  const houseNumberScore = opts.searchInAddress
+    ? rankHouseNumberMatch(h.address, term)
+    : 0;
+
+  return houseNumberScore + rankTextFields(h, term, opts);
+}
+
+/**
+ * ตรวจว่าบ้านตรงกับคำค้นหรือไม่ (partial match) ตามฟิลด์ที่ผู้ใช้เปิด
+ * ใช้สำหรับ "กรอง" เท่านั้น — ไม่ได้กรองภายในฟังก์ชันจัดอันดับซ้ำ
+ */
+function matchesSearch(h: House, term: string, opts: SearchOptions): boolean {
+  if (!term.trim()) return true;
+  const lower = term.toLowerCase();
+
+  if (opts.searchInName && h.full_name?.toLowerCase().includes(lower)) return true;
+  if (opts.searchInAddress && h.address?.toLowerCase().includes(lower)) return true;
+  if (opts.searchInPhone && h.phone?.includes(term)) return true;
+  if (opts.searchInNote && h.note?.toLowerCase().includes(lower)) return true;
+  return false;
+}
+
+/**
+ * เรียงลำดับรายการที่ผ่านการกรองมาแล้วตามความตรงของ searchTerm
+ * - ไม่กรองซ้ำ (การกรองทำไปแล้วครั้งเดียวก่อนเรียกฟังก์ชันนี้)
+ * - ถ้าคะแนนเท่ากัน ใช้ลำดับเดิมของข้อมูลเป็นตัวตัดสิน → ผลลัพธ์เสถียรเสมอ
+ */
+function sortByRelevance(
   houses: House[],
-  searchTerm: string,
-  opts?: {
-    searchInName?: boolean;
-    searchInAddress?: boolean;
-    searchInPhone?: boolean;
-    searchInNote?: boolean;
-  },
+  term: string,
+  opts: SearchOptions,
 ): House[] {
-  if (!searchTerm) return houses;
-
-  const lower = searchTerm.toLowerCase();
-  const filtered = houses.filter((h) => {
-    let matches = false;
-
-    if (opts?.searchInName && h.full_name?.toLowerCase().includes(lower)) {
-      matches = true;
-    }
-    if (opts?.searchInAddress && h.address?.toLowerCase().includes(lower)) {
-      matches = true;
-    }
-    if (opts?.searchInPhone && h.phone?.includes(searchTerm)) {
-      matches = true;
-    }
-    if (opts?.searchInNote && h.note?.toLowerCase().includes(lower)) {
-      matches = true;
-    }
-
-    return matches;
-  });
-
-  return filtered.sort((a, b) => rankHouse(b, searchTerm) - rankHouse(a, searchTerm));
+  if (!term.trim()) return houses;
+  return houses
+    .map((house, index) => ({ house, index, score: rankHouse(house, term, opts) }))
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((entry) => entry.house);
 }
 
 export default function HousesPage() {
@@ -409,38 +413,64 @@ export default function HousesPage() {
   }, [router]);
 
   // กรองข้อมูล + เรียงลำดับตามความตรงของ searchTerm
-  // แก้ useEffect กรองข้อมูล (แทนที่ useEffect เดิมที่มี searchTerm)
-  // 1) ฟิลเตอร์: คัดเฉพาะรายการที่ตรงกับ search/filter เดิม
-  // 2) เรียงลำดับ: ใช้ rankResults() คำนวณคะแนนความตรง
+  // ลำดับการทำงาน (สำคัญ):
+  //   (1) อำเภอ/พื้นที่แบบเข้มงวด → (2) ตัวกรองเดิมที่มีอยู่ →
+  //   (3) ค้นหาข้อความตามฟิลด์ที่เปิด → (4) จัดอันดับ → (5) แบ่งหน้า
+  // การจัดอันดับทำ "หลัง" การกรองเสมอ จึงไม่ดึงรายการจากอำเภออื่นกลับมา
   useEffect(() => {
-    // 1) ฟิลเตอร์: คัดเฉพาะรายการที่ตรงกับ search/filter เดิม
-    const filterResults = houses.filter((h) => {
-      let matches = false;
-
-      if (searchInName && h.full_name?.toLowerCase().includes(searchTerm.toLowerCase())) {
-        matches = true;
-      }
-      if (searchInAddress && h.address?.toLowerCase().includes(searchTerm.toLowerCase())) {
-        matches = true;
-      }
-      if (searchInPhone && h.phone?.includes(searchTerm)) {
-        // เบอร์ไม่ case-sensitive มากนัก
-        matches = true;
-      }
-      if (searchInNote && h.note?.toLowerCase().includes(searchTerm.toLowerCase())) {
-        matches = true;
-      }
-
-      return matches;
-    });
-
-    // 2) เรียงลำดับตามความตรงของ searchTerm (หลังจาก filter ครบ)
-    setFilteredHouses(rankResults(filterResults, searchTerm, {
+    const searchOptions: SearchOptions = {
       searchInName,
       searchInAddress,
       searchInPhone,
       searchInNote,
-    }));
+    };
+
+    let filtered = houses;
+
+    // (1) อำเภอ: ต้องตรงกับชื่ออำเภอที่ดึงได้จากที่อยู่จริงเท่านั้น
+    //     รายการที่ที่อยู่ไม่ระบุอำเภอ (extractDistrict = null) จะไม่ถูกจัดเข้า
+    //     อำเภอที่เลือกโดยการเดา
+    if (selectedDistrict !== "ทั้งหมด") {
+      filtered = filtered.filter(
+        (h) => extractDistrict(h.address) === selectedDistrict,
+      );
+    }
+
+    // (2) ตัวกรองเดิมที่มีอยู่แล้ว
+    if (showWithCoords && !showNoCoords) {
+      filtered = filtered.filter((h) => h.lat && h.lng);
+    } else if (showNoCoords && !showWithCoords) {
+      filtered = filtered.filter((h) => !h.lat || !h.lng);
+    }
+
+    if (houseNumberFilter)
+      filtered = filtered.filter((h) => h.address?.includes(houseNumberFilter));
+    if (phoneFilter)
+      filtered = filtered.filter((h) => h.phone?.includes(phoneFilter));
+    if (villageFilter)
+      filtered = filtered.filter(
+        (h) =>
+          h.address?.includes(`หมู่ ${villageFilter}`) ||
+          h.address?.includes(`ม.${villageFilter}`),
+      );
+    if (subdistrictFilter)
+      filtered = filtered.filter((h) =>
+        h.address?.toLowerCase().includes(subdistrictFilter.toLowerCase()),
+      );
+    if (districtFilter)
+      filtered = filtered.filter((h) =>
+        h.address?.toLowerCase().includes(districtFilter.toLowerCase()),
+      );
+    if (provinceFilter)
+      filtered = filtered.filter((h) =>
+        h.address?.toLowerCase().includes(provinceFilter.toLowerCase()),
+      );
+
+    // (3) ค้นหาข้อความ (partial match) เฉพาะฟิลด์ที่ผู้ใช้เปิด
+    filtered = filtered.filter((h) => matchesSearch(h, searchTerm, searchOptions));
+
+    // (4) จัดอันดับเฉพาะรายการที่ผ่านตัวกรองทั้งหมดแล้ว
+    setFilteredHouses(sortByRelevance(filtered, searchTerm, searchOptions));
     setCurrentPage(1);
   }, [
     searchTerm,
