@@ -435,7 +435,12 @@ export default function HousesPage() {
     });
 
     // 2) เรียงลำดับตามความตรงของ searchTerm (หลังจาก filter ครบ)
-    setFilteredHouses(rankResults(filterResults, searchTerm));
+    setFilteredHouses(rankResults(filterResults, searchTerm, {
+      searchInName,
+      searchInAddress,
+      searchInPhone,
+      searchInNote,
+    }));
     setCurrentPage(1);
   }, [
     searchTerm,
