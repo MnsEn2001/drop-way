@@ -139,6 +139,16 @@ body {
   background: rgba(15, 23, 42, 0.5);
 }
 
+/* Confirmation dialogs must always sit above every normal modal. */
+.modal-overlay-top {
+  z-index: 1000;
+  pointer-events: auto;
+}
+
+.modal-overlay-top > .modal-sheet {
+  pointer-events: auto;
+}
+
 @keyframes skeleton-pulse {
   0% {
     background-position: 100% 50%;
