@@ -1424,17 +1424,6 @@ export default function HousesPage() {
                     <Trash2 className="h-5 w-5" aria-hidden="true" />
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(h)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    className="icon-btn"
-                    title="แก้ไข"
-                    aria-label="แก้ไขข้อมูลบ้าน"
-                  >
-                    <Edit3 className="h-5 w-5" aria-hidden="true" />
-                  </button>
-
                   {h.lat && h.lng && (
                     <button
                       type="button"
@@ -1446,6 +1435,17 @@ export default function HousesPage() {
                       นำทาง
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(h)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    className="icon-btn"
+                    title="แก้ไข"
+                    aria-label="แก้ไขข้อมูลบ้าน"
+                  >
+                    <Edit3 className="h-5 w-5" aria-hidden="true" />
+                  </button>
                 </div>
               </div>
             ))}

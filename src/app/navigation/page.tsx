@@ -1703,45 +1703,48 @@ export default function NavigationPage() {
           <button
             type="button"
             onClick={() => setShowStartModal(true)}
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm h-11 w-11 p-0"
+            title="ตั้งจุดเริ่มต้น / ลองใหม่"
+            aria-label="ตั้งจุดเริ่มต้น / ลองใหม่"
           >
             <MapPin className="h-4 w-4" aria-hidden="true" />
-            ตั้งจุดเริ่มต้น / ลองใหม่
           </button>
-        </div>
 
-        {/* โหมดมือ: ย้ายแถบปุ่มการทำงานไปด้านซ้ายหรือขวา */}
-        <div
-          role="group"
-          aria-label="ตำแหน่งแถบปุ่มการทำงาน"
-          className="mt-3 inline-flex rounded-full border border-gray-200 bg-white p-0.5"
-        >
-          <button
-            type="button"
-            onClick={() => changeHandMode("right")}
-            aria-pressed={handMode === "right"}
-            className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
-              handMode === "right"
-                ? "bg-teal-600 text-white"
-                : "text-gray-600 hover:text-teal-700"
-            }`}
+          {/* โหมดมือ: ย้ายแถบปุ่มการทำงานไปด้านซ้ายหรือขวา (ไอคอนล้วน ซ้ายก่อนขวา) */}
+          <div
+            role="group"
+            aria-label="ตำแหน่งแถบปุ่มการทำงาน"
+            className="inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5"
           >
-            <PanelRight className="h-4 w-4" aria-hidden="true" />
-            มือขวา
-          </button>
-          <button
-            type="button"
-            onClick={() => changeHandMode("left")}
-            aria-pressed={handMode === "left"}
-            className={`flex min-h-[44px] items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition-colors ${
-              handMode === "left"
-                ? "bg-teal-600 text-white"
-                : "text-gray-600 hover:text-teal-700"
-            }`}
-          >
-            <PanelLeft className="h-4 w-4" aria-hidden="true" />
-            มือซ้าย
-          </button>
+            <button
+              type="button"
+              onClick={() => changeHandMode("left")}
+              aria-pressed={handMode === "left"}
+              title="ย้ายแถบปุ่มไปด้านซ้าย"
+              aria-label="ย้ายแถบปุ่มไปด้านซ้าย"
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
+                handMode === "left"
+                  ? "bg-teal-600 text-white"
+                  : "text-gray-600 hover:text-teal-700"
+              }`}
+            >
+              <PanelLeft className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => changeHandMode("right")}
+              aria-pressed={handMode === "right"}
+              title="ย้ายแถบปุ่มไปด้านขวา"
+              aria-label="ย้ายแถบปุ่มไปด้านขวา"
+              className={`flex h-11 w-11 items-center justify-center rounded-full transition-colors ${
+                handMode === "right"
+                  ? "bg-teal-600 text-white"
+                  : "text-gray-600 hover:text-teal-700"
+              }`}
+            >
+              <PanelRight className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -2589,14 +2592,14 @@ export default function NavigationPage() {
                         setShowUnsavedChangesConfirmModal(true);
                       }
                     }}
-                    className="btn btn-secondary flex-1"
+                    className="btn btn-secondary flex-1 py-3"
                   >
                     ยกเลิก
                   </button>
                   <button
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={handlePageInputSubmit}
-                    className="btn btn-primary flex-1"
+                    className="btn btn-primary flex-1 py-3"
                   >
                     ไป
                   </button>
@@ -2638,7 +2641,7 @@ export default function NavigationPage() {
                   setShowRestrictedConfirmModal(false);
                   setRestrictedConfirmPayload(null);
                 }}
-                className="btn btn-secondary flex-1"
+                className="btn btn-secondary flex-1 py-3"
               >
                 ไม่ปิด
               </button>
@@ -2654,7 +2657,7 @@ export default function NavigationPage() {
         
                   onConfirm();
                 }}
-                className="btn btn-primary flex-1"
+                className="btn btn-primary flex-1 py-3"
               >
                 ปิดทิ้ง
               </button>
@@ -2693,7 +2696,7 @@ export default function NavigationPage() {
                 onClick={() => {
                   setShowUnsavedChangesConfirmModal(false);
                 }}
-                className="btn btn-secondary flex-1"
+                className="btn btn-secondary flex-1 py-3"
               >
                 ไม่ปิด
               </button>
@@ -2706,7 +2709,7 @@ export default function NavigationPage() {
                   setShowPageInput(false);
                   setPageInputValue("");
                 }}
-                className="btn btn-primary flex-1"
+                className="btn btn-primary flex-1 py-3"
               >
                 ปิดทิ้ง
               </button>
@@ -2953,7 +2956,7 @@ export default function NavigationPage() {
                     setShowFilterModal(false);
                   }
                 }}
-                className="btn btn-secondary flex-1"
+                className="btn btn-secondary flex-1 py-3"
               >
                 ล้างทั้งหมด
               </button>
@@ -2965,7 +2968,7 @@ export default function NavigationPage() {
                   // 단, 안전한 닫기 UX를 위해 dirty일 때도 닫지만 값 초기화는 하지 않습니다.
                   setShowFilterModal(false);
                 }}
-                className="btn btn-primary flex-1"
+                className="btn btn-primary flex-1 py-3"
                 aria-label="ใช้ตัวกรองที่เลือก"
               >
                 ใช้ตัวกรอง
@@ -3140,6 +3143,7 @@ export default function NavigationPage() {
                     }
                     closeModal();
                   }}
+                  className="btn btn-secondary flex-1 py-3"
                 >
                   ยกเลิก
                 </button>
@@ -3147,7 +3151,7 @@ export default function NavigationPage() {
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={saveHouse}
-                  className="btn btn-primary flex-1"
+                  className="btn btn-primary flex-1 py-3"
                 >
                   บันทึก
                 </button>
