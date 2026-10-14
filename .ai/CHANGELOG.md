@@ -1,5 +1,45 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-14 — Mobile UI: ปุ่มในการ์ดบ้าน + ปุ่มควบคุมหน้า Navigation + ขนาดปุ่มใน modal
+
+### หัวข้อ
+- การ์ดบ้าน: เรียงปุ่มเป็น ลบ → นำทาง → แก้ไข
+- หน้า Navigation: ปุ่มตั้งจุดเริ่มต้น + ปุ่มซ้าย/ขวาเป็นไอคอนล้วน อยู่ในแถวเดียวกัน
+- Modal หน้า Navigation: ปุ่มยกเลิก/บันทึกกว้างเท่ากันทุกคู่
+
+### Root cause / เหตุที่แก้
+- ปุ่ม "นำทาง" ถูกวางหลังปุ่มแก้ไข และปุ่มมือซ้าย/ขวาแยกเป็นอีกแถว (`mt-3`)
+  ใต้แถว GPS ทำให้ปุ่มควบคุมตกออกจากโซนนิ้วโป้ง และยังมีข้อความ "มือขวา/มือซ้าย"
+  กินความกว้างบนจอมือถือ
+- modal แก้ไขบ้าน (หน้า navigation) ปุ่ม "ยกเลิก" **ไม่มี class ความกว้างเลย**
+  ขณะที่ปุ่ม "บันทึก" เป็น `flex-1` → สองปุ่มกว้างไม่เท่ากัน
+
+### เปลี่ยนอะไร
+- `src/app/houses/page.tsx`: ย้ายบล็อกปุ่มนำทางขึ้นมาก่อนปุ่มแก้ไข (ฝั่ง footer ของการ์ด)
+  ลำดับใหม่ ลบ → นำทาง → แก้ไข — ไม่แตะ class (`icon-btn-danger`, `icon-btn`,
+  `btn btn-secondary ml-auto`), `title`/`aria-label`, `openNavigation()` (Google Maps)
+  หรือเงื่อนไข `h.lat && h.lng`
+- `src/app/navigation/page.tsx`:
+  - ปุ่มตั้งจุดเริ่มต้นเหลือไอคอน `MapPin` ล้วน (`btn btn-secondary btn-sm h-11 w-11 p-0`)
+    คง `title` + `aria-label` และยังเปิด start modal เดิม
+  - กลุ่มปุ่มมือย้ายเข้าไปในแถว `flex flex-wrap` เดียวกับปุ่มตั้งจุดเริ่มต้น
+    (ลบ `mt-3`), ลดเหลือไอคอน `PanelLeft` (ซ้าย) ก่อน `PanelRight` (ขวา)
+    ปุ่มละ 44×44 (`h-11 w-11`), คง `aria-pressed` + เพิ่ม `title`/`aria-label`,
+    สี teal สำหรับด้านที่เลือก, `changeHandMode("left"/"right")` และ
+    `localStorage["navigationActionRailSide"]` + ค่าเริ่มต้นมือขวาเหมือนเดิมทุกไบต์
+  - modal footer ทั้ง 8 ตัวเป็น `btn ... flex-1 py-3` ทั้งคู่ (secondary = ยกเลิก/ปฏิเสธ,
+    primary = ยืนยัน) และปุ่มยกเลิกของ modal แก้ไขบ้านได้ class มาแล้ว
+- ไม่แตะ logic การบันทึก/ทิ้งข้อมูล, loading/disabled, Supabase, RLS, การจัดอันดับบ้าน,
+  การนำทาง หรือ `.modal-foot` ใน `globals.css`
+
+### สถานะ
+- commit: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74`
+- ผ่าน `git diff --check`, `npx tsc --noEmit`, `npm run lint`, `npm run build`
+- harness ตรวจ source 32/32 PASS (ดูรายงาน)
+- BLOCKED: การคลิก/ตรวจบนเบราว์เซอร์หรือมือถือจริง (ไม่มี session ที่ล็อกอินได้),
+  Supabase RLS
+- Report: `.ai/reports/2026-10-14-dropway-mobile-card-buttons-and-navigation-controls.md`
+
 ## 2026-10-13 — House Search Ranking + Strict District Filtering
 
 ### หัวข้อ

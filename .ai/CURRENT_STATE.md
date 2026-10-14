@@ -30,7 +30,9 @@ This is a factual snapshot of the repository and the documentation effort that c
   `c8f92b9a2337b75b4799507009224df57bc3b8e5`
 - 2026-10-13 house search ranking + strict district filtering (code commit)
   pushed and verified: `cd3bcbb968d4f0cf05671efbdfde5f97882d1512`
-- Latest verified GitHub `main`: `cd3bcbb968d4f0cf05671efbdfde5f97882d1512`
+- 2026-10-14 mobile card-button/navigation-control UI (code commit)
+  pushed and verified: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74`
+- Latest verified GitHub `main`: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74`
   (docs commit for this session follows on top)
 
 ## Latest verified full product audit
@@ -156,11 +158,38 @@ This is a factual snapshot of the repository and the documentation effort that c
 - NOT VERIFIED: clicking the district dropdown in a real signed-in browser;
   evidence is source-level plus an 18/18 logic harness, type check, lint, build.
 
+## Mobile UI polish (2026-10-14)
+- Houses card footer buttons now read **ลบ → นำทาง → แก้ไข**
+  (`src/app/houses/page.tsx`). Only the navigate block moved; `icon-btn-danger`,
+  `icon-btn`, `btn btn-secondary ml-auto`, every `title`/`aria-label`,
+  `openNavigation()`'s Google Maps URL and the `h.lat && h.lng` gate are unchanged.
+- `src/app/navigation/page.tsx` GPS row is now a single `flex flex-wrap` row:
+  status badge → start-point button → hand-mode picker. The start-point button is
+  icon-only (`MapPin`, `btn btn-secondary btn-sm h-11 w-11 p-0`) with `title` +
+  `aria-label="ตั้งจุดเริ่มต้น / ลองใหม่"` and still opens `showStartModal`.
+- Hand mode is icon-only too: `PanelLeft` (left) **before** `PanelRight` (right),
+  44×44 (`h-11 w-11`), `aria-pressed` + `title` + `aria-label`, teal fill for the
+  active side. `changeHandMode("left")` stays on the left icon and
+  `changeHandMode("right")` on the right icon; `HAND_MODE_KEY`
+  (`navigationActionRailSide`), the saved-value read and the default `"right"`
+  are byte-identical to the previous commit. Visible "มือซ้าย/มือขวา" labels are
+  gone (code comments still mention them on purpose).
+- All 8 navigation modal footers use `flex-1 py-3` on **both** buttons with
+  `btn btn-secondary` (cancel) / `btn btn-primary` (confirm). The edit-house
+  cancel button previously had no width class at all next to a `flex-1` save
+  button — that is fixed. `.modal-foot` still has no `position`/`bottom`, so it
+  stays in normal document flow.
+- Report: `.ai/reports/2026-10-14-dropway-mobile-card-buttons-and-navigation-controls.md`
+- NOT VERIFIED / BLOCKED: no signed-in browser or device here, so the actual
+  rail movement, tap targets and keyboard-open layout were not clicked through.
+
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
   `.action-rail`), 44px targets, `aria-label` on every button.
-- Hand mode: header switch "มือขวา" / "มือซ้าย", default right, persisted as
-  `localStorage["navigationActionRailSide"]` with try/catch.
+- Hand mode: header picker, default right, persisted as
+  `localStorage["navigationActionRailSide"]` with try/catch. (Since
+  2026-10-14 the picker is icon-only `PanelLeft`/`PanelRight` in the GPS row —
+  see the 2026-10-14 section above.)
 - No `autoFocus` remains in `src/`; dialogs focus the trigger on close instead.
 - Dialog sizing: `.modal-sheet` (`min(85dvh, --app-vvh * 0.85)`) with
   `overflow-y: auto`; `.modal-foot` is a normal in-flow block (no sticky, no
@@ -214,8 +243,9 @@ This is a factual snapshot of the repository and the documentation effort that c
 
 ## Local synchronization status
 - Local branch: `main`
-- Local `HEAD` SHA: `90c1d1d08b793702890ec25bd16315d12858f6d0` (matches
-  `origin/main`; verified with `git ls-remote origin refs/heads/main`)
+- Local `HEAD` SHA: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74` (matches
+  `origin/main`; verified with `git ls-remote --heads origin main`)
+  before this: `934d4b02dda8c11c42eb4ea99e8dcc29b1866d5a`
 - Working tree status: untracked workspace artifacts only; no modified tracked
   files after push
 - Difference from `origin/main`: none
@@ -225,6 +255,8 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Pushed again: 2026-10-12 (dialog-dismiss routing + shared restricted/unsaved
   hook)
 - Pushed again: 2026-10-12 (modal save/cancel footer back to normal flow)
+- Pushed again: 2026-10-14 (mobile card-button order, navigation icon-only
+  controls, modal footer button widths)
 
 ## Verified working features
 - Repository identity and branch verification

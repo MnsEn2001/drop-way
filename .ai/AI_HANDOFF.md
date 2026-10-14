@@ -95,7 +95,17 @@ Notes learned in this environment:
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
-## Current open items (as of 2026-10-13)
+## Current open items (as of 2026-10-14)
+- Mobile UI rules now in force (2026-10-14, do not regress): the houses card
+  footer order is **ลบ → นำทาง → แก้ไข** and the navigate button keeps
+  `btn btn-secondary ml-auto` plus its `h.lat && h.lng` gate; the navigation
+  page GPS row is one wrapping row (status badge → icon-only start-point button
+  → icon-only hand-mode picker) where the left icon runs
+  `changeHandMode("left")` and the right icon runs `changeHandMode("right")`,
+  both 44×44 with `aria-pressed`; every navigation modal footer pair is
+  `flex-1 py-3` with `btn btn-secondary` cancel + `btn btn-primary` confirm.
+  See `.ai/reports/2026-10-14-dropway-mobile-card-buttons-and-navigation-controls.md`.
+  Clicking these on a real phone is still NOT VERIFIED (no signed-in browser).
 - House search + district rules (2026-10-13, do not regress): in
   `src/app/houses/page.tsx` the ranking is two separated bands — house numbers
   (`rankHouseNumberMatch`, read from `address` only) sit above text scores
