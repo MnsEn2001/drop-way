@@ -154,6 +154,9 @@ export default function NavigationPage() {
   const [detectedStartLat, setDetectedStartLat] = useState<number | null>(null);
   const [detectedStartLng, setDetectedStartLng] = useState<number | null>(null);
   const [addressInput, setAddressInput] = useState<string>("");
+  // ข้อความในช่องพิกัดของ modal แก้ไขบ้าน (แยกจาก lat/lng ใน formData)
+  // เพื่อให้พิมพ์ทีละตัวอักษรได้โดยช่องไม่ถูกล้างค่าระหว่างทาง
+  const [houseCoordsInput, setHouseCoordsInput] = useState<string>("");
   const [addressSuggestions, setAddressSuggestions] = useState<
     { label: string; value: string }[]
   >([]);
@@ -1392,12 +1395,16 @@ export default function NavigationPage() {
       lng: house.lng || undefined,
     });
     setAddressInput(house.address || "");
+    setHouseCoordsInput(
+      house.lat != null && house.lng != null ? `${house.lat},${house.lng}` : "",
+    );
     setHasShownVillageSuggestions(false); // เพิ่มบรรทัดนี้
   };
   const closeModal = () => {
     setEditingHouse(null);
     setFormData({});
     setIsDetecting(false);
+    setHouseCoordsInput("");
   };
   const detectLocation = () => {
     if (!navigator.geolocation) {
@@ -1414,6 +1421,7 @@ export default function NavigationPage() {
           lat: parseFloat(lat),
           lng: parseFloat(lng),
         }));
+        setHouseCoordsInput(`${lat},${lng}`);
         setIsDetecting(false);
         toast.success(`ดึงพิกัดสำเร็จ: ${lat},${lng}`);
       },
@@ -2979,15 +2987,25 @@ export default function NavigationPage() {
       )}
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
-        <div className="modal-overlay flex items-center justify-center p-4">
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div
             role="dialog"
             aria-modal="true"
-            className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            aria-labelledby="edit-house-title"
+            className="modal-sheet flex h-full w-full max-w-sm flex-col overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:h-auto sm:rounded-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-bold mb-5">แก้ไขบ้าน</h2>
-            <div className="space-y-4">
+            {/* Header: อยู่นิ่ง ไม่ scroll ไปกับ content */}
+            <div className="shrink-0 border-b border-gray-200 px-5 pb-4 pt-5 sm:border-0 sm:px-6 sm:pt-6">
+              <h2 id="edit-house-title" className="text-xl font-bold">
+                แก้ไขบ้าน
+              </h2>
+            </div>
+            {/* Content: scroll container เดียวของ modal */}
+            <div
+              data-modal-scroll
+              className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6"
+            >
               <input
                 type="text"
                 placeholder="ชื่อ-นามสกุล"
@@ -3060,13 +3078,10 @@ export default function NavigationPage() {
               <input
                 type="text"
                 placeholder="พิกัด (lat,lng) เช่น 16.123456,99.123456"
-                value={
-                  formData.lat && formData.lng
-                    ? `${formData.lat.toFixed(6)},${formData.lng.toFixed(6)}`
-                    : ""
-                }
+                value={houseCoordsInput}
                 onChange={(e) => {
                   const value = e.target.value.trim();
+                  setHouseCoordsInput(value);
 
                   // ถ้าช่องว่าง → ถือว่าต้องการลบพิกัด
                   if (value === "") {
@@ -3107,7 +3122,7 @@ export default function NavigationPage() {
                   ไม่มีพิกัด (บ้านนี้จะไม่แสดงบนแผนที่/การนำทาง)
                 </p>
               )}
-              {formData.lat && formData.lng && (
+              {formData.lat != null && formData.lng != null && (
                 <div className="text-center -mt-2 mb-2">
                   <button
                     onClick={() => verifyOnMaps(formData.lat!, formData.lng!)}
@@ -3118,44 +3133,45 @@ export default function NavigationPage() {
                   </button>
                 </div>
               )}
-              <div className="modal-foot flex gap-3">
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    // ยกเลิก: ถ้าข้อมูลยังไม่ตรงกับเดิม ให้ผ่าน confirmation ก่อน
-                    // (ข้อมูลที่กรอกไว้จะอยู่ครบจนกว่าจะยืนยัน "ปิดทิ้ง")
-                    if (
-                      editingHouse &&
-                      (formData.full_name !== editingHouse.full_name ||
-                        formData.phone !== editingHouse.phone ||
-                        formData.address !== editingHouse.address ||
-                        formData.note !== editingHouse.note ||
-                        formData.lat !== editingHouse.lat ||
-                        formData.lng !== editingHouse.lng)
-                    ) {
-                      setRestrictedConfirmPayload({
-                        label: "แก้ไขบ้าน",
-                        onConfirm: () => closeModal(),
-                      });
-                      setShowRestrictedConfirmModal(true);
-                      return;
-                    }
-                    closeModal();
-                  }}
-                  className="btn btn-secondary flex-1 py-3"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={saveHouse}
-                  className="btn btn-primary flex-1 py-3"
-                >
-                  บันทึก
-                </button>
-              </div>
+            </div>
+            {/* Footer: อยู่นิ่ง ไม่ scroll ไปกับ content */}
+            <div className="modal-foot flex shrink-0 gap-3 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pb-6">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  // ยกเลิก: ถ้าข้อมูลยังไม่ตรงกับเดิม ให้ผ่าน confirmation ก่อน
+                  // (ข้อมูลที่กรอกไว้จะอยู่ครบจนกว่าจะยืนยัน "ปิดทิ้ง")
+                  if (
+                    editingHouse &&
+                    (formData.full_name !== editingHouse.full_name ||
+                      formData.phone !== editingHouse.phone ||
+                      formData.address !== editingHouse.address ||
+                      formData.note !== editingHouse.note ||
+                      formData.lat !== editingHouse.lat ||
+                      formData.lng !== editingHouse.lng)
+                  ) {
+                    setRestrictedConfirmPayload({
+                      label: "แก้ไขบ้าน",
+                      onConfirm: () => closeModal(),
+                    });
+                    setShowRestrictedConfirmModal(true);
+                    return;
+                  }
+                  closeModal();
+                }}
+                className="btn btn-secondary flex-1 py-3"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={saveHouse}
+                className="btn btn-primary flex-1 py-3"
+              >
+                บันทึก
+              </button>
             </div>
           </div>
         </div>

@@ -71,6 +71,15 @@ function isEditable(element: HTMLElement): boolean {
 }
 
 /**
+ * The element that actually scrolls inside a dialog. Split dialogs (fixed
+ * header + scrolling content + fixed footer) mark their content area with
+ * `data-modal-scroll`; every other dialog keeps scrolling on the sheet itself.
+ */
+function getScrollContainer(sheet: HTMLElement): HTMLElement {
+  return sheet.querySelector<HTMLElement>("[data-modal-scroll]") ?? sheet;
+}
+
+/**
  * Single shared modal keyboard behavior for every dialog in the app
  * (houses page + navigation page).
  *
@@ -86,10 +95,12 @@ function isEditable(element: HTMLElement): boolean {
  *    `visualViewport` resize/scroll (keyboard animation, scrolling the visual
  *    viewport), the focused input/textarea/select is brought into the visible
  *    area with a 20px safe margin.
- * 3. Scrolls only the dialog's own container. Every adjustment is done through
- *    `sheet.scrollTop` — never `window.scrollTo`, never `scrollIntoView()`,
- *    never a page-level scroll — so the page behind never jumps and the
- *    dialog never moves.
+ * 3. Scrolls only the dialog's own container (the `[data-modal-scroll]`
+ *    content area when the dialog has a fixed header/footer, otherwise the
+ *    sheet). Every adjustment is done through that element's `scrollTop` —
+ *    never `window.scrollTo`, never `scrollIntoView()`, never a page-level
+ *    scroll — so the page behind never jumps, the dialog never moves and its
+ *    header/footer stay put.
  *
  * It is delegated from `document`/`visualViewport`, so every modal on both
  * pages gets identical behavior without duplicating logic per dialog, and it
@@ -126,7 +137,7 @@ export function useModalKeyboardBehavior() {
     };
 
     // Scrolls the focused field into the *visible* part of the viewport by
-    // moving only the sheet's own scroll position.
+    // moving only the dialog's scroll container.
     const ensureFocusedFieldVisible = () => {
       const active = document.activeElement;
       if (!(active instanceof HTMLElement)) return;
@@ -134,19 +145,20 @@ export function useModalKeyboardBehavior() {
 
       const sheet = getOwningSheet(active);
       if (!sheet || sheet.dataset.vpPinned !== "true") return;
-      if (sheet.scrollHeight <= sheet.clientHeight) return; // nothing to scroll
 
-      // Layout-viewport coordinates: the sheet is fixed, so compare its rect
-      // against the visual viewport offset inside the layout viewport.
-      const visibleTop = Math.max(
-        sheet.getBoundingClientRect().top,
-        visualViewport.offsetTop,
-      );
+      const scroller = getScrollContainer(sheet);
+      if (scroller.scrollHeight <= scroller.clientHeight) return; // nothing to scroll
+
+      // Layout-viewport coordinates: the dialog is fixed, so compare the
+      // scroller's rect against the visual viewport offset inside the layout
+      // viewport.
+      const scrollerRect = scroller.getBoundingClientRect();
+      const visibleTop = Math.max(scrollerRect.top, visualViewport.offsetTop);
       const visibleBottom = Math.min(
-        sheet.getBoundingClientRect().bottom,
+        scrollerRect.bottom,
         visualViewport.offsetTop + visualViewport.height,
       );
-      if (visibleBottom <= visibleTop) return; // keyboard covers the whole sheet
+      if (visibleBottom <= visibleTop) return; // keyboard covers the whole area
 
       const elementRect = active.getBoundingClientRect();
       let delta = 0;
@@ -157,9 +169,9 @@ export function useModalKeyboardBehavior() {
       }
       if (delta === 0) return;
 
-      const maxScroll = sheet.scrollHeight - sheet.clientHeight;
-      sheet.scrollTop = Math.min(
-        Math.max(0, sheet.scrollTop + delta),
+      const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+      scroller.scrollTop = Math.min(
+        Math.max(0, scroller.scrollTop + delta),
         Math.max(0, maxScroll),
       );
     };

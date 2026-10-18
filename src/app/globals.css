@@ -369,9 +369,10 @@ body {
 
   .modal-sheet {
     background: var(--background);
-    /* Rounded on every corner at every breakpoint: modals are centered in
-       the overlay on mobile too, so the old bottom-sheet rounding
-       (1rem 1rem 0 0) and the bottom safe-area padding no longer apply. */
+    /* Default shape for centered dialogs. Split dialogs (fixed header +
+       scrolling content + fixed footer) may override the rounding with
+       utilities; they mark their scroll area with `data-modal-scroll` so the
+       keyboard hook in `src/lib/viewport.ts` scrolls only that content. */
     border-radius: 1rem;
     box-shadow: var(--shadow-md);
     /* 80vh is the fallback for browsers without dvh or the visual-viewport
@@ -401,10 +402,10 @@ body {
     overflow: hidden;
   }
 
-  /* Save/cancel footer inside a scrollable sheet. It stays in the normal
-     document flow after the form content (no position: sticky, no bottom: 0,
-     no z-index, no covering background) so it never floats over the text and
-     never sticks to the viewport — users scroll down to reach the buttons.
+  /* Save/cancel footer. It is never position: sticky and never overlays the
+     content: in a split dialog it is a `shrink-0` flex child after the
+     scrolling content, so it stays visible while only the content scrolls;
+     in a single-scroll dialog it simply follows the form content.
      Keyboard handling is separate and lives in `--app-vvh` / the viewport
      hook, not here. */
   .modal-foot {
