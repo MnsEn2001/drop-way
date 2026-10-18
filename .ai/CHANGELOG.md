@@ -1,5 +1,47 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-18 — Edit House Modal (หน้า Navigation): mobile layout + scroll เฉพาะ content
+
+### หัวข้อ
+- modal "แก้ไขบ้าน" มี header / content / footer แยกกันชัดเจน
+- content เป็น scroll container เดียว; header และปุ่มยกเลิก/บันทึก อยู่นิ่ง
+- ช่องพิกัดพิมพ์ได้จริงโดยไม่ถูกล้างค่าระหว่างพิมพ์
+
+### Root cause
+- ทั้ง header, ฟิลด์ และ `.modal-foot` อยู่ใน `.modal-sheet` ที่ `overflow-y:
+  auto` → ตอน focus input เบราว์เซอร์/hook เลื่อน scrollTop ของทั้ง sheet
+  ทำให้ header และปุ่มล่างเลื่อนตาม (modal กระโดด, กดผิด)
+- `useModalKeyboardBehavior()` scroll `sheet.scrollTop` อย่างเดียว ไม่มีแนวคิด
+  content scroll container
+- input พิกัดเดิมใช้ `value` ที่คำนวณจาก `formData.lat && formData.lng` และ
+  onChange เซ็ต lat/lng เป็น null ทันทีเมื่อยังพิมพ์ไม่ครบ `lat,lng` → ตัวแรก
+  ที่พิมพ์ทำให้ช่องว่าง/เด้ง
+- overlay เดิม `items-center` ทุก breakpoint ทำให้จอเล็ก + คีย์บอร์ดเปิดเหลือ
+  พื้นที่ content น้อย
+
+### เปลี่ยนอะไร
+- `src/app/navigation/page.tsx` (เฉพาะ modal แก้ไขบ้าน): overlay
+  `items-end ... sm:items-center`, sheet `flex h-full flex-col overflow-hidden
+  ... sm:h-auto`, header `shrink-0`, content
+  `data-modal-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain`,
+  footer `modal-foot flex shrink-0` + safe-area padding (ไม่มี sticky/absolute),
+  `aria-labelledby`; input พิกัดใช้ state `houseCoordsInput` (parsing เดิม),
+  เงื่อนไขปุ่ม Maps เป็น null check
+- `src/lib/viewport.ts`: `getScrollContainer()` เลือก `[data-modal-scroll]`
+  ก่อน fallback เป็น sheet; scroll เฉพาะ container นั้น (modal อื่นไม่เปลี่ยน)
+- `src/app/globals.css`: แก้ comment ของ `.modal-sheet` / `.modal-foot` ให้ตรง
+  กับรูปแบบใหม่ (ไม่มี rule/class ใหม่)
+- ไม่แตะ `saveHouse()`, `closeModal()`, restricted confirmation/เงื่อนไข dirty,
+  address autocomplete, `detectLocation()`, `verifyOnMaps()`, lat/lng ที่บันทึก,
+  Supabase/API/schema/auth, ปุ่ม X (ไม่เพิ่มกลับ), หน้า `/houses`
+
+### สถานะ
+- code commit: `d373f6d555f311c32e92c9e9828da5b34477317c` (push แล้ว, remote ตรง)
+- ผ่าน `npx tsc --noEmit`, `npm run lint`, `npm run build`, `git diff --check`,
+  harness 21/21 PASS, HTTP 200 `/navigation` `/houses` `/login`
+- BLOCKED: การแตะจริงบนมือถือ/keyboard เปิด-ปิด (ไม่มี signed-in browser/device)
+- Report: `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`
+
 ## 2026-10-14 — Mobile UI: ปุ่มในการ์ดบ้าน + ปุ่มควบคุมหน้า Navigation + ขนาดปุ่มใน modal
 
 ### หัวข้อ

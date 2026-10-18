@@ -95,7 +95,16 @@ Notes learned in this environment:
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
-## Current open items (as of 2026-10-14)
+## Current open items (as of 2026-10-18)
+- Edit House modal (navigation) mobile layout (2026-10-18, do not regress):
+  header `shrink-0`, one `data-modal-scroll` content area, footer `shrink-0`
+  outside the scroller with safe-area padding, no X button, coordinate field
+  keeps its `houseCoordsInput` text buffer, and the Google Maps button uses
+  `lat != null && lng != null`. `saveHouse()`, `closeModal()`, the restricted
+  confirmation dirty check, address autocomplete and `detectLocation()` must
+  stay as they are. Only this modal uses the split structure. See
+  `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`. Real
+  phone/keyboard tapping is still NOT VERIFIED (no signed-in browser).
 - Mobile UI rules now in force (2026-10-14, do not regress): the houses card
   footer order is **ลบ → นำทาง → แก้ไข** and the navigate button keeps
   `btn btn-secondary ml-auto` plus its `h.lat && h.lng` gate; the navigation
@@ -147,14 +156,20 @@ Notes learned in this environment:
 - Interaction/visual checks for these colors on real devices remain NOT
   VERIFIED (no browser or test account in this environment). See
   `.ai/reports/2026-10-12-dropway-card-button-and-data-color-polish.md`.
-- Modal rules (2026-10-12): every modal overlay uses
-  `modal-overlay flex items-center justify-center p-4` (centered on both axes
-  at every breakpoint — do not reintroduce `items-end` bottom-sheet
-  alignment or per-sheet `sm:max-h-[90vh]` overrides), `.modal-sheet` rounds
-  all four corners and sizes to `min(85dvh, --app-vvh * 0.85)` with
-  `overflow-y: auto`, and no modal may carry `overflow-hidden` unless its
-  content is guaranteed to fit. See
+- Modal rules (2026-10-12, with one scoped 2026-10-18 exception): every modal
+  overlay uses `modal-overlay flex items-center justify-center p-4` (centered
+  on both axes at every breakpoint), `.modal-sheet` rounds all four corners and
+  sizes to `min(85dvh, --app-vvh * 0.85)` with `overflow-y: auto`, and no modal
+  may carry `overflow-hidden` unless its content is guaranteed to fit. See
   `.ai/reports/2026-10-12-dropway-centered-modals-all-breakpoints.md`.
+  **Exception — navigation Edit House modal only** (2026-10-18): it is a split
+  dialog (`items-end ... sm:items-center`, `flex h-full flex-col
+  overflow-hidden p-0 sm:h-auto`, `shrink-0` header, one `data-modal-scroll
+  min-h-0 flex-1 overflow-y-auto overscroll-contain` content area, and a
+  `shrink-0` `.modal-foot` outside the scroller with safe-area bottom padding),
+  because the user asked for a stable mobile modal where only content scrolls.
+  Do not spread this structure to other modals without a request; see
+  `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`.
 - Modal footer rule (2026-10-12): `.modal-foot` must stay in the normal
   document flow (`margin-top`, `padding-top`, `border-top` only). Do **not**
   add `position: sticky`, `bottom: 0`, `z-index`, or an opaque background —
@@ -169,13 +184,15 @@ Notes learned in this environment:
   `setShowRestrictedConfirmModal` / `setShowUnsavedChangesConfirmModal`.
   All keyboard/viewport behavior lives in the single shared
   `useModalKeyboardBehavior()` hook (`src/lib/viewport.ts`), which pins the
-  open sheet's top position and scrolls only `sheet.scrollTop`; do not add a
-  second keyboard system, `window.scrollTo`-based fixes, `scrollIntoView`,
-  autofocus, `as unknown as` placeholder refs, or `setState` on
-  visualViewport resize. Background lock is the `body.nav-dialog-open` class
-  (`overflow: hidden`); do not reintroduce `position: fixed` on
-  `.page-shell`. See
-  `.ai/reports/2026-10-12-dropway-modal-keyboard-stability.md`.
+  open sheet's top position and scrolls only that dialog's scroll container
+  (`[data-modal-scroll]` when the sheet has a split header/content/footer,
+  otherwise `sheet.scrollTop`); do not add a second keyboard system,
+  `window.scrollTo`-based fixes, `scrollIntoView`, autofocus,
+  `as unknown as` placeholder refs, or `setState` on visualViewport resize.
+  Background lock is the `body.nav-dialog-open` class (`overflow: hidden`); do
+  not reintroduce `position: fixed` on `.page-shell`. See
+  `.ai/reports/2026-10-12-dropway-modal-keyboard-stability.md` and
+  `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`.
 
 ## Continue-with prompts
 - If the task is incomplete, leave a clear next step in this file or in `.ai/tasks/active/`.

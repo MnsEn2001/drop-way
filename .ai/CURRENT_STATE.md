@@ -32,7 +32,9 @@ This is a factual snapshot of the repository and the documentation effort that c
   pushed and verified: `cd3bcbb968d4f0cf05671efbdfde5f97882d1512`
 - 2026-10-14 mobile card-button/navigation-control UI (code commit)
   pushed and verified: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74`
-- Latest verified GitHub `main`: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74`
+- 2026-10-18 Edit House modal mobile layout/scroll (code commit)
+  pushed and verified: `d373f6d555f311c32e92c9e9828da5b34477317c`
+- Latest verified GitHub `main`: `d373f6d555f311c32e92c9e9828da5b34477317c`
   (docs commit for this session follows on top)
 
 ## Latest verified full product audit
@@ -182,6 +184,36 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Report: `.ai/reports/2026-10-14-dropway-mobile-card-buttons-and-navigation-controls.md`
 - NOT VERIFIED / BLOCKED: no signed-in browser or device here, so the actual
   rail movement, tap targets and keyboard-open layout were not clicked through.
+
+## Edit House modal mobile scroll (2026-10-18)
+- Only the Edit House modal in `src/app/navigation/page.tsx` changed. It is now
+  the app's one split dialog: overlay
+  `modal-overlay flex items-end justify-center sm:items-center sm:p-4`, sheet
+  `modal-sheet flex h-full w-full max-w-sm flex-col overflow-hidden ... p-0
+  sm:h-auto` (global `max-height: min(85dvh, --app-vvh * 0.85)` still applies),
+  a `shrink-0` header, one `data-modal-scroll` content area
+  (`min-h-0 flex-1 overflow-y-auto overscroll-contain`), and a `shrink-0`
+  `.modal-foot` outside the scroller with safe-area bottom padding.
+- This is a deliberate, scoped exception to the 2026-10-12 "centered on both
+  axes at every breakpoint / no overflow-hidden" modal rule: the user asked for
+  a mobile sheet where only content scrolls so header and save/cancel stay put.
+  All other 11 modals keep the centered single-scroll structure.
+- `src/lib/viewport.ts`: `getScrollContainer()` now returns the sheet's
+  `[data-modal-scroll]` element when present, else the sheet. The pinned
+  position lock is unchanged and every adjustment still goes through
+  `scrollTop` (no `window.scrollTo`, no `scrollIntoView`).
+- Coordinate field in that modal now keeps a `houseCoordsInput` text buffer;
+  the `lat,lng` parsing rules (null when empty/incomplete/invalid) are
+  byte-equivalent to before, and saving still writes `formData.lat/lng`.
+  The Google Maps button uses `lat != null && lng != null`.
+- Unchanged: `saveHouse()`, `closeModal()`, restricted-confirm dirty check,
+  address suggestions/autocomplete, `detectLocation()`, `verifyOnMaps()`, all
+  Supabase calls, the other modals, and `/houses` (its Add/Edit modal is still
+  single-scroll).
+- Report: `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`
+- BLOCKED: tapping fields/suggestions/buttons on a real phone with the keyboard
+  open (no signed-in browser or device). Verification is source + built CSS +
+  typecheck/lint/build + a 21/21 structural harness.
 
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
