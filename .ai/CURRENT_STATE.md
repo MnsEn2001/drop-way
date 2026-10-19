@@ -263,6 +263,34 @@ This is a factual snapshot of the repository and the documentation effort that c
   in this environment. Verification is source + built CSS + typecheck/lint/
   build + a 36/36 structural harness.
 
+## Edit House modal เป็น content-sized อีกครั้ง (2026-10-19, ต่อจากหัวข้อก่อน)
+- "Modal ยาวเต็มจอ" ที่ผู้ใช้รายงานมีสาเหตุจาก `h-full` ที่ commit `934c18f`
+  เติมให้ sheet + overlay `items-end sm:items-center` (bottom sheet) → sheet
+  ยืดเต็ม overlay และเกาะขอบล่างจอ (วัดจริง: 717px ของ viewport 844px,
+  bottom = 844; คีย์บอร์ดเปิด 400px → สูง 340px bottom = 400)
+- กติกาปัจจุบันของ modal แก้ไขบ้าน (ทั้ง navigation + houses): overlay
+  `modal-overlay flex items-center justify-center p-4`, sheet
+  `modal-sheet modal-sheet-fit flex w-full max-w-sm|md flex-col overflow-hidden
+  rounded-2xl p-0` — **ห้ามใส่** `h-full` / `h-screen` / `h-[100dvh]` /
+  `min-h-screen` / `items-stretch` / `rounded-b-none rounded-t-2xl` กลับมา
+- `.modal-sheet-fit` (ใน `globals.css`) คือตัวจำกัดความสูง: มือถือ
+  `calc(100vh - 2rem)` แล้วทับด้วย `calc(var(--app-vvh, 100dvh) - 2rem)`,
+  desktop `min(90vh, calc(var(--app-vvh, 100dvh) - 2rem))` — ใช้ `--app-vvh`
+  (พื้นที่มองเห็น) แทน `100dvh` ดิบ เพื่อให้ header/footer อยู่ในพื้นที่มองเห็น
+  แม้คีย์บอร์ดเปิดอยู่ และ `[data-modal-scroll]` มี `-webkit-overflow-scrolling`
+- วัดด้วย Chromium จริง (viewport 390×844): เนื้อหาปกติ 423px กลางจอ (top 211),
+  เนื้อหายาว 812px = 844 − 32 พร้อม content scroll, คีย์บอร์ดเปิด 400px →
+  sheet 368px, header top 16, footer bottom 384 (ไม่มีส่วนใดหลุดออกนอกพื้นที่
+  มองเห็น); เลื่อน content 200px แล้ว header/footer ไม่ขยับ
+- คงระบบเดิมทั้งหมด: overlay อิง `--app-vp-top`/`--app-vvh`,
+  `useModalKeyboardBehavior()` (ไม่มี pin, blur เฉพาะ field ด้านหลังที่ focused,
+  ไม่ autofocus), body lock `body.nav-dialog-open` (ทั้งสองหน้าใช้ร่วมกัน),
+  โครง header `shrink-0` / content เดียว / footer `shrink-0`, ไม่มีปุ่ม X
+- `src/app/houses/page.tsx` ได้ effect เลื่อน content ให้ dropdown แนะนำที่อยู่
+  พ้นขอบล่าง (สูตรเดียวกับหน้า navigation) — logic อื่นไม่ถูกแตะ
+- Report: `.ai/reports/2026-10-19-dropway-edit-house-modal-content-sized-revert.md`
+- BLOCKED: การทดสอบบนมือถือจริง (ไม่มี signed-in session/อุปกรณ์ใน environment นี้)
+
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
   `.action-rail`), 44px targets, `aria-label` on every button.

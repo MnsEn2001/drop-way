@@ -258,6 +258,36 @@ export default function HousesPage() {
   >([]);
   const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] =
     useState<number>(-1);
+  // อ้างอิง scroll container ของ modal เพิ่ม/แก้ไขบ้าน + dropdown แนะนำที่อยู่
+  // เพื่อเลื่อนเฉพาะ content ให้ dropdown อยู่ในพื้นที่ที่มองเห็นเสมอ
+  const houseFormScrollRef = useRef<HTMLDivElement | null>(null);
+  const houseAddressDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  // ถ้า dropdown แนะนำที่อยู่โผล่ต่ำเกินพื้นที่ที่มองเห็น (footer/คีย์บอร์ด)
+  // ให้เลื่อนเฉพาะ content ของ modal ขึ้นเท่าที่จำเป็น — ไม่แตะ page scroll
+  useEffect(() => {
+    if (addressSuggestions.length === 0) return;
+
+    const scroller = houseFormScrollRef.current;
+    const dropdown = houseAddressDropdownRef.current;
+    if (!scroller || !dropdown) return;
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+    const visualViewport = window.visualViewport;
+    const visibleBottom = Math.min(
+      scrollerRect.bottom,
+      visualViewport
+        ? visualViewport.offsetTop + visualViewport.height
+        : scrollerRect.bottom,
+    );
+
+    const overflow = dropdownRect.bottom - (visibleBottom - 12);
+    if (overflow <= 0) return;
+
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    scroller.scrollTop = Math.min(scroller.scrollTop + overflow, maxScroll);
+  }, [addressSuggestions]);
 
   // ข้อมูลคงที่ (ใส่ข้างนอก component หรือข้างในก็ได้ แนะนำข้างใน)
   const villages = Array.from({ length: 25 }, (_, i) => (i + 1).toString()); // "1" ถึง "25"
@@ -1675,13 +1705,16 @@ export default function HousesPage() {
       )}
 
       {/* Modal เพิ่ม / แก้ไขบ้าน */}      {(editingHouse || isAdding) && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="house-form-title"
             onClick={(e) => e.stopPropagation()}
-            className="modal-sheet flex h-full w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:h-auto sm:rounded-2xl"
+            // Content-sized dialog: no h-full / 100dvh. `.modal-sheet-fit` caps
+            // the height against the *visible* viewport, so the header and
+            // footer stay on screen while only the content scrolls.
+            className="modal-sheet modal-sheet-fit flex w-full max-w-md flex-col overflow-hidden rounded-2xl p-0"
           >
             {/* Header: อยู่นิ่ง ไม่ scroll ไปกับ content */}
             <div className="shrink-0 border-b border-gray-200 px-5 pb-4 pt-5 sm:border-0 sm:px-6 sm:pt-6">
@@ -1691,6 +1724,7 @@ export default function HousesPage() {
             </div>
             {/* Content: scroll container เดียวของ modal */}
             <div
+              ref={houseFormScrollRef}
               data-modal-scroll
               className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6"
             >
@@ -1746,7 +1780,10 @@ export default function HousesPage() {
 
                 {/* Dropdown แนะนำที่อยู่ */}
                 {addressSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                  <div
+                    ref={houseAddressDropdownRef}
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto"
+                  >
                     {addressSuggestions.map((suggestion, index) => (
                       <button
                         key={index}

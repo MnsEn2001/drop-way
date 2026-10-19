@@ -404,17 +404,46 @@ available (no `window.visualViewport`). The variables are written by
     overscroll-behavior-y: contain;
   }
 
+  /* Content-sized dialogs (Edit House / Add House). The sheet hugs its
+     content — no `h-full`, no `min-h-screen` — and its height is capped only
+     when the content does not fit:
+
+     - mobile: visible viewport height minus a 1rem gap (the overlay already
+       has `p-4`), so the dialog never becomes a full-screen page;
+     - desktop (`sm`): the same cap, limited to 90vh.
+
+     The cap uses `--app-vvh` (the *visible* viewport from
+     `src/lib/viewport.ts`) rather than a raw `100dvh` on purpose: when the
+     keyboard is already open, a `100dvh` cap would be taller than the visible
+     area, so the header and footer of the dialog would end up behind the
+     keyboard. With `--app-vvh` the whole dialog always fits in the visible
+     area and only the `[data-modal-scroll]` content scrolls. */
+  .modal-sheet-fit {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(var(--app-vvh, 100dvh) - 2rem);
+  }
+
+  @media (min-width: 640px) {
+    .modal-sheet-fit {
+      max-height: min(90vh, calc(var(--app-vvh, 100dvh) - 2rem));
+    }
+  }
+
+  /* Momentum scrolling for the dialog's single scroll area (no-op where the
+     property is not supported). */
+  .modal-sheet [data-modal-scroll] {
+    -webkit-overflow-scrolling: touch;
+  }
+
   /* Stable dialog positioning: while a dialog is open, the page body should
      not scroll beneath the modal (background locked), and the dialog itself
-     must keep its open-time position instead of being re-centered every time
-     the on-screen keyboard resizes the viewport.
-
-     The position lock is done in JS by `useModalKeyboardBehavior` in
-     `src/lib/viewport.ts`: it pins the open sheet's top offset so keyboard
-     resize never recenters it, and scrolls only the sheet's own content to
-     keep the focused field visible. Nothing here recenters the dialog, and
-     the page behind is locked with plain `overflow: hidden` (no fixed
-     positioning of `.page-shell`, which would create a second scroll
+     must keep its open-time position instead of being pushed below the
+     keyboard. `useModalKeyboardBehavior` in `src/lib/viewport.ts` reuses the
+     existing `.modal-overlay` visual-viewport geometry (it is already sized
+     from `--app-vp-top` / `--app-vvh`) and scrolls only the dialog's own
+     content to keep the focused field visible. Nothing here recenters the
+     dialog, and the page behind is locked with plain `overflow: hidden` (no
+     fixed positioning of `.page-shell`, which would create a second scroll
      container and reset the page scroll position). */
   body.nav-dialog-open {
     overflow: hidden;

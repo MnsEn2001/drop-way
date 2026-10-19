@@ -1,5 +1,57 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-19 — Edit House Modal: revert full-height, กลับเป็น modal ขนาดพอดีเนื้อหา
+
+### หัวข้อ
+- modal แก้ไขบ้านทั้ง `/navigation` และ `/houses` กลับมาเป็น dialog ขนาด
+  "พอดีกับเนื้อหา" (content-sized) อีกครั้ง — ไม่ใช่ full-height/bottom sheet
+- ความสูงถูกจำกัดด้วยพื้นที่ที่มองเห็นจริง (`--app-vvh`) ไม่ใช่ `100dvh` ดิบ
+
+### Root cause
+- commit `934c18f` เติม `h-full` ให้ sheet (`flex h-full w-full ... rounded-b-none
+  rounded-t-2xl p-0`) และเปลี่ยน overlay เป็น `items-end justify-center
+  sm:items-center sm:p-4` → sheet ยืดเต็มความสูง overlay (วัดได้ 717px จาก
+  viewport 844px = 85% ของจอ ตาม `max-height` เดิม) และเกาะขอบล่างจอ
+  (bottom = 844) แทนที่จะเป็น modal กลางจอขนาดพอดีเนื้อหา
+- เมื่อคีย์บอร์ดเปิดอยู่ก่อน (visible viewport 400px) sheet เดิมสูง 340px
+  (85% ของ 400) และ bottom = 400 → ชนขอบล่างของพื้นที่มองเห็น ดูเหมือน
+  "modal ยาวลงด้านล่าง"
+
+### เปลี่ยนอะไร
+- `src/app/globals.css`: เพิ่ม `.modal-sheet-fit` — `max-height:
+  calc(100vh - 2rem)` แล้วทับด้วย `calc(var(--app-vvh, 100dvh) - 2rem)`,
+  desktop `@media (min-width: 640px)` → `min(90vh, calc(var(--app-vvh, 100dvh)
+  - 2rem))`; เพิ่ม `.modal-sheet [data-modal-scroll] {
+  -webkit-overflow-scrolling: touch }`; แก้คอมเมนต์ที่อ้างถึง pin ที่ถูกถอดไปแล้ว
+- `src/app/navigation/page.tsx` + `src/app/houses/page.tsx`: modal แก้ไขบ้าน
+  เปลี่ยน overlay กลับเป็น `modal-overlay flex items-center justify-center p-4`
+  และ sheet เป็น `modal-sheet modal-sheet-fit flex w-full max-w-sm|md flex-col
+  overflow-hidden rounded-2xl p-0` (ถอด `h-full`, `rounded-b-none`,
+  `rounded-t-2xl`, `sm:h-auto`, `items-end`)
+- `src/app/houses/page.tsx`: เพิ่ม ref content/dropdown + effect เลื่อน content
+  เท่าที่จำเป็นให้ dropdown แนะนำที่อยู่พ้นขอบล่างของ scroller/คีย์บอร์ด
+  (เหมือนหน้า navigation)
+- คงไว้ทั้งระบบ: `.modal-overlay` อิง visual viewport (`--app-vp-top` /
+  `--app-vvh`), `useModalKeyboardBehavior()` (blur เฉพาะ field ด้านหลังที่
+  focused + scroll เฉพาะ `[data-modal-scroll]` ด้วย `scrollTop`), body lock
+  `body.nav-dialog-open`, โครง header `shrink-0` / content scroll เดียว /
+  footer `shrink-0` ไม่มี X, `.modal-foot` อยู่ใน flex flow ปกติ,
+  `onMouseDown={(e) => e.preventDefault()}` + `selectAddressSuggestion()`
+- ไม่แตะ logic: `saveHouse()`, `closeModal()`, restricted confirmation,
+  `formData`, `editingHouse`, address autocomplete, `detectLocation()`,
+  `verifyOnMaps()`, lat/lng behavior, API/DB/auth, ไม่เพิ่ม dependency
+
+### สถานะ
+- ผ่าน `npx tsc --noEmit`, `npm run lint`, `npm run build` (9/9 pages),
+  structural harness 72/72, Chromium geometry harness 16/16 และ HTTP smoke
+  (`/` 307, `/navigation` `/houses` `/login` `/register` 200)
+- วัดด้วย Chromium จริง (viewport 390×844): เนื้อหาปกติ sheet 423px กลางจอ,
+  เนื้อหายาว sheet 812px (= 844 − 32, ไม่ใช่ full screen, content scroll
+  663/1078), คีย์บอร์ดเปิด (400px) sheet 368px header top 16 footer bottom 384,
+  เลื่อน content แล้ว header/footer ไม่ขยับ
+- BLOCKED: keyboard/แตะจริงบนมือถือ (ไม่มี signed-in session ในเบราว์เซอร์)
+- Report: `.ai/reports/2026-10-19-dropway-edit-house-modal-content-sized-revert.md`
+
 ## 2026-10-19 — Modal เปิดตอนคีย์บอร์ดเปิดอยู่ + ความนิ่งของหน้า Navigation
 
 ### หัวข้อ

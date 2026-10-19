@@ -3018,12 +3018,15 @@ export default function NavigationPage() {
       )}
       {/* Modal แก้ไขบ้าน */}
       {editingHouse && (
-        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
+        <div className="modal-overlay flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-house-title"
-            className="modal-sheet flex h-full w-full max-w-sm flex-col overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:h-auto sm:rounded-2xl"
+            // Content-sized dialog: no h-full / 100dvh. `.modal-sheet-fit` caps
+            // the height against the *visible* viewport, so the header and
+            // footer stay on screen while only the content scrolls.
+            className="modal-sheet modal-sheet-fit flex w-full max-w-sm flex-col overflow-hidden rounded-2xl p-0"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header: อยู่นิ่ง ไม่ scroll ไปกับ content */}

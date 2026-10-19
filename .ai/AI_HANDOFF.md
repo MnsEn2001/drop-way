@@ -95,19 +95,30 @@ Notes learned in this environment:
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
-## Current open items (as of 2026-10-18)
-- Edit House modal mobile layout (2026-10-18, extended 2026-10-19; do not
-  regress): **both** edit-house dialogs (navigation and houses "เพิ่ม /
-  แก้ไขบ้าน") are split dialogs — header `shrink-0`, one `data-modal-scroll`
-  content area, footer `shrink-0` outside the scroller with safe-area padding,
-  no X button, navigation coordinate field keeps its `houseCoordsInput` text
-  buffer, and the Google Maps button uses `lat != null && lng != null`.
-  `saveHouse()`, `closeModal()`, the restricted confirmation dirty check,
-  address autocomplete, `detectLocation()` and the houses add flow must stay
-  as they are. See
+## Current open items (as of 2026-10-19b)
+- Edit House modal must stay **content-sized** (2026-10-19, do not regress):
+  **both** edit-house dialogs (navigation and houses "เพิ่ม / แก้ไขบ้าน") are
+  split dialogs with overlay `modal-overlay flex items-center justify-center
+  p-4` and sheet `modal-sheet modal-sheet-fit flex w-full max-w-sm|md flex-col
+  overflow-hidden rounded-2xl p-0`. **Never** add `h-full`, `h-screen`,
+  `h-[100dvh]`, `min-h-screen`, `items-stretch` or the old bottom-sheet
+  rounding (`rounded-b-none rounded-t-2xl`) back — that is what made the modal
+  fill the screen and sit on the bottom edge (measured 717px of an 844px
+  viewport, bottom-anchored, before this revert). `.modal-sheet-fit` in
+  `globals.css` owns the height cap and uses `--app-vvh` (visible viewport),
+  not a raw `100dvh`, so header/footer stay visible with the keyboard open.
+  Structure stays: header `shrink-0`, one `data-modal-scroll` content area,
+  footer `shrink-0` outside the scroller with safe-area padding, no X button,
+  navigation coordinate field keeps its `houseCoordsInput` text buffer, and
+  the Google Maps button uses `lat != null && lng != null`. `saveHouse()`,
+  `closeModal()`, the restricted confirmation dirty check, address
+  autocomplete, `detectLocation()` and the houses add flow must stay as they
+  are. See
+  `.ai/reports/2026-10-19-dropway-edit-house-modal-content-sized-revert.md`,
   `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md` and
   `.ai/reports/2026-10-19-dropway-keyboard-open-modal-and-navigation-stability.md`.
-  Real phone/keyboard tapping is still NOT VERIFIED (no signed-in browser).
+  Real phone/keyboard tapping is still NOT VERIFIED (no signed-in browser);
+  Chromium geometry checks cover the layout contract only.
 - Keyboard-open positioning rule (2026-10-19, do not regress):
   `.modal-overlay` must keep `top: var(--app-vp-top, 0px)` + `bottom: auto` +
   `height: 100vh` fallback overridden by `height: var(--app-vvh, 100dvh)` so
