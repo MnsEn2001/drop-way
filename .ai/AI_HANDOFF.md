@@ -96,15 +96,31 @@ Notes learned in this environment:
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
 ## Current open items (as of 2026-10-18)
-- Edit House modal (navigation) mobile layout (2026-10-18, do not regress):
-  header `shrink-0`, one `data-modal-scroll` content area, footer `shrink-0`
-  outside the scroller with safe-area padding, no X button, coordinate field
-  keeps its `houseCoordsInput` text buffer, and the Google Maps button uses
-  `lat != null && lng != null`. `saveHouse()`, `closeModal()`, the restricted
-  confirmation dirty check, address autocomplete and `detectLocation()` must
-  stay as they are. Only this modal uses the split structure. See
-  `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`. Real
-  phone/keyboard tapping is still NOT VERIFIED (no signed-in browser).
+- Edit House modal mobile layout (2026-10-18, extended 2026-10-19; do not
+  regress): **both** edit-house dialogs (navigation and houses "เพิ่ม /
+  แก้ไขบ้าน") are split dialogs — header `shrink-0`, one `data-modal-scroll`
+  content area, footer `shrink-0` outside the scroller with safe-area padding,
+  no X button, navigation coordinate field keeps its `houseCoordsInput` text
+  buffer, and the Google Maps button uses `lat != null && lng != null`.
+  `saveHouse()`, `closeModal()`, the restricted confirmation dirty check,
+  address autocomplete, `detectLocation()` and the houses add flow must stay
+  as they are. See
+  `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md` and
+  `.ai/reports/2026-10-19-dropway-keyboard-open-modal-and-navigation-stability.md`.
+  Real phone/keyboard tapping is still NOT VERIFIED (no signed-in browser).
+- Keyboard-open positioning rule (2026-10-19, do not regress):
+  `.modal-overlay` must keep `top: var(--app-vp-top, 0px)` + `bottom: auto` +
+  `height: 100vh` fallback overridden by `height: var(--app-vvh, 100dvh)` so
+  dialogs open inside the *visible* area when the on-screen keyboard is already
+  open. Do not reintroduce a `pinSheet`/`vpPinned`/inline `marginTop` position
+  lock (removed — it held dialogs low), do not add per-dialog measurements or
+  hardcoded offsets. `--app-vp-top` now means `visualViewport.offsetTop` (not
+  `pageTop`) and `--app-kb-inset` exists for lifting floating controls. The
+  hook also blurs a focused field that is outside a newly opened
+  `.modal-sheet` (iOS does not move focus when a button is tapped) — keep that
+  observer, and never blur anywhere else or focus anything programmatically.
+  Navigation floating button must use `.nav-fab` (safe area + `--app-kb-inset`),
+  not a raw `fixed bottom-20 right-4 z-50`.
 - Mobile UI rules now in force (2026-10-14, do not regress): the houses card
   footer order is **ลบ → นำทาง → แก้ไข** and the navigate button keeps
   `btn btn-secondary ml-auto` plus its `h.lat && h.lng` gate; the navigation
@@ -163,12 +179,14 @@ Notes learned in this environment:
   may carry `overflow-hidden` unless its content is guaranteed to fit. See
   `.ai/reports/2026-10-12-dropway-centered-modals-all-breakpoints.md`.
   **Exception — navigation Edit House modal only** (2026-10-18): it is a split
-  dialog (`items-end ... sm:items-center`, `flex h-full flex-col
+  dialog (  `items-end ... sm:items-center`, `flex h-full flex-col
   overflow-hidden p-0 sm:h-auto`, `shrink-0` header, one `data-modal-scroll
   min-h-0 flex-1 overflow-y-auto overscroll-contain` content area, and a
   `shrink-0` `.modal-foot` outside the scroller with safe-area bottom padding),
   because the user asked for a stable mobile modal where only content scrolls.
-  Do not spread this structure to other modals without a request; see
+  **Since 2026-10-19 this applies to both edit-house dialogs** (navigation and
+  houses; see also the keyboard-open rule above). Do not spread this structure
+  to other modals without a request; see
   `.ai/reports/2026-10-18-dropway-edit-house-modal-mobile-scroll.md`.
 - Modal footer rule (2026-10-12): `.modal-foot` must stay in the normal
   document flow (`margin-top`, `padding-top`, `border-top` only). Do **not**
@@ -183,10 +201,11 @@ Notes learned in this environment:
   Escape-to-close anywhere. Dirty closes go through
   `setShowRestrictedConfirmModal` / `setShowUnsavedChangesConfirmModal`.
   All keyboard/viewport behavior lives in the single shared
-  `useModalKeyboardBehavior()` hook (`src/lib/viewport.ts`), which pins the
-  open sheet's top position and scrolls only that dialog's scroll container
-  (`[data-modal-scroll]` when the sheet has a split header/content/footer,
-  otherwise `sheet.scrollTop`); do not add a second keyboard system,
+  `useModalKeyboardBehavior()` hook (`src/lib/viewport.ts`), which sizes the
+  overlay from the visual viewport (CSS) and scrolls only the focused dialog's
+  own scroll container (`[data-modal-scroll]` when the sheet has a split
+  header/content/footer, otherwise `sheet.scrollTop`); do not add a second
+  keyboard system,
   `window.scrollTo`-based fixes, `scrollIntoView`, autofocus,
   `as unknown as` placeholder refs, or `setState` on visualViewport resize.
   Background lock is the `body.nav-dialog-open` class (`overflow: hidden`); do

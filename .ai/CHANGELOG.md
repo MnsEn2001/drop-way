@@ -1,5 +1,53 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-19 — Modal เปิดตอนคีย์บอร์ดเปิดอยู่ + ความนิ่งของหน้า Navigation
+
+### หัวข้อ
+- modal ทุกตัวเปิดในพื้นที่ที่มองเห็นเสมอ แม้คีย์บอร์ดของหน้าด้านหลังจะเปิดอยู่
+- modal แก้ไขบ้านทั้ง `/navigation` และ `/houses` ใช้โครง header / scrolling
+  content / fixed footer เหมือนกัน
+- ปุ่มเครื่องมือลอยของหน้า navigation ไม่ถูกแถบล่าง/คีย์บอร์ดบัง
+
+### Root cause
+- `.modal-overlay` ใช้ `position: fixed; inset: 0` = layout viewport แต่
+  คีย์บอร์ดย่อแค่ `visualViewport` ⇒ overlay สูงเท่า layout viewport และ dialog
+  ที่ `items-center` ถูกจัดกลางรวมส่วนที่คีย์บอร์ดบัง = modal เปิดต่ำ
+- การแตะปุ่มบน iOS ไม่เปลี่ยน focus ⇒ ช่องค้นหาด้านหลังยัง focused และ
+  คีย์บอร์ดค้างอยู่
+- ตรรกะ pin sheet เดิม (`align-self: flex-start` + `margin-top` ตอน focusin)
+  ยึด modal ไว้ที่ตำแหน่งเดิมซึ่งอยู่ในโซนต่ำ จึงขัดกับการแก้ overlay
+
+### เปลี่ยนอะไร
+- `src/app/globals.css`: `.modal-overlay` อิง visual viewport
+  (`top: var(--app-vp-top, 0px)`, `height: 100vh` fallback แล้วทับด้วย
+  `height: var(--app-vvh, 100dvh)`, `bottom: auto`, `overscroll-behavior:
+  contain`); เพิ่ม `.nav-fab` (safe area + `--app-kb-inset`)
+- `src/lib/viewport.ts`: `--app-vp-top` = `visualViewport.offsetTop` (เดิม
+  `pageTop`), เพิ่ม `--app-kb-inset`; ถอด pin (`pinSheet`/`vpPinned`/
+  inline margin) ออก; เพิ่ม MutationObserver ที่ blur field ด้านหลังเมื่อมี
+  `.modal-sheet` ใหม่ถูก insert; ยัง scroll เฉพาะ `[data-modal-scroll]`
+  ของ dialog ด้วย `scrollTop` เท่านั้น (ไม่มี `window.scrollTo`/
+  `scrollIntoView`/autofocus)
+- `src/app/houses/page.tsx`: modal เพิ่ม/แก้ไขบ้านเป็น split dialog
+  (overlay `items-end ... sm:items-center sm:p-4`, sheet `flex h-full flex-col
+  overflow-hidden p-0 sm:h-auto`, header `shrink-0`, content
+  `data-modal-scroll`, footer `shrink-0` + safe area) — ปุ่มยกเลิก/บันทึกและ
+  ฟังก์ชันเดิมทั้งหมด
+- `src/app/navigation/page.tsx`: เพิ่ม ref content/dropdown + effect เลื่อน
+  content เท่าที่จำเป็นให้ dropdown แนะนำที่อยู่พ้น footer/คีย์บอร์ด; FAB
+  ใช้ `.nav-fab`; `pb-32` → `pb-44` (มือถือ); อัปเดตคอมเมนต์ของ hook
+- ไม่แตะ `saveHouse()`, `closeModal()`, restricted/unsaved confirmation,
+  address autocomplete, `detectLocation()`, `verifyOnMaps()`, Supabase/API/
+  schema/auth/RLS, Google Maps logic, การกรอง/เรียง/แบ่งหน้า, ปุ่ม X (ไม่เพิ่ม)
+
+### สถานะ
+- code commit: `934c18f3ec341aa19e844e815dea1eb2e4417351` (push แล้ว, remote ตรง)
+- ผ่าน `npx tsc --noEmit`, `npm run lint`, `npm run build`, `git diff --check`,
+  structural harness 36/36 PASS, HTTP `307` `/` และ `200` `/navigation`
+  `/houses` `/login`
+- BLOCKED: TEST A–E บนเครื่องจริง (ไม่มี signed-in browser/device)
+- Report: `.ai/reports/2026-10-19-dropway-keyboard-open-modal-and-navigation-stability.md`
+
 ## 2026-10-18 — Edit House Modal (หน้า Navigation): mobile layout + scroll เฉพาะ content
 
 ### หัวข้อ

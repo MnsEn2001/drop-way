@@ -34,7 +34,9 @@ This is a factual snapshot of the repository and the documentation effort that c
   pushed and verified: `f660df99eb02b0c9b2881acbdd0f1ddab4cc5b74`
 - 2026-10-18 Edit House modal mobile layout/scroll (code commit)
   pushed and verified: `d373f6d555f311c32e92c9e9828da5b34477317c`
-- Latest verified GitHub `main`: `d373f6d555f311c32e92c9e9828da5b34477317c`
+- 2026-10-19 keyboard-open modal positioning + navigation stability (code commit)
+  pushed and verified: `934c18f3ec341aa19e844e815dea1eb2e4417351`
+- Latest verified GitHub `main`: `934c18f3ec341aa19e844e815dea1eb2e4417351`
   (docs commit for this session follows on top)
 
 ## Latest verified full product audit
@@ -214,6 +216,52 @@ This is a factual snapshot of the repository and the documentation effort that c
 - BLOCKED: tapping fields/suggestions/buttons on a real phone with the keyboard
   open (no signed-in browser or device). Verification is source + built CSS +
   typecheck/lint/build + a 21/21 structural harness.
+
+## Keyboard-open modal positioning + navigation stability (2026-10-19)
+- Root cause of "keyboard open → open Edit House → modal sits low":
+  `.modal-overlay` was `position: fixed; inset: 0` (layout viewport). The
+  keyboard only shrinks the *visual* viewport, so the overlay stayed full
+  height and the centred/flex sheet was laid out behind the keyboard. The
+  overlay now uses `top: var(--app-vp-top, 0px)`, `bottom: auto`,
+  `height: 100vh` fallback overridden by `height: var(--app-vvh, 100dvh)` and
+  `overscroll-behavior: contain`, so every dialog (houses 4 + navigation 8)
+  opens inside the visible area even when the keyboard is already open.
+- `src/lib/viewport.ts`: `--app-vp-top` is now
+  `visualViewport.offsetTop` (was `pageTop`) and `--app-kb-inset`
+  (`max(0, innerHeight - offsetTop - height)`) was added. The old pin logic
+  (`pinSheet`, `sheet.dataset.vpPinned`, inline `alignSelf`/`marginTop`) is
+  removed — it held the dialog at its old (low) position. The hook still
+  scrolls only the dialog's own scroller (`[data-modal-scroll]` first, else the
+  sheet) via `scrollTop`; no `window.scrollTo`, no `scrollIntoView`, no
+  autofocus, no React state on viewport resize. This supersedes the pin
+  described in the 2026-10-12 section above.
+- New in the same hook: a `MutationObserver` on `document.body` that blurs a
+  focused text field when it is outside a newly inserted `.modal-sheet` — on
+  iOS tapping a button does not move focus, so the page search field could keep
+  the keyboard open while a dialog opened.
+- Both edit-house dialogs are now split dialogs (fixed header / scrolling
+  `data-modal-scroll` content / fixed `shrink-0` footer with safe-area padding):
+  the navigation one (2026-10-18) and the houses "เพิ่ม / แก้ไขบ้าน" one
+  (2026-10-19). This extends the 2026-10-18 scoped exception; other modals keep
+  the centred single-scroll structure. No X button in either modal.
+- Navigation page: the floating tools button uses `.nav-fab`
+  (`bottom: calc(5rem + env(safe-area-inset-bottom,0px) + var(--app-kb-inset,0px))`,
+  `5rem + kb-inset` on desktop) instead of `fixed bottom-20 right-4 z-50`, and
+  the page bottom padding on mobile is `pb-44` so the raised button cannot
+  cover the last card. The address suggestion dropdown is scrolled into the
+  visible content area with `content.scrollTop` when it would fall under the
+  footer/keyboard; the original `onMouseDown={(e) => e.preventDefault()}` guard
+  is kept.
+- Business logic untouched: `saveHouse()`, `closeModal()`, restricted/unsaved
+  confirmation and dirty checks, `formData`, address autocomplete helpers,
+  `detectLocation()`, `verifyOnMaps()`, `houseCoordsInput` parsing, Supabase/
+  API/schema/auth/RLS, Google Maps logic, filtering/ranking/pagination, hand
+  mode storage.
+- Report: `.ai/reports/2026-10-19-dropway-keyboard-open-modal-and-navigation-stability.md`
+- BLOCKED: TEST A–E on a real phone (keyboard already open → open modal, tap
+  fields/suggestions/buttons, keyboard close) — no signed-in browser or device
+  in this environment. Verification is source + built CSS + typecheck/lint/
+  build + a 36/36 structural harness.
 
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
