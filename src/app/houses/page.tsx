@@ -1675,20 +1675,25 @@ export default function HousesPage() {
       )}
 
       {/* Modal เพิ่ม / แก้ไขบ้าน */}      {(editingHouse || isAdding) && (
-        <div
-          className="modal-overlay flex items-center justify-center p-4"
-        >
+        <div className="modal-overlay flex items-end justify-center sm:items-center sm:p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="house-form-title"
             onClick={(e) => e.stopPropagation()}
-            className="modal-sheet w-full max-w-md p-5 sm:rounded-2xl sm:p-6"
+            className="modal-sheet flex h-full w-full max-w-md flex-col overflow-hidden rounded-b-none rounded-t-2xl p-0 sm:h-auto sm:rounded-2xl"
           >
-            <h2 id="house-form-title" className="text-lg font-bold">
-              {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
-            </h2>
-            <div className="mt-4 space-y-4">
+            {/* Header: อยู่นิ่ง ไม่ scroll ไปกับ content */}
+            <div className="shrink-0 border-b border-gray-200 px-5 pb-4 pt-5 sm:border-0 sm:px-6 sm:pt-6">
+              <h2 id="house-form-title" className="text-lg font-bold">
+                {isAdding ? "เพิ่มบ้านใหม่" : "แก้ไขบ้าน"}
+              </h2>
+            </div>
+            {/* Content: scroll container เดียวของ modal */}
+            <div
+              data-modal-scroll
+              className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6"
+            >
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label htmlFor="house-full-name" className="label">
@@ -1851,39 +1856,40 @@ export default function HousesPage() {
                   </button>
                 </div>
               )}
-              <div className="modal-foot flex gap-3">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  onMouseDown={(e) => e.preventDefault()}
-                  disabled={isSavingHouse}
-                  className="btn btn-secondary flex-1"
-                >
-                  ยกเลิก
-                </button>
+            </div>
+            {/* Footer: อยู่นิ่ง ไม่ scroll ไปกับ content */}
+            <div className="modal-foot flex shrink-0 gap-3 px-5 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:pb-6">
+              <button
+                type="button"
+                onClick={closeModal}
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={isSavingHouse}
+                className="btn btn-secondary flex-1"
+              >
+                ยกเลิก
+              </button>
 
-                <button
-                  type="button"
-                  onClick={saveHouse}
-                  onMouseDown={(e) => e.preventDefault()}
-                  disabled={isSavingHouse}
-                  className="btn btn-primary flex-1"
-                >
-                  {isSavingHouse ? (
-                    <>
-                      <Loader2
-                        className="h-4 w-4 animate-spin"
-                        aria-hidden="true"
-                      />
-                      กำลังบันทึก...
-                    </>
-                  ) : isAdding ? (
-                    "เพิ่มบ้าน"
-                  ) : (
-                    "บันทึก"
-                  )}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={saveHouse}
+                onMouseDown={(e) => e.preventDefault()}
+                disabled={isSavingHouse}
+                className="btn btn-primary flex-1"
+              >
+                {isSavingHouse ? (
+                  <>
+                    <Loader2
+                      className="h-4 w-4 animate-spin"
+                      aria-hidden="true"
+                    />
+                    กำลังบันทึก...
+                  </>
+                ) : isAdding ? (
+                  "เพิ่มบ้าน"
+                ) : (
+                  "บันทึก"
+                )}
+              </button>
             </div>
           </div>
         </div>

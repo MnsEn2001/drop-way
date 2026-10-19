@@ -6,13 +6,18 @@ import { useEffect } from "react";
 const VISIBLE_EDGE_MARGIN = 20;
 
 /**
- * Keeps the visible-viewport CSS variables on the document element so dialogs
- * can size themselves to the area that is actually visible when the on-screen
- * keyboard is open:
+ * Keeps the visual-viewport CSS variables on the document element so dialogs
+ * and floating controls can size/position themselves against the area that is
+ * actually visible when the on-screen keyboard is open:
  *
  * - `--app-vvh`: `visualViewport.height`
- * - `--app-vp-top`: `visualViewport.pageTop`
- * - `--app-vp-left`: `visualViewport.pageLeft`
+ * - `--app-vp-top`: `visualViewport.offsetTop` (offset of the visible area
+ *   inside the layout viewport) — `.modal-overlay` uses it so a dialog opens
+ *   in the visible area even when the keyboard is already open
+ * - `--app-vp-left`: `visualViewport.offsetLeft`
+ * - `--app-kb-inset`: how much of the layout viewport sits below/behind the
+ *   keyboard (`innerHeight - offsetTop - height`) — floating actions use it so
+ *   they are never buried under the keyboard
  *
  * It only writes CSS custom properties (no React state), so viewport resize
  * never triggers a re-render and never recenters a dialog.
@@ -28,17 +33,18 @@ export function useVisualViewportMetrics() {
     const root = document.documentElement;
 
     const apply = () => {
-      root.style.setProperty(
-        "--app-vvh",
-        `${Math.round(visualViewport.height)}px`,
-      );
-      root.style.setProperty(
-        "--app-vp-top",
-        `${Math.round(visualViewport.pageTop)}px`,
-      );
+      const height = Math.round(visualViewport.height);
+      const offsetTop = Math.round(visualViewport.offsetTop);
+
+      root.style.setProperty("--app-vvh", `${height}px`);
+      root.style.setProperty("--app-vp-top", `${offsetTop}px`);
       root.style.setProperty(
         "--app-vp-left",
-        `${Math.round(visualViewport.pageLeft)}px`,
+        `${Math.round(visualViewport.offsetLeft)}px`,
+      );
+      root.style.setProperty(
+        "--app-kb-inset",
+        `${Math.max(0, Math.round(window.innerHeight - offsetTop - height))}px`,
       );
     };
 
@@ -52,6 +58,7 @@ export function useVisualViewportMetrics() {
       root.style.removeProperty("--app-vvh");
       root.style.removeProperty("--app-vp-top");
       root.style.removeProperty("--app-vp-left");
+      root.style.removeProperty("--app-kb-inset");
     };
   }, []);
 }
@@ -63,11 +70,29 @@ function getOwningSheet(element: Element | null): HTMLElement | null {
   return sheet;
 }
 
+const NON_TEXT_INPUT_TYPES = new Set([
+  "button",
+  "checkbox",
+  "color",
+  "file",
+  "hidden",
+  "image",
+  "radio",
+  "range",
+  "reset",
+  "submit",
+]);
+
+/** True only for fields that can open the on-screen keyboard. */
 function isEditable(element: HTMLElement): boolean {
+  if (element.isContentEditable) return true;
+
   const tag = element.tagName;
   if (tag === "TEXTAREA" || tag === "SELECT") return true;
-  if (tag === "INPUT") return true;
-  return element.isContentEditable;
+  if (tag !== "INPUT") return false;
+
+  const type = (element as HTMLInputElement).type.toLowerCase();
+  return !NON_TEXT_INPUT_TYPES.has(type);
 }
 
 /**
@@ -80,17 +105,37 @@ function getScrollContainer(sheet: HTMLElement): HTMLElement {
 }
 
 /**
+ * Releases the keyboard held by a field that is not part of the dialog that
+ * just opened.
+ *
+ * On mobile, tapping a dialog trigger does not necessarily blur the field that
+ * is already focused behind it (tapping a button is not a focus change on iOS
+ * Safari), so the keyboard could stay open and keep the visible viewport
+ * short. Blurring that single element at the moment a `.modal-sheet` is
+ * inserted closes the keyboard before the dialog settles, without touching
+ * focus anywhere else. Nothing is ever focused programmatically, so the
+ * "the keyboard only opens when the user taps a field" rule and accessibility
+ * stay intact.
+ */
+function releaseBackgroundKeyboard(sheet: Element) {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return;
+  if (!isEditable(active)) return;
+  if (sheet.contains(active)) return;
+  active.blur();
+}
+
+/**
  * Single shared modal keyboard behavior for every dialog in the app
  * (houses page + navigation page).
  *
  * What it does while a `.modal-sheet` dialog is open:
  *
- * 1. Locks the open-time position of the sheet. When the user focuses a field
- *    the on-screen keyboard shrinks the visual viewport, which used to make
- *    the flex-centered sheet re-center (jump). The sheet's current top offset
- *    is measured once and pinned with `align-self: flex-start` + `margin-top`,
- *    so the dialog keeps the exact position it had when the user touched the
- *    field, no matter how the viewport resizes afterwards.
+ * 1. Keeps the dialog inside the visible area. `.modal-overlay` is sized from
+ *    the visual-viewport variables (see `useVisualViewportMetrics`), so a
+ *    dialog opened while the keyboard is already open is laid out in the
+ *    visible area from its very first frame — it can never be pushed below the
+ *    keyboard, and the keyboard resize cannot push it down either.
  * 2. Follows the focused field. On `focusin`, and again on every
  *    `visualViewport` resize/scroll (keyboard animation, scrolling the visual
  *    viewport), the focused input/textarea/select is brought into the visible
@@ -99,13 +144,11 @@ function getScrollContainer(sheet: HTMLElement): HTMLElement {
  *    content area when the dialog has a fixed header/footer, otherwise the
  *    sheet). Every adjustment is done through that element's `scrollTop` —
  *    never `window.scrollTo`, never `scrollIntoView()`, never a page-level
- *    scroll — so the page behind never jumps, the dialog never moves and its
- *    header/footer stay put.
+ *    scroll — so the page behind never jumps, header/footer stay put and only
+ *    the content moves.
  *
  * It is delegated from `document`/`visualViewport`, so every modal on both
- * pages gets identical behavior without duplicating logic per dialog, and it
- * never focuses anything itself: the keyboard only opens when the user taps a
- * field (no autofocus anywhere in the system).
+ * pages gets identical behavior without duplicating logic per dialog.
  */
 export function useModalKeyboardBehavior() {
   // Keep the visual-viewport CSS variables (`--app-vvh` etc.) in sync.
@@ -113,38 +156,18 @@ export function useModalKeyboardBehavior() {
 
   useEffect(() => {
     const visualViewport = window.visualViewport;
-    if (!visualViewport) return;
-
-    let frame: number | null = null;
-    const pendingTimeouts: number[] = [];
-
-    // Pins the sheet to the top offset it had when the field was tapped, so
-    // the keyboard resize can never recenter (and thus jump) the dialog.
-    const pinSheet = (sheet: HTMLElement) => {
-      if (sheet.dataset.vpPinned === "true") return;
-      const overlay = sheet.parentElement;
-      if (!overlay || !overlay.classList.contains("modal-overlay")) return;
-
-      const overlayRect = overlay.getBoundingClientRect();
-      const sheetRect = sheet.getBoundingClientRect();
-      const paddingTop =
-        window.parseFloat(window.getComputedStyle(overlay).paddingTop) || 0;
-      const offset = Math.round(sheetRect.top - (overlayRect.top + paddingTop));
-
-      sheet.style.alignSelf = "flex-start";
-      sheet.style.marginTop = `${Math.max(0, offset)}px`;
-      sheet.dataset.vpPinned = "true";
-    };
 
     // Scrolls the focused field into the *visible* part of the viewport by
     // moving only the dialog's scroll container.
     const ensureFocusedFieldVisible = () => {
+      if (!visualViewport) return;
+
       const active = document.activeElement;
       if (!(active instanceof HTMLElement)) return;
       if (!isEditable(active)) return;
 
       const sheet = getOwningSheet(active);
-      if (!sheet || sheet.dataset.vpPinned !== "true") return;
+      if (!sheet) return;
 
       const scroller = getScrollContainer(sheet);
       if (scroller.scrollHeight <= scroller.clientHeight) return; // nothing to scroll
@@ -176,6 +199,9 @@ export function useModalKeyboardBehavior() {
       );
     };
 
+    let frame: number | null = null;
+    const pendingTimeouts: number[] = [];
+
     const scheduleEnsureVisible = () => {
       if (frame !== null) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
@@ -186,10 +212,8 @@ export function useModalKeyboardBehavior() {
 
     const handleFocusIn = (event: FocusEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      const sheet = getOwningSheet(target);
-      if (!sheet) return;
+      if (!getOwningSheet(target)) return;
 
-      pinSheet(sheet);
       scheduleEnsureVisible();
       // Android Chrome animates the keyboard in over a few hundred ms and
       // keeps firing visual-viewport resizes; retry twice so the field ends
@@ -198,16 +222,38 @@ export function useModalKeyboardBehavior() {
       pendingTimeouts.push(window.setTimeout(scheduleEnsureVisible, 600));
     };
 
+    // When a dialog opens, release any keyboard that belongs to a field
+    // outside it (see `releaseBackgroundKeyboard`).
+    const sheetObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (!(node instanceof Element)) continue;
+          const sheet = node.matches(".modal-sheet")
+            ? node
+            : node.querySelector(".modal-sheet");
+          if (!sheet) continue;
+          releaseBackgroundKeyboard(sheet);
+          return;
+        }
+      }
+    });
+    sheetObserver.observe(document.body, { childList: true, subtree: true });
+
     document.addEventListener("focusin", handleFocusIn, true);
-    visualViewport.addEventListener("resize", scheduleEnsureVisible);
-    visualViewport.addEventListener("scroll", scheduleEnsureVisible);
+    if (visualViewport) {
+      visualViewport.addEventListener("resize", scheduleEnsureVisible);
+      visualViewport.addEventListener("scroll", scheduleEnsureVisible);
+    }
 
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
       pendingTimeouts.forEach((timeout) => window.clearTimeout(timeout));
+      sheetObserver.disconnect();
       document.removeEventListener("focusin", handleFocusIn, true);
-      visualViewport.removeEventListener("resize", scheduleEnsureVisible);
-      visualViewport.removeEventListener("scroll", scheduleEnsureVisible);
+      if (visualViewport) {
+        visualViewport.removeEventListener("resize", scheduleEnsureVisible);
+        visualViewport.removeEventListener("scroll", scheduleEnsureVisible);
+      }
     };
   }, []);
 }

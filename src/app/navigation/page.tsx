@@ -82,10 +82,14 @@ export default function NavigationPage() {
   const [handMode, setHandMode] = useState<HandMode>("right");
   // ปุ่มที่กดเปิด Dialog ไว้ เพื่อคืนโฟกัสหลังปิด (ไม่เปิดคีย์บอร์ดซ้ำ)
   const dialogTriggerRef = useRef<HTMLElement | null>(null);
+  // อ้างอิง scroll container ของ modal แก้ไขบ้าน + dropdown แนะนำที่อยู่
+  // เพื่อเลื่อน content ให้ dropdown อยู่ในพื้นที่ที่มองเห็นเสมอ (ไม่ถูก footer ทับ)
+  const editModalScrollRef = useRef<HTMLDivElement | null>(null);
+  const editAddressDropdownRef = useRef<HTMLDivElement | null>(null);
 
-  // ระบบกลางเดียวสำหรับ dialog ทุกตัว (ใช้ร่วมกับหน้าบ้าน): ล็อกตำแหน่ง
-  // dialog ตอนเปิด ไม่ให้คีย์บอร์ดทำให้ recenter/กระโดด และเลื่อนเฉพาะ
-  // เนื้อหาใน .modal-sheet ให้ field ที่ผู้ใช้แตะอยู่เหนือคีย์บอร์ดเสมอ
+  // ระบบกลางเดียวสำหรับ dialog ทุกตัว (ใช้ร่วมกับหน้าบ้าน): overlay อิงกับ visual
+  // viewport ทำให้ dialog เปิดในพื้นที่ที่มองเห็นเสมอแม้คีย์บอร์ดจะเปิดอยู่ก่อน
+  // และเลื่อนเฉพาะเนื้อหาใน .modal-sheet ให้ field ที่ผู้ใช้แตะอยู่เหนือคีย์บอร์ด
   useModalKeyboardBehavior();
 
   // Modal คอมเมนต์
@@ -1044,6 +1048,33 @@ export default function NavigationPage() {
       setAddressInput(formData.address || "");
     }
   }, [editingHouse, formData.address]);
+
+  // ถ้า dropdown แนะนำที่อยู่โผล่ต่ำเกินพื้นที่ที่มองเห็น (footer/คีย์บอร์ด)
+  // ให้เลื่อนเฉพาะ content ของ modal ขึ้นเท่าที่จำเป็น — ไม่แตะ page scroll
+  useEffect(() => {
+    if (addressSuggestions.length === 0) return;
+
+    const scroller = editModalScrollRef.current;
+    const dropdown = editAddressDropdownRef.current;
+    if (!scroller || !dropdown) return;
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const dropdownRect = dropdown.getBoundingClientRect();
+    const visualViewport = window.visualViewport;
+    const visibleBottom = Math.min(
+      scrollerRect.bottom,
+      visualViewport
+        ? visualViewport.offsetTop + visualViewport.height
+        : scrollerRect.bottom,
+    );
+
+    const overflow = dropdownRect.bottom - (visibleBottom - 12);
+    if (overflow <= 0) return;
+
+    const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+    scroller.scrollTop = Math.min(scroller.scrollTop + overflow, maxScroll);
+  }, [addressSuggestions]);
+
   const handleAddressChange = (value: string) => {
     setAddressInput(value);
     setFormData((prev) => ({ ...prev, address: value }));
@@ -1668,7 +1699,7 @@ export default function NavigationPage() {
   }
 
   return (
-    <div className="page-shell relative mx-auto max-w-7xl px-4 py-6 pb-32 sm:py-8 md:pb-8">
+    <div className="page-shell relative mx-auto max-w-7xl px-4 py-6 pb-44 sm:py-8 md:pb-8">
       <div className="mb-6 sm:mb-8">
         <h1 className="page-title">
           <Home className="h-7 w-7 text-teal-700" aria-hidden="true" />
@@ -2733,7 +2764,7 @@ export default function NavigationPage() {
             onClick={() => setIsFabOpen(false)}
           />
           {/* กลุ่มปุ่มย่อย + ปุ่มหลัก - แสดงเฉพาะตอนเปิด */}
-          <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end">
+          <div className="nav-fab flex flex-col items-end">
             <div className="flex flex-col items-end gap-4 mb-4">
               <button
                 type="button"
@@ -2784,7 +2815,7 @@ export default function NavigationPage() {
         </>
       ) : (
         /* เมื่อปิด FAB - แสดงเฉพาะปุ่มหลักตัวเดียว (ไม่หมุนลูกศร) */
-        <div className="fixed bottom-20 right-4 z-50">
+        <div className="nav-fab">
           <button
             type="button"
             onClick={() => setIsFabOpen(true)}
@@ -3003,6 +3034,7 @@ export default function NavigationPage() {
             </div>
             {/* Content: scroll container เดียวของ modal */}
             <div
+              ref={editModalScrollRef}
               data-modal-scroll
               className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6"
             >
@@ -3035,7 +3067,10 @@ export default function NavigationPage() {
                 />
                 {/* Dropdown แนะนำที่อยู่ */}
                 {addressSuggestions.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
+                  <div
+                    ref={editAddressDropdownRef}
+                    className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto"
+                  >
                     {addressSuggestions.map((suggestion, index) => (
                       <button
                         key={index}

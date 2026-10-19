@@ -131,12 +131,30 @@ body {
   height: var(--mobile-header-height);
 }
 
-/* Modal sheets must always sit above the fixed bottom navigation. */
+/* Modal sheets must always sit above the fixed bottom navigation.
+
+   The overlay covers the *visual* viewport, not the layout viewport. On mobile
+the on-screen keyboard shrinks `visualViewport` while the layout viewport keeps
+its full height, so a plain `inset: 0` overlay stayed as tall as the layout
+viewport and any dialog inside it was laid out (and centered) behind the
+keyboard — the dialog opened "pushed down" whenever the keyboard was already
+open. Anchoring the overlay to the visible area fixes the root cause for every
+dialog: the geometry is already correct at the moment the modal opens, without
+any per-modal measurement or hardcoded offsets.
+
+   Fallbacks: `100vh` then `100dvh` when the visual-viewport variables are not
+available (no `window.visualViewport`). The variables are written by
+`useVisualViewportMetrics()` in `src/lib/viewport.ts`. */
 .modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
   background: rgba(15, 23, 42, 0.5);
+  top: var(--app-vp-top, 0px);
+  bottom: auto;
+  height: 100vh;
+  height: var(--app-vvh, 100dvh);
+  overscroll-behavior: contain;
 }
 
 /* Confirmation dialogs must always sit above every normal modal. */
@@ -412,6 +430,24 @@ body {
     margin-top: 1rem;
     padding-top: 0.75rem;
     border-top: 1px solid var(--border);
+  }
+
+  /* Floating tools button of the navigation page. Base offset is unchanged
+     (5rem) but it now clears the home-indicator safe area and any open
+     on-screen keyboard (`--app-kb-inset` from `src/lib/viewport.ts`), so the
+     main navigation action is never buried under the bottom bar or the
+     keyboard. */
+  .nav-fab {
+    position: fixed;
+    right: 1rem;
+    z-index: 50;
+    bottom: calc(5rem + env(safe-area-inset-bottom, 0px) + var(--app-kb-inset, 0px));
+  }
+
+  @media (min-width: 768px) {
+    .nav-fab {
+      bottom: calc(5rem + var(--app-kb-inset, 0px));
+    }
   }
 
   /* Vertical, icon-only action rail on the side of a navigation card. */
