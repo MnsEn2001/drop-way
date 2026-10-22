@@ -1,5 +1,51 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-22 — นำรายการจาก "ส่งแล้ว" กลับไป "วันนี้" (แก้เคสกดยืนยันผิด)
+
+### หัวข้อ
+- การ์ดในแถบ **ส่งแล้ว** ของหน้า `/navigation` มีปุ่ม
+  **↩ นำกลับไปวันนี้** (แสดงเฉพาะแท็บนั้น) → confirmation → ย้อนสถานะ
+  `delivery_status` จาก `delivered` กลับเป็น `pending` ซึ่งเป็นค่าเดียวกับ
+  ที่แถบ "วันนี้" ใช้กรองอยู่แล้ว — ไม่มีสถานะ/ตาราง/API ใหม่
+
+### ของเดิมที่ตรวจก่อนแก้
+- แถบ "วันนี้" = `!delivery_status || delivery_status === "pending"`;
+  แถบ "ส่งแล้ว" = `delivery_status === "delivered"` (ฟิลเตอร์ใน
+  `src/app/navigation/page.tsx`)
+- "ส่งสำเร็จ" เขียนโดย `confirmDeliver()` → `user_navigation_houses.update(
+  { delivery_status: "delivered", delivery_note, delivered_at })`
+- ข้อมูลทั้งหมด (บ้าน/ลูกค้า/ที่อยู่/เบอร์/พิกัด/note/`driver_note`/
+  `report_reason`/`delivery_note`) อยู่ในแถวเดิมของ `user_navigation_houses`
+  → การนำกลับจึงเป็นการ update แถวเดิม ไม่ delete/insert
+- ไม่มี delivery history / audit log / status history ในโปรเจกต์ (ไม่มีตาราง
+  หรือไฟล์ SQL) จึงไม่เพิ่มระบบใหม่ (ตาม MVP)
+- Confirmation กลางมี 2 ตัว แต่ข้อความคงที่สำหรับ "unsaved changes"
+  ("ไม่ปิด / ปิดทิ้ง") จึงใช้ไม่ได้กับข้อความ "นำกลับไปวันนี้"; ใช้ **รูปแบบ**
+  เดิมของชั้น confirmation (`modal-overlay-top`, z-index 1000,
+  `.modal-sheet`, `.modal-foot`, `btn btn-secondary` + `btn btn-primary`)
+
+### เปลี่ยนอะไร
+- `src/app/navigation/page.tsx`: state `showRestoreConfirmModal` /
+  `houseToRestore` / `isRestoreSubmitting` + `restoreInFlightRef` (กันกดซ้ำ),
+  `requestRestoreToToday()`, `confirmRestoreToToday()`,
+  `closeRestoreConfirmModal()`; เพิ่ม modal ยืนยัน;
+  เพิ่ม `(showRestoreConfirmModal && !!houseToRestore)` ใน `anyDialogOpen`
+- ปุ่ม "นำกลับไปวันนี้" เป็นปุ่มเต็มความกว้างในเนื้อการ์ด (min-height 44px)
+  เฉพาะ `viewMode === "delivered"` — ไม่แตะ `.action-rail` เดิม
+- Mutation: `update({ delivery_status: "pending", delivered_at: null })`
+  `.eq("id", nav_id).eq("delivery_status", "delivered")` (กันกดซ้ำ/กันแถวที่
+  ไม่ได้ส่งแล้ว) แล้วอ่าน `navigation_view` ยืนยันว่าเป็น `pending` จริง
+  ก่อน `reloadNavigation()`; error → toast "นำรายการกลับไปวันนี้ไม่สำเร็จ
+  กรุณาลองใหม่" และรายการยังอยู่ "ส่งแล้ว" (ไม่มี optimistic move)
+- `delivery_note` (ข้อมูลการชำระเงิน) และ field อื่นทั้งหมดถูกเก็บไว้;
+  `delivered_at` ถูกล้างเพราะไม่ใช่เวลาส่งจริงอีกต่อไป
+- ตรวจแล้ว: `npx tsc --noEmit` 0, `next lint` 0, `npm run build` 9/9,
+  E2E Chromium 26/26 (cancel/confirm/double-tap/error/refresh/new session/
+  other rows untouched; payload = `{delivery_status:"pending",delivered_at:null}`)
+- Report: `.ai/reports/2026-10-22-dropway-navigation-restore-to-today.md`
+- BLOCKED: real Supabase RLS/database + real-device touch (ไม่มี credentials/
+  อุปกรณ์ใน environment นี้) — E2E ใช้ stateful REST stub
+
 ## 2026-10-22 — รายงาน "โอน": Amount Calculator แบบแป้นตัวเลขในแอป
 
 ### หัวข้อ

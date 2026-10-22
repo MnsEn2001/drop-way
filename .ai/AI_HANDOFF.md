@@ -96,6 +96,20 @@ Notes learned in this environment:
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
 ## Current open items (as of 2026-10-22)
+- Restore "ส่งแล้ว → วันนี้" (2026-10-22, do not regress): cards in the
+  `delivered` tab render the `นำกลับไปวันนี้` button (44px, content column
+  only, never inside `.action-rail`). It must keep going through
+  `confirmRestoreToToday()` → `user_navigation_houses.update({
+  delivery_status: "pending", delivered_at: null })` with the
+  `.eq("delivery_status", "delivered")` guard, `restoreInFlightRef` double-tap
+  guard, backend re-read via `navigation_view`, then `reloadNavigation()`.
+  Do not add a new status/tab/API/audit table, do not delete or re-insert the
+  row, and keep `delivery_note` (payment info), `driver_note`,
+  `report_reason`, address/phone/coords untouched. Errors must leave the card
+  in `ส่งแล้ว` (no optimistic move). Confirmation uses the existing
+  `modal-overlay-top` layer pattern with its own copy — the generic
+  "unsaved changes" dialog text cannot be reused. See
+  `.ai/reports/2026-10-22-dropway-navigation-restore-to-today.md`.
 - Report "โอน" + Amount Calculator (2026-10-22, do not regress): in
   `src/app/navigation/page.tsx` the report option `โอน` opens a content-sized
   sheet (`modal-sheet modal-sheet-fit flex w-full max-w-sm flex-col

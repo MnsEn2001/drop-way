@@ -31,6 +31,7 @@ import {
   PanelLeft,
   PanelRight,
   QrCode,
+  Undo2,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
 import { useModalKeyboardBehavior } from "@/lib/viewport";
@@ -215,6 +216,14 @@ export default function NavigationPage() {
   const [isCommentSubmitting, setIsCommentSubmitting] = useState(false);
   const [isDeliverSubmitting, setIsDeliverSubmitting] = useState(false);
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
+  // นำรายการที่ "ส่งแล้ว" กลับไปอยู่ในแถบ "วันนี้" (แก้เคสกดยืนยันผิด)
+  const [showRestoreConfirmModal, setShowRestoreConfirmModal] = useState(false);
+  const [houseToRestore, setHouseToRestore] = useState<NavigationHouse | null>(
+    null,
+  );
+  const [isRestoreSubmitting, setIsRestoreSubmitting] = useState(false);
+  // กันกดซ้ำในจังหวะเดียวกัน (ก่อน React จะ re-render เป็น disabled)
+  const restoreInFlightRef = useRef(false);
   // View Mode: today | delivered | reported
   const [viewMode, setViewMode] = useState<
     "today" | "delivered" | "reported" | "qr_pending" | "calculator"
@@ -515,7 +524,8 @@ export default function NavigationPage() {
     !!editingHouse ||
     (showDeliverModal && !!houseToDeliver) ||
     (showCommentModal && !!houseToComment) ||
-    (showReportModal && !!houseToReport);
+    (showReportModal && !!houseToReport) ||
+    (showRestoreConfirmModal && !!houseToRestore);
 
   // Body lock: เมื่อมี dialog เปิดอยู่ ให้ล็อกการ scroll ของหน้าด้านหลัง
   // (หน้าหลัง = locked, .modal-sheet = scroll เนื้อหาเองได้, คีย์บอร์ด =
@@ -1764,6 +1774,78 @@ export default function NavigationPage() {
       setIsReportSubmitting(false);
     }
   };
+  // ── นำรายการที่ "ส่งแล้ว" กลับไปแถบ "วันนี้" ────────────────────────────
+  // สถานะเดิมของระบบ: แถบ "วันนี้" = delivery_status เป็น pending (หรือว่าง)
+  // จึงย้อนสถานะเดิมกลับเป็น "pending" ตัวเดียวกับที่ confirmDeliver เปลี่ยนไป
+  // — ไม่สร้าง status ใหม่. เก็บ delivery_note (ข้อมูลการชำระเงิน) ไว้ครบ
+  // และล้างเฉพาะ delivered_at ที่เป็นเวลากด "ส่งแล้ว" ครั้งที่ผิด.
+  const requestRestoreToToday = (house: NavigationHouse) => {
+    if (isRestoreSubmitting) return;
+    setHouseToRestore(house);
+    setShowRestoreConfirmModal(true);
+  };
+
+  const closeRestoreConfirmModal = () => {
+    if (isRestoreSubmitting) return;
+    setShowRestoreConfirmModal(false);
+    setHouseToRestore(null);
+  };
+
+  const confirmRestoreToToday = async () => {
+    if (!houseToRestore || isRestoreSubmitting) return;
+    if (restoreInFlightRef.current) return;
+    if (houseToRestore.delivery_status !== "delivered") {
+      closeRestoreConfirmModal();
+      return;
+    }
+
+    restoreInFlightRef.current = true;
+    setIsRestoreSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("user_navigation_houses")
+        .update({
+          delivery_status: "pending",
+          delivered_at: null,
+        })
+        .eq("id", houseToRestore.nav_id)
+        // กันกดซ้ำ/กดจากแท็บอื่น: อัปเดตได้เฉพาะแถวที่ยังเป็น delivered
+        .eq("delivery_status", "delivered");
+
+      if (error) {
+        toast.error("นำรายการกลับไปวันนี้ไม่สำเร็จ กรุณาลองใหม่");
+        return;
+      }
+
+      // ยืนยันกับ backend ว่ารายการกลับไป "วันนี้" จริง (ไม่ใช่แค่ state)
+      const { data: restored, error: verifyError } = await supabase
+        .from("navigation_view")
+        .select("nav_id, delivery_status")
+        .eq("nav_id", houseToRestore.nav_id)
+        .maybeSingle();
+
+      if (
+        verifyError ||
+        !restored ||
+        (restored.delivery_status && restored.delivery_status !== "pending")
+      ) {
+        toast.error("นำรายการกลับไปวันนี้ไม่สำเร็จ กรุณาลองใหม่");
+        await reloadNavigation();
+        return;
+      }
+
+      toast.success("นำรายการกลับไปแถบ \"วันนี้\" แล้ว");
+      await reloadNavigation();
+      setShowRestoreConfirmModal(false);
+      setHouseToRestore(null);
+    } catch {
+      toast.error("นำรายการกลับไปวันนี้ไม่สำเร็จ กรุณาลองใหม่");
+    } finally {
+      restoreInFlightRef.current = false;
+      setIsRestoreSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center gap-3 px-4">
@@ -2419,6 +2501,18 @@ export default function NavigationPage() {
                         </div>
                       )}
 
+                      {/* นำกลับไปวันนี้ - เฉพาะรายการในแถบ "ส่งแล้ว" */}
+                      {viewMode === "delivered" && (
+                        <button
+                          type="button"
+                          onClick={() => requestRestoreToToday(h)}
+                          className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 text-sm font-bold text-teal-800 transition-colors hover:bg-teal-100 active:scale-[0.99]"
+                        >
+                          <Undo2 className="h-4 w-4" aria-hidden="true" />
+                          นำกลับไปวันนี้
+                        </button>
+                      )}
+
                       {/* สถานะรายงาน - แสดงแบบข้อความเต็ม ไม่มีไอคอน + รองรับหลายบรรทัด */}
                       {h.delivery_status === "reported" && h.report_reason && (
                         <div className="mt-3 text-xs">
@@ -2829,6 +2923,75 @@ export default function NavigationPage() {
                 className="btn btn-primary flex-1 py-3"
               >
                 ปิดทิ้ง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal ยืนยันการนำรายการกลับไป "วันนี้" — TOPMOST LAYER */}
+      {showRestoreConfirmModal && houseToRestore && (
+        <div
+          className="modal-overlay modal-overlay-top flex items-center justify-center p-4"
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restore-to-today-title"
+            className="modal-sheet w-full max-w-sm p-5 sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="restore-to-today-title"
+              className="mb-2 text-lg font-bold text-gray-900"
+            >
+              นำรายการกลับไปวันนี้?
+            </h2>
+            <p className="text-sm text-gray-600">
+              รายการนี้จะถูกนำออกจาก &quot;ส่งแล้ว&quot; และกลับไปอยู่ในรายการ
+              &quot;วันนี้&quot;
+            </p>
+            <div className="mt-4 rounded-xl bg-gray-50 p-3 text-sm">
+              <p className="font-bold text-gray-900">
+                {houseToRestore.full_name || "ไม่มีชื่อ"}
+              </p>
+              {houseToRestore.address && (
+                <p className="line-clamp-2 text-xs text-gray-500">
+                  {houseToRestore.address}
+                </p>
+              )}
+            </div>
+            <div className="modal-foot flex gap-3">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={closeRestoreConfirmModal}
+                disabled={isRestoreSubmitting}
+                className="btn btn-secondary flex-1 py-3"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={confirmRestoreToToday}
+                disabled={isRestoreSubmitting}
+                className="btn btn-primary flex-1 py-3"
+              >
+                {isRestoreSubmitting ? (
+                  <>
+                    <Loader2
+                      className="h-5 w-5 animate-spin"
+                      aria-hidden="true"
+                    />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  <>
+                    <Undo2 className="h-4 w-4" aria-hidden="true" />
+                    นำกลับไปวันนี้
+                  </>
+                )}
               </button>
             </div>
           </div>

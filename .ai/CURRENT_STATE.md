@@ -317,6 +317,34 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Report: `.ai/reports/2026-10-22-dropway-navigation-report-transfer.md`
 - BLOCKED: real-device keyboard/touch (ไม่มีอุปกรณ์ใน environment นี้)
 
+## นำรายการกลับไป "วันนี้" (2026-10-22)
+- แถบ "ส่งแล้ว" (`viewMode === "delivered"`) มีปุ่ม **↩ นำกลับไปวันนี้**
+  ในการ์ดทุกใบ — แสดงเฉพาะแท็บนี้ ไม่แตะ `.action-rail` เดิม; ปุ่มสูง 44px
+  เต็มความกว้างในเนื้อการ์ด
+- สถานะเดิม: `delivery_status = "delivered"` (เขียนโดย `confirmDeliver()`)
+  → นำกลับเป็น `delivery_status = "pending"` + `delivered_at = null`
+  ซึ่งเป็นค่าที่แถบ "วันนี้" กรองอยู่แล้ว (`!delivery_status ||
+  delivery_status === "pending"`) — **ไม่มี status/ตาราง/API ใหม่**
+- Mutation: update แถวเดิมใน `user_navigation_houses`
+  (`confirmRestoreToToday()`), guard `.eq("id", nav_id).eq("delivery_status",
+  "delivered")`, กันกดซ้ำด้วย `restoreInFlightRef` + `isRestoreSubmitting`,
+  แล้วอ่าน `navigation_view` ยืนยันผลจริงก่อน `reloadNavigation()`;
+  error → toast "นำรายการกลับไปวันนี้ไม่สำเร็จ กรุณาลองใหม่" และไม่ย้ายการ์ด
+- ข้อมูลเดิมทั้งหมดคงอยู่: `delivery_note` (ยอดเงิน/การชำระ), `driver_note`,
+  `report_reason`, ที่อยู่/เบอร์/พิกัด/note — ไม่ delete/insert record
+- Confirmation: modal ใหม่ใช้ชั้น `modal-overlay-top` (z-index 1000) +
+  `.modal-sheet` + `.modal-foot` + `btn btn-secondary`/`btn btn-primary`
+  ตาม pattern confirmation เดิม (dialog "unsaved changes" เดิมมีข้อความ
+  คงที่ จึง reuse ตัว component ไม่ได้) — `anyDialogOpen` รวม modal นี้แล้ว
+- ไม่มี audit/history ในระบบเดิม จึงไม่เพิ่มระบบ history ใหม่
+- ตรวจแล้ว: `npx tsc --noEmit`, `next lint`, `npm run build` (9/9), E2E
+  Chromium 26/26 (cancel ไม่ยิง mutation, confirm ย้ายรายการ, double-tap =
+  1 PATCH, error คงสถานะเดิม, refresh/new session ยังถูกต้อง,
+  รายการอื่นไม่เปลี่ยน)
+- Report: `.ai/reports/2026-10-22-dropway-navigation-restore-to-today.md`
+- BLOCKED: real Supabase RLS/database + real-device touch (E2E ใช้ stateful
+  REST stub แทน backend จริง)
+
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
   `.action-rail`), 44px targets, `aria-label` on every button.
