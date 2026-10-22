@@ -95,7 +95,23 @@ Notes learned in this environment:
 - If the task changes project status, update `.ai/CURRENT_STATE.md` and `.ai/CHANGELOG.md`.
 - Commit and push the finished work to `main` using the "Push procedure" above, then report the pushed commit SHA and the remote verification result.
 
-## Current open items (as of 2026-10-19b)
+## Current open items (as of 2026-10-22)
+- Report "โอน" + Amount Calculator (2026-10-22, do not regress): in
+  `src/app/navigation/page.tsx` the report option `โอน` opens a content-sized
+  sheet (`modal-sheet modal-sheet-fit flex w-full max-w-sm flex-col
+  overflow-hidden p-0`) whose pad is **buttons only** — never add an `<input>`,
+  `inputMode`, or any focusable text field, because that is what re-opens the
+  native keyboard. Keep the middle section `min-h-0 flex-1 overflow-y-auto`
+  with `data-modal-scroll` and the `ล้าง / ตกลง` row `shrink-0`, so `ตกลง`
+  stays on screen in short visible areas. Amount lives in
+  `transferAmountInput` (typing) and `reportTransferAmount` (confirmed);
+  `confirmReport()` must keep building `report_reason` as
+  `รอโอน ${reportTransferAmount} บาท` and save through the existing
+  `user_navigation_houses` update. Do not route it through the old
+  cash-change calculator (`showCalculatorModal` / `calculatorResult`, tied to
+  `deliverNote`), and do not change the legacy report options or their
+  confirmation. See
+  `.ai/reports/2026-10-22-dropway-navigation-report-transfer.md`.
 - Edit House modal must stay **content-sized** (2026-10-19, do not regress):
   **both** edit-house dialogs (navigation and houses "เพิ่ม / แก้ไขบ้าน") are
   split dialogs with overlay `modal-overlay flex items-center justify-center

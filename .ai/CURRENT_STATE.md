@@ -291,6 +291,32 @@ This is a factual snapshot of the repository and the documentation effort that c
 - Report: `.ai/reports/2026-10-19-dropway-edit-house-modal-content-sized-revert.md`
 - BLOCKED: การทดสอบบนมือถือจริง (ไม่มี signed-in session/อุปกรณ์ใน environment นี้)
 
+## รายงาน "โอน" + Amount Calculator (2026-10-22)
+- Report Problem Modal (`src/app/navigation/page.tsx`,
+  "รายงานปัญหา / ฝากไว้ก่อน") มีตัวเลือกที่ 5 **"โอน"** (เต็มแถว) ต่อจาก
+  `โทรไม่รับ` / `เลื่อน` / `ตีกลับ` / `อื่นๆ` — ตัวเลือกเดิมไม่เปลี่ยน
+- กด "โอน" เปิด Amount Calculator: sheet
+  `modal-sheet modal-sheet-fit flex w-full max-w-sm flex-col overflow-hidden p-0`
+  (content-sized), header `shrink-0`, กลาง `min-h-0 flex-1 overflow-y-auto`
+  + `data-modal-scroll`, footer "ล้าง / ตกลง" `shrink-0`; แป้น 3 คอลัมน์
+  `1-9 . 0 ←` เป็น `<button>` ล้วน — **ห้ามเพิ่ม `<input>`/`inputMode`** ใน modal นี้
+  (ห้ามให้คีย์บอร์ดระบบเด้ง) และ **ห้าม** ใส่ `h-full`/`100dvh`/`items-stretch`
+- Amount เก็บใน `transferAmountInput` (ระหว่างกรอก) และ `reportTransferAmount`
+  (ยืนยันแล้ว) → `confirmReport()` สร้าง `report_reason` =
+  `รอโอน [จำนวนเงิน] บาท` แล้ว update `user_navigation_houses`
+  (`delivery_status`/`report_reason`/`reported_at`) ผ่าน flow เดิม,
+  `reloadNavigation()` — ไม่มี mock/API/schema ใหม่
+- Confirmation ใช้ของเดิม `showRestrictedConfirmModal` (`modal-overlay-top`,
+  z-index 1000): "ไม่ปิด" กลับมาพร้อมจำนวนเดิม, "ปิดทิ้ง" ทิ้งจำนวน;
+  `anyDialogOpen` รวม modal นี้แล้ว (body lock ทำงาน)
+- Calculator เงินทอนเดิม (`showCalculatorModal`) ยังเหมือนเดิมทุกอย่าง —
+  ใช้เฉพาะ flow ส่งงาน/เงินทอน ไม่ถูก reuse เป็นตัวกรอกจำนวนเงินโอน
+- ตรวจแล้ว: `npx tsc --noEmit`, `next lint`, `npm run build` (9/9), E2E
+  Chromium 33/33 (payload จริงผ่าน intercepted Supabase REST: `รอโอน 100 บาท`,
+  `รอโอน 250 บาท`, `รอโอน 250.50 บาท`; 390×520 ยังเห็นปุ่มตกลง)
+- Report: `.ai/reports/2026-10-22-dropway-navigation-report-transfer.md`
+- BLOCKED: real-device keyboard/touch (ไม่มีอุปกรณ์ใน environment นี้)
+
 ## Navigation UI (2026-10-12)
 - Card actions live in a vertical icon-only rail (`src/app/globals.css` →
   `.action-rail`), 44px targets, `aria-label` on every button.

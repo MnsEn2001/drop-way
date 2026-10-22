@@ -235,6 +235,11 @@ export default function NavigationPage() {
   );
   const [reportReason, setReportReason] = useState("โทรไม่รับ");
   const [reportReasonCustom, setReportReasonCustom] = useState("");
+  // รายงาน "โอน": จำนวนเงินที่กรอกจากแป้นตัวเลขในแอป
+  const [showTransferAmountModal, setShowTransferAmountModal] = useState(false);
+  const [transferAmountInput, setTransferAmountInput] = useState("");
+  // จำนวนเงินที่ยืนยันแล้ว (ใช้สร้าง comment ตอนบันทึกรายงาน)
+  const [reportTransferAmount, setReportTransferAmount] = useState("");
   const watchIdRef = useRef<number | null>(null);
   const router = useRouter();
 
@@ -505,6 +510,7 @@ export default function NavigationPage() {
     showFilterModal ||
     showStartModal ||
     showCalculatorModal ||
+    showTransferAmountModal ||
     showPageInput ||
     !!editingHouse ||
     (showDeliverModal && !!houseToDeliver) ||
@@ -1649,13 +1655,82 @@ export default function NavigationPage() {
     }
   };
 
+  // ── รายงาน "โอน": แป้นตัวเลขในแอป (ไม่มี input → ไม่มีคีย์บอร์ดระบบ) ──
+  const MAX_TRANSFER_INTEGER_DIGITS = 9;
+  const transferAmountValue = (value: string) => {
+    if (!value || value.endsWith(".")) return NaN;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : NaN;
+  };
+  const isTransferAmountValid = Number.isFinite(
+    transferAmountValue(transferAmountInput),
+  );
+
+  const openTransferAmountModal = () => {
+    setTransferAmountInput(reportTransferAmount);
+    setShowTransferAmountModal(true);
+  };
+
+  const pressTransferAmountKey = (key: string) => {
+    setTransferAmountInput((prev) => {
+      if (key === "backspace") return prev.slice(0, -1);
+      if (key === "clear") return "";
+      if (key === ".") {
+        if (prev.includes(".")) return prev;
+        return prev === "" ? "0." : `${prev}.`;
+      }
+      const [, decimalPart] = prev.split(".");
+      if (decimalPart !== undefined) {
+        // ทศนิยมไม่เกิน 2 ตำแหน่ง
+        if (decimalPart.length >= 2) return prev;
+        return prev + key;
+      }
+      if (prev.length >= MAX_TRANSFER_INTEGER_DIGITS) return prev;
+      if (prev === "0") return key;
+      return prev + key;
+    });
+  };
+
+  const confirmTransferAmount = () => {
+    if (!Number.isFinite(transferAmountValue(transferAmountInput))) {
+      toast.error("กรุณากรอกจำนวนเงินให้ถูกต้อง");
+      return;
+    }
+    setReportTransferAmount(transferAmountInput);
+    setReportReason("โอน");
+    setShowTransferAmountModal(false);
+  };
+
+  // ปิด calculator: มีจำนวนเงินค้างอยู่ → ยืนยันก่อน ไม่ให้ข้อมูลหายเงียบๆ
+  const requestCloseTransferAmount = () => {
+    if (transferAmountInput.trim() === "") {
+      setShowTransferAmountModal(false);
+      return;
+    }
+    setRestrictedConfirmPayload({
+      label: "จำนวนเงินที่โอน",
+      onConfirm: () => {
+        setShowTransferAmountModal(false);
+        setTransferAmountInput("");
+        setReportTransferAmount("");
+      },
+    });
+    setShowRestrictedConfirmModal(true);
+  };
+
   // ⭐ แก้ confirmReport ทั้งหมด
   const confirmReport = async () => {
     if (!houseToReport) return;
     if (isReportSubmitting) return;
 
     const finalReason =
-      reportReason === "อื่นๆ" ? reportReasonCustom.trim() : reportReason;
+      reportReason === "โอน"
+        ? reportTransferAmount
+          ? `รอโอน ${reportTransferAmount} บาท`
+          : ""
+        : reportReason === "อื่นๆ"
+          ? reportReasonCustom.trim()
+          : reportReason;
     if (!finalReason) {
       toast.error("กรุณาเลือกหรือกรอกเหตุผล");
       return;
@@ -1682,6 +1757,9 @@ export default function NavigationPage() {
       setShowReportModal(false);
       setReportReason("โทรไม่รับ"); // รีเซ็ตค่าเริ่มต้น
       setReportReasonCustom("");
+      setReportTransferAmount("");
+      setTransferAmountInput("");
+      setShowTransferAmountModal(false);
     } finally {
       setIsReportSubmitting(false);
     }
@@ -3882,11 +3960,22 @@ export default function NavigationPage() {
                 เหตุผลการรายงาน
               </label>
               <div className="grid grid-cols-2 gap-3">
-                {["โทรไม่รับ", "เลื่อน", "ตีกลับ", "อื่นๆ"].map((option) => (
+                {["โทรไม่รับ", "เลื่อน", "ตีกลับ", "อื่นๆ", "โอน"].map((option) => (
                   <button
                     key={option}
-                    onClick={() => setReportReason(option)}
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      if (option === "โอน") {
+                        // "โอน" เปิดแป้นตัวเลขสำหรับกรอกจำนวนเงิน
+                        openTransferAmountModal();
+                        return;
+                      }
+                      setReportReason(option);
+                    }}
                     className={`py-3 px-4 rounded-xl font-medium transition-all border-2 ${
+                      option === "โอน" ? "col-span-2" : ""
+                    } ${
                       reportReason === option
                         ? "bg-orange-600 text-white border-orange-600 shadow-md"
                         : "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
@@ -3911,9 +4000,13 @@ export default function NavigationPage() {
                 <p className="text-sm text-orange-800 font-medium">
                   เหตุผลที่จะบันทึก:{" "}
                   <span className="font-bold">
-                    {reportReason === "อื่นๆ"
-                      ? reportReasonCustom?.trim() || "กำลังกรอกรายละเอียด..."
-                      : reportReason}
+                    {reportReason === "โอน"
+                      ? reportTransferAmount
+                        ? `รอโอน ${reportTransferAmount} บาท`
+                        : "ยังไม่ได้ระบุจำนวนเงิน (กด \"โอน\" เพื่อกรอก)"
+                      : reportReason === "อื่นๆ"
+                        ? reportReasonCustom?.trim() || "กำลังกรอกรายละเอียด..."
+                        : reportReason}
                   </span>
                 </p>
               </div>
@@ -3927,6 +4020,9 @@ export default function NavigationPage() {
                     setHouseToReport(null);
                     setReportReason("โทรไม่รับ"); // รีเซ็ตกลับค่าเริ่มต้น
                     setReportReasonCustom("");
+                    setReportTransferAmount("");
+                    setTransferAmountInput("");
+                    setShowTransferAmountModal(false);
                   };
                   if (!isReportDirty()) {
                     resetReport();
@@ -3948,6 +4044,7 @@ export default function NavigationPage() {
                 disabled={
                   isReportSubmitting ||
                   !reportReason ||
+                  (reportReason === "โอน" && !reportTransferAmount) ||
                   (reportReason === "อื่นๆ" && !reportReasonCustom?.trim())
                 }
                 className="btn btn-primary flex-1 py-3"
@@ -3960,6 +4057,112 @@ export default function NavigationPage() {
                 ) : (
                   "รายงานแล้ว"
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal จำนวนเงินที่โอน (รายงาน → โอน)
+          - แป้นตัวเลขในแอปเท่านั้น ไม่มี input → คีย์บอร์ดระบบไม่เด้ง
+          - อยู่เหนือ Report Modalในลำดับ DOM แต่ยังอยู่ใต้ confirmation
+            (.modal-overlay-top, z-index 1000) */}
+      {showTransferAmountModal && (
+        <div className="modal-overlay flex items-center justify-center p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transfer-amount-title"
+            className="modal-sheet modal-sheet-fit flex w-full max-w-sm flex-col overflow-hidden p-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 bg-teal-700 p-4 text-white">
+              <div className="min-w-0">
+                <h2 id="transfer-amount-title" className="text-lg font-bold">
+                  จำนวนเงินที่โอน
+                </h2>
+                {houseToReport && (
+                  <p className="truncate text-xs text-teal-100">
+                    {houseToReport.full_name}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={requestCloseTransferAmount}
+                className="shrink-0 rounded-lg px-2 py-1 text-sm font-medium text-teal-100 transition-colors hover:bg-teal-600 hover:text-white"
+              >
+                ยกเลิก
+              </button>
+            </div>
+
+            {/* จำนวนเงิน + แป้นตัวเลข (ส่วนเดียวที่ scroll ได้เมื่อจอเตี้ย)
+                header และแถว "ล้าง / ตกลง" อยู่แยกกัน จึงไม่ถูกตัดออกจอ */}
+            <div className="min-h-0 flex-1 overflow-y-auto" data-modal-scroll>
+              {/* จำนวนเงิน */}
+              <div className="bg-gray-100 p-4">
+                <div className="rounded-xl bg-white px-4 py-5 text-center shadow-inner">
+                  <p className="text-4xl font-bold tabular-nums text-gray-800">
+                    {transferAmountInput || "0"}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">บาท</p>
+                </div>
+                <p
+                  className={`mt-3 text-center text-sm font-medium ${
+                    isTransferAmountValid ? "text-teal-800" : "text-gray-500"
+                  }`}
+                >
+                  {isTransferAmountValid
+                    ? `จะบันทึก: รอโอน ${transferAmountInput} บาท`
+                    : "กดตัวเลขเพื่อกรอกจำนวนเงิน"}
+                </p>
+              </div>
+
+              {/* แป้นตัวเลข */}
+              <div className="grid grid-cols-3 gap-2 bg-gray-50 p-4">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "←"].map(
+                  (key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() =>
+                        pressTransferAmountKey(key === "←" ? "backspace" : key)
+                      }
+                      aria-label={key === "←" ? "ลบตัวเลขล่าสุด" : undefined}
+                      className={`h-14 rounded-xl text-2xl font-bold shadow-md transition-transform active:scale-95 ${
+                        key === "←"
+                          ? "bg-red-500 text-white hover:bg-red-600"
+                          : "bg-white hover:bg-gray-100"
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+
+            {/* ล้าง / ตกลง */}
+            <div className="flex shrink-0 gap-3 border-t bg-gray-50 px-4 pb-4 pt-3">
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pressTransferAmountKey("clear")}
+                className="btn btn-secondary flex-1 py-3"
+              >
+                ล้าง
+              </button>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={confirmTransferAmount}
+                disabled={!isTransferAmountValid}
+                className="btn btn-primary flex-1 py-3"
+              >
+                ตกลง
               </button>
             </div>
           </div>

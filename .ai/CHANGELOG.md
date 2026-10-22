@@ -1,5 +1,60 @@
 # .ai/CHANGELOG.md
 
+## 2026-10-22 — รายงาน "โอน": Amount Calculator แบบแป้นตัวเลขในแอป
+
+### หัวข้อ
+- Report Problem Modal ของหน้า `/navigation` มีตัวเลือกใหม่ **"โอน"**
+- กด "โอน" → เปิด Amount Calculator ที่เป็นแป้นตัวเลขในแอป (ไม่มี `<input>`)
+  → กด "ตกลง" → ได้ comment/reason `รอโอน [จำนวนเงิน] บาท` กลับเข้า report flow
+  เดิม และบันทึกผ่าน `confirmReport()` เดิม
+
+### ของเดิมที่ตรวจก่อนแก้
+- Report Modal: `src/app/navigation/page.tsx` (รายงานปัญหา / ฝากไว้ก่อน) —
+  ตัวเลือกเดิม `โทรไม่รับ` / `เลื่อน` / `ตีกลับ` / `อื่นๆ` เก็บใน `reportReason`
+  + `reportReasonCustom`; ปุ่ม "รายงานแล้ว" เรียก `confirmReport()`
+- `confirmReport()` เขียน `user_navigation_houses` → `delivery_status:
+  "reported"`, `report_reason`, `reported_at` แล้ว `reloadNavigation()`
+  (ไม่ใช่ mock; ไม่มี API/schema แยก)
+- Calculator เดิม (`showCalculatorModal` / `calculatorInput` /
+  `calculatorResult`) เป็น "เครื่องคิดเลขเงินทอน" ของ flow ส่งงาน: ผูกกับ
+  `deliverNote` + `localCash`/`localTransfer`, คำนวณเงินทอน/ขาด, ไม่มีจุด
+  ทศนิยมและไม่มีปุ่มตกลง → นำมาใช้กรอกจำนวนเงินโอนโดยตรงไม่ได้ (และห้ามแก้
+  behavior เดิม) จึง reuse เฉพาะ modal shell/สไตล์แป้นและรูปแบบ state string
+  (concat / slice backspace / clear) ไม่สร้างเครื่องคิดเลขเงินทอนซ้ำ
+- Confirmation เดิม: `showRestrictedConfirmModal` + `restrictedConfirmPayload`
+  overlay `modal-overlay-top` (z-index 1000) อยู่เหนือ modal ปกติ (z-index 50)
+
+### เปลี่ยนอะไร
+- `src/app/navigation/page.tsx`: เพิ่ม state `showTransferAmountModal`,
+  `transferAmountInput`, `reportTransferAmount`; เพิ่มปุ่ม "โอน" (เต็มแถว)
+  ในกริดตัวเลือกเดิมโดยไม่แตะตัวเลือกเดิม
+- Amount Calculator ใหม่ (เฉพาะกรอกจำนวนเงินโอน): overlay
+  `modal-overlay flex items-center justify-center p-4`, sheet
+  `modal-sheet modal-sheet-fit flex w-full max-w-sm flex-col overflow-hidden p-0`
+  — content-sized, header `shrink-0`, กลางเป็น `min-h-0 flex-1 overflow-y-auto`
+  (`data-modal-scroll`), แถว "ล้าง / ตกลง" `shrink-0`; แป้น 3×4
+  `1-9 . 0 ←` เป็น `<button>` ล้วน (ไม่มี input → คีย์บอร์ดระบบไม่เด้ง)
+- Validation: ป้องกันจุดทศนิยมซ้ำ, ทศนิยมเกิน 2 ตำแหน่ง, จำนวนเต็มเกิน 9 หลัก,
+  ค่า 0/ว่าง/"0." ไม่ผ่าน, `ตกลง` disabled จนกว่าจะ valid; `ล้าง` reset;
+  `←` ลบตัวสุดท้าย; เปิดซ้ำจะ prefill จำนวนที่ยืนยันแล้ว
+- ปิด calculator ระหว่างมีตัวเลข → ใช้ confirmation เดิม: "ไม่ปิด" กลับมา
+  พร้อมจำนวนเดิม, "ปิดทิ้ง" ปิดและทิ้งจำนวน; backdrop/Escape ยังไม่ปิด modal
+- `confirmReport()` สร้าง reason `รอโอน ${reportTransferAmount} บาท` เมื่อ
+  `reportReason === "โอน"`; กันปุ่มบันทึกเมื่อยังไม่มีจำนวน; reset state
+  ครบเมื่อบันทึกสำเร็จ/ยกเลิก; เพิ่ม modal เข้า `anyDialogOpen` (body lock)
+- ไม่แตะ: ตัวเลือกเดิม, comment modal, deliver flow, schema, API, auth,
+  navigation ทั้งหน้า, calculator เงินทอนเดิม
+
+### สถานะ
+- ผ่าน `npx tsc --noEmit`, `next lint`, `npm run build` (9/9)
+- E2E Chromium (390×844 และ 390×520) 33/33: กรอก 100/250/250.50 → PATCH body
+  `report_reason` = `รอโอน 100 บาท` / `รอโอน 250 บาท` / `รอโอน 250.50 บาท`
+  พร้อม `delivery_status: "reported"` + `reported_at`; backspace/ล้าง/
+  ตกลงตอนว่าง/ทศนิยมซ้ำ/confirmation ไม่ปิด-ปิดทิ้ง/ตัวเลือกเดิม `โทรไม่รับ`
+  และ `อื่นๆ` ยังบันทึกเหมือนเดิม; ตรวจ z-index confirmation 1000 > modal 50
+- BLOCKED: คีย์บอร์ดจริงบนมือถือ (ทดสอบด้วย viewport จำลองเท่านั้น)
+- Report: `.ai/reports/2026-10-22-dropway-navigation-report-transfer.md`
+
 ## 2026-10-19 — Edit House Modal: revert full-height, กลับเป็น modal ขนาดพอดีเนื้อหา
 
 ### หัวข้อ
